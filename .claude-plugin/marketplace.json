@@ -1,0 +1,14 @@
+{
+  "name": "cea-skill",
+  "owner": {
+    "name": "se-uhd"
+  },
+  "description": "cea-skill Claude Code plugin.",
+  "plugins": [
+    {
+      "name": "cea-skill",
+      "source": "./",
+      "description": "Claim-Evidence Alignment (CEA) skills for papers and their research artifacts."
+    }
+  ]
+}

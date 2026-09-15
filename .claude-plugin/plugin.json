@@ -1,0 +1,16 @@
+{
+  "name": "cea-skill",
+  "version": "0.1.0",
+  "description": "Claim-Evidence Alignment (CEA) skills: extract a paper's narrow quantitative claims, the broad statements they serve, and the rejected candidates from its PDF, with every quote checked against the page text.",
+  "author": {
+    "name": "se-uhd"
+  },
+  "keywords": [
+    "claims",
+    "evidence",
+    "research-artifacts",
+    "peer-review",
+    "reproducibility"
+  ],
+  "license": "MIT"
+}
