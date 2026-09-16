@@ -16,8 +16,8 @@ Pipeline:
   1. `pdftotext -layout`, split into pages on form feeds.
   2. Blank running headers, footers, and bare page numbers at the top and bottom of each page.
   3. Cut each page into two-column regions and full-width blocks, and read each region's left
-     column before its right.
-  4. Blank LaTeX `lineno` margin numbers.
+     column before its right. A page too short for this is cut at the gutter of the other pages.
+  4. Blank LaTeX `lineno` line numbers, at either margin or glued to the end of a line.
   5. Remove the references section.
 """
 
@@ -28,10 +28,20 @@ import subprocess
 from collections import Counter
 from dataclasses import dataclass
 
-# A `lineno` margin number, in the two shapes `pdftotext -layout` produces: alone on its line, or
-# in the gutter before the line's text.
+# A `lineno` margin number, in the shapes `pdftotext -layout` produces: alone on its line, in the
+# gutter before the line's text, or after the line's text at the right margin.
 _MARGIN_BARE = re.compile(r"^\s*\d{1,4}\s*$")
 _MARGIN_GUTTER = re.compile(r"^\s*\d{1,4}\s{2,}(?=\S)")
+_TRAILING_DIGITS = re.compile(r"(\d+)\s*$")
+# Digits glued to the end of a word, as pdftotext writes a line number that touches the text. The
+# word must be at least three letters long and start in lower case, so that a label such as "S46",
+# "RQ3", "GPT4", "Study1", or "Qwen2" keeps its digits.
+_GLUED_END = re.compile(r"\b([^\W\d_]+)(\d{1,4})\s*$")
+
+
+def _glued_number(line: str) -> re.Match | None:
+    m = _GLUED_END.search(line)
+    return m if m and m.group(1)[:1].islower() else None
 
 # How many blank character columns make a gutter. hallucite measured this over 37 arXiv papers:
 # a threshold of four missed the narrow gutter of ACM bibliographies, and a threshold of two
@@ -42,15 +52,22 @@ _CROSSING_SHARE = 0.03
 # A region needs this many non-blank lines, so that a few table rows with a gap in the middle are
 # not read as two columns.
 _MIN_REGION_LINES = 8
-# Share of a region's lines that must carry text on each side of the gutter. Without it, a block
-# of short single-column lines, which is blank right of the middle, would count as two columns.
-_MIN_SIDE_SHARE = 0.25
+# Lines of a region that must carry text on each side of the gutter. Without this minimum, a block of short
+# single-column lines, which is blank right of the middle, would count as two columns. It is a count
+# rather than a share, so that a page with a full left column and a short right column still splits.
+_MIN_SIDE_LINES = 4
+# How far a region's cut may sit from the gutter of the paper. A gutter is a band several columns
+# wide, and the cut can fall anywhere inside it, so the distance is measured generously.
+_GUTTER_NEAR = 6
 
-_PAGE_NUMBER = re.compile(r"^\s*\d{1,4}\s*$")
-# A table caption at the start of a line ("TABLE V", "Table 3") and a run of 3 or more spaces between
+# A line that holds only one to three numbers.
+_NUMBERS_ONLY = re.compile(r"^\s*(?:\d{1,4}\s{2,}){0,2}\d{1,4}\s*$")
+# A table caption at the start of a line (e.g., "TABLE V", "Table 3") and a run of 3 or more spaces between
 # two cells. Text lines in a two-column region have at most one such run, the gap between columns.
 _TABLE_CAPTION = re.compile(r"^(?:TABLE|Table)\s+(?:[IVXLC]+|\d+)\b")
 _WIDE_GAP = re.compile(r"\S\s{3,}(?=\S)")
+# The first line of a figure or table caption.
+_CAPTION = re.compile(r"^(?:Fig\.|Figure|FIGURE|Table|TABLE)\s*(?:[IVXLC]+|\d+)\b")
 # The page number in a running header is at its start or end.
 _EDGE_NUMBER = re.compile(r"^[\d:.\s]+|[\d:.\s]+$")
 
@@ -61,7 +78,24 @@ _HEADER_NUM = re.compile(r"^(?:\d+[.)]?|[ivxlc]+[.)])\s+", re.I)
 # "R EFERENCES".
 _REFERENCE_HEADINGS = frozenset(h.replace(" ", "") for h in (
     "references", "bibliography", "references and notes", "literature cited", "works cited"))
-_APPENDIX_HEADINGS = ("appendix", "appendices", "supplementarymaterial")
+_APPENDIX_HEADINGS = ("appendix", "appendices", "supplementarymaterial", "supplementalmaterial",
+                      "onlineappendix")
+# Words that start an appendix heading in papers that number their appendices with their sections,
+# such as "VIII. Additional Results". A bibliography entry must not follow such a heading.
+_APPENDIX_WORDS = ("supplementary", "supplemental", "additional", "online")
+# The start of a bibliography entry: "[12] ...", "12. Author ...", "Surname, I.", "Surname, John.",
+# initials and a surname, or names followed by a year. A sentence that opens "Overall, Table 3 ..."
+# must not match, or an appendix heading before it is missed.
+_BIB_ENTRY = re.compile(r"^\s*(?:\[\d{1,3}\]"
+                        r"|\d{1,3}\.\s+[A-Z]"
+                        r"|[A-Z][\w'\u2019-]+,\s+(?:[A-Z]\.|[A-Z][a-z]+\.)"
+                        r"|(?:[A-Z]\.\s?){1,3}[A-Z][\w'\u2019-]+"
+                        r"|[A-Z][\w'\u2019-]+(?:\s+(?:and\s+)?[A-Z][\w'\u2019-]+)+\.\s+(?:19|20)\d{2}\.)")
+# A top-level heading labeled with a letter, as acmart, IEEEtran, and LNCS label appendices:
+# "A Additional Results", "A. Additional Results", "A.1 Details for RQ1".
+_LETTER_LABEL = re.compile(r"^[A-Z](?:\.\d+)?[.)]?\s+(?=[A-Z])")
+# The quotation marks that a bibliography entry puts around a title.
+_QUOTE_MARKS = "\"'\u201c\u201d"
 
 REFERENCES_REMOVED = "[references removed by cea_claims.py extract]"
 
@@ -80,9 +114,11 @@ class Extraction:
     # (page of the References heading, page of the appendix heading after it or None), or None
     # when no References heading was found.
     references: tuple[int, int | None] | None
+    # Whether the paper sets its body in two columns anywhere.
+    two_column: bool = False
 
 
-# ── Text layer ───────────────────────────────────────────────────────────────
+# --- Text layer ---
 
 def _pages(pdf_path: str) -> list[str]:
     try:
@@ -100,43 +136,78 @@ def _pages(pdf_path: str) -> list[str]:
     return pages
 
 
-# ── Running headers, footers, and page numbers ──────────────────────────────
+# --- Running headers, footers, and page numbers ---
 
 def _without_page_number(s: str) -> str:
     return re.sub(r"\s+", " ", _EDGE_NUMBER.sub("", s)).strip()
 
 
 def _running_headers(pages: list[str]) -> set[str]:
-    """Running headers and footers: a page's first or last non-blank line that says enough to be
-    recognized and repeats on at least two pages once its page number is removed (hallucite)."""
+    """Running headers and footers: a page's first or last non-blank line that stands apart from
+    the body and repeats on other pages once its page number is removed. A line that says enough to
+    be recognized must repeat on two pages (hallucite). A short line, such as an author name, must
+    repeat on three. Blank space above or below the line keeps the last line of a paragraph, which
+    can read the same on several pages, out of the count."""
     counts: Counter[str] = Counter()
     for page in pages:
-        lines = [l for l in page.split("\n") if l.strip()]
+        all_lines = page.split("\n")
+        lines = [l for l in all_lines if l.strip()]
         if len(lines) < 5:
             continue
-        for line in (lines[0], lines[-1]):
+        first, last = all_lines.index(lines[0]), len(all_lines) - 1 - all_lines[::-1].index(lines[-1])
+        apart = [l for l, i, step in ((lines[0], first, 1), (lines[-1], last, -1))
+                 if not (0 <= i + step < len(all_lines)) or not all_lines[i + step].strip()]
+        for line in apart:
             norm = _without_page_number(line)
-            if len(norm) >= 20 and len(re.findall(r"[^\W\d_]{2,}", norm)) >= 3:
+            if re.search(r"[^\W\d_]{2,}", norm):
                 counts[norm] += 1
-    return {n for n, c in counts.items() if c >= 2}
+    return {n for n, c in counts.items()
+            if c >= 3 or (c >= 2 and len(n) >= 20 and len(re.findall(r"[^\W\d_]{2,}", n)) >= 3)}
+
+
+def _numbering_continues(line: str, neighbor: str) -> bool:
+    """Whether a number of `line` continues, at the same column, the numbering of `neighbor`. The
+    line numbers beside a page number do. The cells of a table row do not."""
+    near = {m.start(): int(m.group()) for m in re.finditer(r"\d+", neighbor)}
+    return any(abs(near[col] - int(m.group())) == 1
+               for m in re.finditer(r"\d+", line)
+               for col in (m.start() - 1, m.start(), m.start() + 1) if col in near)
+
+
+def _page_number_line(line: str, width: int, neighbor: str) -> bool:
+    """Whether `line` holds only a page number: one number, or a number near the middle of the page
+    between the line numbers of the two columns. A row of a table holds its numbers closer together,
+    and its cells do not continue the numbers of the line beside it."""
+    if not _NUMBERS_ONLY.match(line):
+        return False
+    spans = [m.span() for m in re.finditer(r"\d+", line)]
+    if len(spans) == 1:
+        return True
+    apart = all(b[0] - a[1] >= 10 for a, b in zip(spans, spans[1:]))
+    centered = any(abs((a + b) / 2 - width / 2) <= 0.1 * width for a, b in spans)
+    return apart and centered and (not neighbor.strip() or _numbering_continues(line, neighbor))
 
 
 def _blank_edges(lines: list[str], headers: set[str]) -> None:
-    """Blank the running header, footer, and bare page number at either end of a page, in place.
+    """Blank the running header, footer, and page number at either end of a page, in place.
     Only the ends are touched, because the same words inside a page are text."""
+    width = max((len(l) for l in lines), default=0)
     for edge in (0, -1):
         for _ in range(2):  # a page number and a running header can be stacked
             body = [i for i, l in enumerate(lines) if l.strip()]
             if len(body) < 5:
                 return
             i = body[edge]
-            if _PAGE_NUMBER.match(lines[i]) or _without_page_number(lines[i]) in headers:
+            inner = i + 1 if edge == 0 else i - 1
+            neighbor = lines[inner] if 0 <= inner < len(lines) else ""
+            if (_page_number_line(lines[i], width, neighbor)
+                    or _without_page_number(lines[i]) in headers):
                 lines[i] = ""
             else:
                 break
 
 
-# ── Columns ──────────────────────────────────────────────────────────────────
+# --- Columns ---
 
 def _gutter(page_lines: list[str]) -> int | None:
     """Column position of a two-column gutter: a band of >=_MIN_GUTTER columns, in the middle
@@ -152,16 +223,23 @@ def _gutter(page_lines: list[str]) -> int | None:
                   if sum(c >= len(l) or l[c] == " " for l in nb) / len(nb) > 1 - _CROSSING_SHARE]
     if not space_cols:
         return None
-    band = [space_cols[0]]
+    runs, run = [], [space_cols[0]]
     for c in space_cols[1:]:
-        if c == band[-1] + 1:
-            band.append(c)
-        elif len(band) >= _MIN_GUTTER:
-            break
+        if c == run[-1] + 1:
+            run.append(c)
         else:
-            band = [c]
-    if len(band) < _MIN_GUTTER:
+            runs.append(run)
+            run = [c]
+    runs.append(run)
+    runs = [r for r in runs if len(r) >= _MIN_GUTTER]
+    if not runs:
         return None
+    # A table cell inside the gap between columns cuts the gap into two runs. The gutter is the run
+    # that the right column's text starts after. On ties, the leftmost run wins.
+    def starts_after(r: list[int]) -> int:
+        edge = r[-1] + 1
+        return sum(1 for l in nb if len(l) > edge and l[edge] != " " and l[edge - 1] == " ")
+    band = max(runs, key=starts_after)
     # Cut where the band is blank on every line, so a line reaching into the band is not split
     # inside a word.
     strict = _longest_blank_run(band, nb)
@@ -219,12 +297,26 @@ def _blank_at(line: str, c: int) -> bool:
     return all(k >= len(line) or line[k] == " " for k in range(c - 1, c + 2))
 
 
-def _widest_window(blank: list[bool], floor: int) -> tuple[int, int] | None:
+def _captions_across(lines: list[str], blank: list[bool]) -> list[bool]:
+    """Lines of a caption that runs across the candidate gutter: a crossing line that starts with
+    "Figure 2." or "TABLE V", and the crossing lines right after it. A two-column region must not
+    contain them, or the caption is cut in half."""
+    marks, in_caption = [], False
+    for line, b in zip(lines, blank):
+        in_caption = not b and (bool(_CAPTION.match(line.strip())) or in_caption)
+        marks.append(in_caption)
+    return marks
+
+
+def _widest_window(blank: list[bool], floor: int, walls: list[bool] | None = None,
+                   share: float = _CROSSING_SHARE) -> tuple[int, int] | None:
     """The longest run [s, e) longer than `floor` that starts and ends on a line blank at the
-    candidate gutter and has at most _CROSSING_SHARE of its lines crossing it."""
-    miss = [0]
-    for b in blank:
+    candidate gutter, has at most _CROSSING_SHARE of its lines crossing it, and contains no line
+    marked in `walls`."""
+    miss, wall = [0], [0]
+    for i, b in enumerate(blank):
         miss.append(miss[-1] + (not b))
+        wall.append(wall[-1] + bool(walls and walls[i]))
     best = None
     n = len(blank)
     for s in range(n):
@@ -233,17 +325,70 @@ def _widest_window(blank: list[bool], floor: int) -> tuple[int, int] | None:
         for e in range(n, s, -1):
             if e - s <= (best[1] - best[0] if best else floor):
                 break
-            if blank[e - 1] and miss[e] - miss[s] <= _CROSSING_SHARE * (e - s):
+            if (blank[e - 1] and miss[e] - miss[s] <= share * (e - s)
+                    and wall[e] == wall[s]):
                 best = (s, e)
                 break
     return best
+
+
+def _cell_gaps(line: str, c: int) -> int:
+    """Runs of 3 or more spaces between two cells of `line`, not counting a run across column `c`,
+    which on a two-column page is the gap between the columns."""
+    return sum(1 for m in _WIDE_GAP.finditer(line) if not m.start() + 1 <= c < m.end())
+
+
+# How long the last cell of a row may be where it stands alone right of the gutter, and what it
+# holds. A last column counts or measures, while the line that ends a paragraph of the right column
+# leaves a single word there just as short.
+_LAST_CELL = 15
+_LAST_CELL_VALUE = re.compile(r"^[\d(<>=~+-][\d.,%()<>=~+-]*$")
+# How long a cell of a row is. Where a page sets two columns, pdftotext prints them on one line with
+# a gap between, and each side carries a run of prose far longer than a cell.
+_CELL_TEXT = 30
+
+
+def _spanning_row(line: str, c: int) -> bool:
+    """Whether `line` has gaps between table cells on both sides of column `c`, as a row of a table
+    that runs across the gutter has. A row of a table inside one column has them on one side only.
+    The line numbers are removed before the columns are split, so a number here is a cell of a row
+    and not a number in the margin."""
+    return _cell_gaps(line[:c], c) > 0 and _cell_gaps(" " * c + line[c:], c) > 0
+
+
+def _last_cell_row(line: str, c: int) -> bool:
+    """Whether `line` is a row of a table with its last cell alone right of column `c`, which is
+    where a table with a narrow last column meets the gutter. The gap before that cell falls on the
+    gutter, so the row would be cut in half and its last cell read as text of the right column.
+
+    Two tables set side by side both carry cells right of the gutter, so more than one cell stands
+    there. A line that ends a paragraph of the right column leaves a single short word there, so the
+    cell must read as a number, which is what the last column of such a table holds."""
+    last = line[c:].strip()
+    return (_cell_gaps(line[:c], c) > 0 and 0 < len(last) <= _LAST_CELL and " " not in last
+            and bool(_LAST_CELL_VALUE.match(last)))
+
+
+def _row_follows(lines: list[str], j: int, c: int, lookahead: int = 3) -> bool:
+    """Whether one of the next `lookahead` non-blank lines after line `j` is a table row. A short
+    label inside a table, such as a category name on a line of its own, then does not end it."""
+    seen = 0
+    for line in lines[j + 1:]:
+        if not line.strip():
+            continue
+        if _cell_gaps(line, c) >= 2:
+            return True
+        seen += 1
+        if seen >= lookahead:
+            return False
+    return False
 
 
 def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, int]]:
     """Line spans [start, end) of tables that run across both columns.
 
     Such a table starts with a caption centered on the page and continues with rows that have
-    wide gaps between cells or that cross the gutter. A table whose cell gap lines up with the
+    wide gaps between cells or that cross the gutter. A table with a cell gap that lines up with the
     gutter would otherwise be cut in half, with its right half placed at the top of the right
     column. A table inside one column has its caption centered on that column and is split with
     the column as usual."""
@@ -252,14 +397,27 @@ def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, 
     while i < len(lines):
         text = lines[i].strip()
         indent = len(lines[i]) - len(lines[i].lstrip())
-        if text and _TABLE_CAPTION.match(text) and abs(indent + len(text) / 2 - width / 2) <= 0.1 * width:
-            rows, end, j = 0, i + 1, i + 1
+        # Judge the caption by its own text, because the same line can also hold text of the other
+        # column or the caption of a second table beside it.
+        caption = re.split(r"\s{3,}", text)[0]
+        if text and _TABLE_CAPTION.match(text) and abs(indent + len(caption) / 2 - width / 2) <= 0.1 * width:
+            rows, end, j, cells = 0, i + 1, i + 1, set()
             while j < len(lines):
                 line = lines[j]
                 if line.strip():
-                    if len(_WIDE_GAP.findall(line.strip())) >= 2:
+                    right = re.search(r"\S", line[c:]) if len(line) > c else None
+                    right_start = c + right.start() if right else None
+                    if _cell_gaps(line, c) >= 2:
                         rows += 1
-                    elif _blank_at(line, c):
+                        cells.update(m.end() for m in _WIDE_GAP.finditer(line))
+                    elif _blank_at(line, c) and not (
+                            # A category label on a line of its own, followed by more rows.
+                            (len(line.strip()) <= 30 and _row_follows(lines, j, c))
+                            # The next line of a row with a right half that continues a cell. It follows
+                            # the row directly, and its right text starts where a cell starts, well
+                            # right of the gutter, where a right column of body text would not start.
+                            or (j == end and right_start is not None and right_start > c + 0.1 * width
+                                and any(abs(right_start - x) <= 1 for x in cells))):
                         break
                     end = j + 1
                 j += 1
@@ -271,105 +429,556 @@ def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, 
     return spans
 
 
-def _layout(lines: list[str]) -> tuple[list[str], int]:
-    """`lines` in reading order, and the number of two-column regions found.
+def _trim_edges(blank: list[bool], s: int, e: int, k: int = 3) -> tuple[int, int]:
+    """[s, e) without its first lines up to the last of the first `k` lines that crosses the
+    gutter, and likewise at its end. Such a line belongs to a full-width block above or below the
+    columns, such as a title or an author line, and a region that kept it would cut it in half."""
+    head = [i for i in range(s, min(s + k, e)) if not blank[i]]
+    if head:
+        s = head[-1] + 1
+    tail = [i for i in range(max(e - k, s), e) if not blank[i]]
+    if tail:
+        e = tail[0]
+    return s, e
+
+
+def _layout(lines: list[str], known: int | None = None, allowed: set[int] | None = None,
+            allow_short: bool = False) -> tuple[list[str], int, int | None]:
+    """`lines` in reading order, the number of two-column regions found, and the column where the
+    largest region was cut, or None.
 
     The longest run of lines that shares a gutter becomes a two-column region, read left column
     first. The lines above and below it are laid out the same way, so a full-width table or title
-    block stays whole and in place, and a page with no region passes through unchanged."""
+    block stays whole and in place, and a page with no region passes through unchanged. A region
+    needs _MIN_REGION_LINES lines. With `allow_short`, a shorter region is accepted at `known`, a gutter
+    found above, below, or on other pages, if no line of it is a row of a table that crosses the
+    gutter and its left column reaches that gutter. With `allowed`, the cut must lie near one of the
+    gutters that the paper uses, so that a gap inside a wide table is never taken for a gutter. The
+    returned gutter is None for a region where most lines are rows of a table, so that a gap inside
+    a table cannot become the gutter of the paper."""
     idx = [i for i, l in enumerate(lines) if l.strip()]
-    if len(idx) < _MIN_REGION_LINES:
-        return lines, 0
+    if len(idx) < (2 if known is not None else _MIN_REGION_LINES):
+        return lines, 0, None
     nb = [lines[i] for i in idx]
     width = max(len(l) for l in nb)
     lo, hi = max(int(width * 0.30), 1), int(width * 0.72)
     best: tuple[int, int, int] | None = None  # (s, e, c) over non-blank line indices
     for c in range(lo, hi):
-        floor = best[1] - best[0] if best else _MIN_REGION_LINES - 1
-        win = _widest_window([_blank_at(l, c) for l in nb], floor)
+        near = known is not None and abs(c - known) <= 3
+        if allowed is not None and not any(abs(c - g) <= _GUTTER_NEAR for g in allowed):
+            continue
+        shortest = 2 if near and allow_short else _MIN_REGION_LINES
+        floor = max(best[1] - best[0] if best else 0, shortest - 1)
+        blank = [_blank_at(l, c) for l in nb]
+        # At a gutter that the paper already uses, more lines may cross it. A bibliography set in a
+        # smaller font reaches past the gutter, and a region that stopped there would leave the rest of
+        # the left column behind the right column's text.
+        win = _widest_window(blank, floor, _captions_across(nb, blank),
+                             0.15 if near else _CROSSING_SHARE)
         if win is None:
             continue
-        region = nb[win[0]:win[1]]
+        s, e = _trim_edges(blank, *win)
+        if e - s < shortest or (best and e - s <= best[1] - best[0]):
+            continue
+        region = nb[s:e]
         left = sum(bool(l[:c - 1].strip()) for l in region)
         right = sum(bool(l[c + 2:].strip()) for l in region)
-        if min(left, right) >= _MIN_SIDE_SHARE * len(region):
-            best = (win[0], win[1], c)
+        if len(region) >= _MIN_REGION_LINES:
+            if min(left, right) >= _MIN_SIDE_LINES:
+                best = (s, e, c)
+        elif (min(left, right) >= 2 and not any(_spanning_row(l, c) for l in region)
+              # In two columns of text the left column reaches the gutter. A table of labels and
+              # definitions leaves a wide space before it.
+              and 2 * sum(1 for l in region if l[:c].rstrip() and c - len(l[:c].rstrip()) <= 12) >= len(region)):
+            best = (s, e, c)
     if best is None:
-        return lines, 0
+        return lines, 0, None
     s, e, c = best
     start, end = idx[s], idx[e - 1] + 1
-    # Keep full-width tables at the top or bottom of the region whole and out of the split.
+    # Keep full-width tables at the top or bottom of the region whole and out of the split, whether
+    # they overlap the region or end right before it, with only blank lines in between.
     top_end, bottom_start = start, end
     for ts, te in _full_width_tables(lines, c, width):
-        if ts <= start < te < end:
-            top_end, start = ts, te
-        elif start < ts < end <= te:
-            end, bottom_start = ts, te
+        if ts <= start and te < end and not any(l.strip() for l in lines[te:start]):
+            top_end, start = ts, max(start, te)
+        elif start < ts and end <= te and not any(l.strip() for l in lines[end:ts]):
+            end, bottom_start = min(end, ts), te
     region = lines[start:end]
-    if sum(bool(l.strip()) for l in region) < _MIN_REGION_LINES:
-        top, n_top = _layout(lines[:top_end])
-        bottom, n_bottom = _layout(lines[bottom_start:])
-        return top + lines[top_end:bottom_start] + bottom, n_top + n_bottom
+    near = known is not None and abs(c - known) <= 3
+    if sum(bool(l.strip()) for l in region) < (2 if near else _MIN_REGION_LINES):
+        top, n_top, _ = _layout(lines[:top_end], known, allow_short=allow_short)
+        bottom, n_bottom, _ = _layout(lines[bottom_start:], known, allow_short=allow_short)
+        return top + lines[top_end:bottom_start] + bottom, n_top + n_bottom, None
     g = _gutter(region)
     if g is None:
         g = c
-    left = [l[:g].rstrip() for l in region]
-    right = [l[g:].rstrip() for l in region]
-    top, n_top = _layout(lines[:top_end])
-    bottom, n_bottom = _layout(lines[bottom_start:])
+    # A line that reaches across the cut stays whole in the left column: a row of a table wherever
+    # it stands, because the gap before its last cell can fall on the gutter, and a line of the
+    # title or author block at either end of the region. Cutting such a line would break a word and
+    # move its end far from its start. A line of prose is cut at the gutter as usual, or the two
+    # columns would run into each other.
+    whole = [_last_cell_row(l, g)
+             or (not _blank_at(l, g) and (_spanning_row(l, g) or i < 3 or i >= len(region) - 3))
+             for i, l in enumerate(region)]
+    left = [l.rstrip() if w else l[:g].rstrip() for l, w in zip(region, whole)]
+    right = ["" if w else l[g:].rstrip() for l, w in zip(region, whole)]
+    top, n_top, _ = _layout(lines[:top_end], g, allow_short=True)
+    bottom, n_bottom, _ = _layout(lines[bottom_start:], g, allow_short=True)
+    # Two columns of text carry comparable amounts on either side of the gutter, and few of their
+    # lines are rows of a table. A gap inside a table leaves a column of short cells beside a wide
+    # one, so a table never decides where the paper's gutter is.
+    filled = sum(len(l[g:].rstrip()) for l in region)
+    # Every wide gap counts here, the one that falls on the cut as well. A row of a table keeps its
+    # cells apart wherever the cut lands, and leaving that gap out is what lets a table read as prose
+    # at the very column where cutting it would scramble its rows.
+    prose = (2 * sum(len(_WIDE_GAP.findall(l)) >= 2 for l in region) <= len(region)
+             and filled >= 0.3 * sum(len(l[:g].rstrip()) for l in region))
     return (top + lines[top_end:start] + left + _align(left, right) + lines[end:bottom_start]
-            + bottom, 1 + n_top + n_bottom)
+            + bottom, 1 + n_top + n_bottom, g if prose else None)
 
 
-# ── Line numbers ─────────────────────────────────────────────────────────────
+# --- Line numbers ---
 
-def _blank_margin(line: str, margin_col: int) -> str:
-    """Replace a `lineno` margin number with spaces, keeping the text in its columns. A number
-    alone on its line is blanked only at the margin column, so a wrapped number stays (hallucite)."""
-    if _MARGIN_BARE.match(line):
-        indent = len(line) - len(line.lstrip())
-        return line if indent > margin_col + 2 else ""
-    m = _MARGIN_GUTTER.match(line)
-    return " " * m.end() + line[m.end():] if m else line
+# A numbering is the run of numbers that one column prints down its margin, counting up line after
+# line. A paper sets one for each column of a page.
+
+# A number set apart from the text by two or more spaces. A paper prints its line numbers in a
+# margin of their own, so nothing stands right beside them.
+_LONE_NUMBER = re.compile(r"(?<=\s{2})(\d{1,4})(?=\s|$)")
+# A number in the margin at the start of a line, where only the indent stands before it. Two spaces
+# must follow it, because the marker of a footnote also starts its line but its text follows at once.
+_MARGIN_NUMBER = re.compile(r"^\s*(\d{1,4})(?=\s{2}|\s*$)")
+# A number that ends a line. One space is enough to set it apart there, because a paper prints its
+# line numbers at the right margin as well, where nothing follows them.
+_END_NUMBER = re.compile(r"(?<=\s)(\d{1,4})\s*$")
+# How many numbers in one column make a numbering.
+_MIN_NUMBERING = 6
+# How much of the paper a numbering runs through, as a share of its lines.
+_NUMBERING_SPAN = 0.5
+# How many lines may stand between two numbered lines. A paper numbers every line, or every fifth
+# or tenth line, and a figure or a table can stand between two of them.
+_NUMBERING_GAP = 40
+# A run of digits set off from what follows it. pdftotext prints the line number of the right column
+# inside the text of the left one, sometimes glued to its last word, as in "of97" or "S2299".
+_GUTTER_NUMBER = re.compile(r"(\d{1,4})(?=\s{2,}|$)")
+# The smallest distance between the numbering of one column and the numbering of the next. A column
+# holds many lines, so the two numberings are far apart.
+_MIN_COLUMN_OFFSET = 5
+# How far past the last number of a page's own numbering the numbering of its next column may
+# start. The next column takes up the count where this one stopped.
+_NUMBERING_RESUMES = 10
+# How far a number may stand from the column of its numbering. pdftotext sets a right-aligned number
+# a character to either side of where the numbers above and below it stand.
+_COLUMN_NEAR = 2
 
 
-def _strip_line_numbers(lines: list[str]) -> tuple[list[str], bool]:
-    nb = [l for l in lines if l.strip()]
-    if not nb:
+def _table_line(line: str) -> bool:
+    """Whether `line` has two or more gaps between cells, as a row of a table has. Numbers in such
+    a line are cells of the table, not line numbers."""
+    return len(_WIDE_GAP.findall(line)) >= 2
+
+
+def _counted_numbers(lines: list[str]) -> dict[int, int]:
+    """Line numbers at the end of lines, with or without a space before them, as {line index:
+    number}. pdftotext can put the line numbers of the right column at the end of the left
+    column's lines and glue them to the last word, as in "observed53" or "of 1257" for "of 12".
+    A number counts when it belongs to a run of at least six numbered lines that count up by the
+    same step of one, five, or ten, with at most that many lines in between. A row of a table is
+    left out, because the last column of a table can count up as well. The part of a decimal number
+    after its point is left out too."""
+    nb = [i for i, l in enumerate(lines) if l.strip()]
+    digits = []
+    for i in nb:
+        line = lines[i].rstrip()
+        m = _TRAILING_DIGITS.search(line)
+        before = line[:m.start(1)] if m else ""
+        decimal = before[-1:] in (".", ",") and before[-2:-1].isdigit()
+        # A word that ends in a digit, such as "Qwen2", must not seed a run of line numbers.
+        label = (w := _GLUED_END.search(line)) and w.group(1)[:1].isupper()
+        digits.append("" if not m or decimal or label or _table_line(line) else m.group(1))
+    found: dict[int, int] = {}
+    k = 0
+    while k < len(nb):
+        best: list[tuple[int, int]] = []
+        for size in range(min(4, len(digits[k])), 0, -1):
+            for step in (1, 5, 10):
+                run = [(k, int(digits[k][-size:]))]
+                while True:
+                    j, n = run[-1]
+                    nxt = next((x for x in range(j + 1, min(j + step + 2, len(nb)))
+                                if digits[x].endswith(str(n + step))), None)
+                    if nxt is None:
+                        break
+                    run.append((nxt, n + step))
+                if len(run) > len(best):
+                    best = run
+        if len(best) >= 6:
+            # A line number ends where the paper prints its line numbers, or is glued to the text.
+            # A number that ends a sentence stands elsewhere and stays.
+            column = Counter(len(lines[nb[j]].rstrip()) for j, _ in best).most_common(1)[0][0]
+            for j, n in best:
+                body = lines[nb[j]].rstrip()
+                glued = not body[:-len(str(n))].endswith(" ")
+                if glued or abs(len(body) - column) <= 1:
+                    found[nb[j]] = n
+            k = best[-1][0] + 1
+        else:
+            k += 1
+    return found
+
+
+def _cut_number(line: str, n: int) -> str:
+    body = line.rstrip()
+    return body[:-len(str(n))].rstrip() if body.endswith(str(n)) else line
+
+
+def _cut_stray_numbers(lines: list[str], counted: dict[int, int]) -> list[str]:
+    """In a numbered paper, a number glued to the end of a line that continues the numbering of a
+    line nearby is a line number as well, even where it belongs to no run of its own. Where the two
+    columns of a page interleave, pdftotext leaves such numbers behind."""
+    if not counted:
+        return lines
+    nb = [i for i, l in enumerate(lines) if l.strip()]
+    glued = {pos: m for pos, i in enumerate(nb) if i not in counted and (m := _glued_number(lines[i]))}
+    out = list(lines)
+    for pos, m in glued.items():
+        value = int(m.group(2))
+        near = [int(other.group(2)) for far, other in glued.items() if 0 < abs(far - pos) <= 12]
+        # The numbers of one column advance with its lines, so a neighbor of the same numbering is
+        # close in value as well.
+        if any(0 < abs(value - n) <= 15 for n in near):
+            i = nb[pos]
+            out[i] = lines[i][:m.start(2)].rstrip()
+    return out
+
+
+def _number_chain(hits: list, step: int) -> list:
+    """The longest chain in `hits`, triples of (line index, number, whatever the caller needs),
+    whose numbers count up by `step` down the lines.
+
+    Whatever stands between two numbers of the chain is stepped over, so that a table in the middle
+    of a numbered page does not end the numbering, and so that a column of a table that counts up on
+    its own few lines forms a chain of its own rather than joining the one around it."""
+    best = None
+    nearest: dict[int, tuple[int, tuple]] = {}
+    below: dict[tuple, tuple | None] = {}
+    for hit in sorted(hits, key=lambda h: -h[0]):
+        following = nearest.get(hit[1] + step)
+        if following and following[1][0] - hit[0] <= _NUMBERING_GAP:
+            length, follows = following[0] + 1, following[1]
+        else:
+            length, follows = 1, None
+        below[hit] = follows
+        nearest[hit[1]] = (length, hit)
+        if best is None or length > best[0]:
+            best = (length, hit)
+    chain: list = []
+    hit = best[1] if best else None
+    while hit is not None:
+        chain.append(hit)
+        hit = below[hit]
+    return chain
+
+
+def _runs_down_the_page(hits: list, bounds: list[tuple[int, int]], reach: int | None = None) -> list:
+    """The chains of `hits` that run down the paper as a numbering does, longest first. A chain is
+    kept only where it reaches across the pages it stands on. A column of a table counts up on its
+    own few lines and no further."""
+    kept, left = [], list(hits)
+    while len(left) >= _MIN_NUMBERING:
+        chain = max((_number_chain(left, step) for step in (1, 5, 10)), key=len)
+        across = reach if reach is not None else sum(
+            e - b for b, e in bounds if any(b <= i < e for i, _, _ in chain))
+        if len(chain) < _MIN_NUMBERING or chain[-1][0] - chain[0][0] < _NUMBERING_SPAN * across:
+            break
+        kept.append(chain)
+        taken = set(chain)
+        left = [h for h in left if h not in taken]
+    return kept
+
+
+def _in_the_margin(line: str, start: int, over: int) -> bool:
+    """Whether the number that fills the columns `start` to `over` stands in a margin of `line`,
+    with nothing but space to its left or nothing but space to its right. A paper prints its line
+    numbers in a margin. This is not enough on its own: the first and the last column of a table
+    have the edge of the line beside them as well, which is what `_row_of_cells` is for."""
+    return not line[:start].strip() or not line[over:].strip()
+
+
+def _row_of_cells(line: str) -> bool:
+    """Whether `line` is a row of a table, once a number at either end of it is set aside.
+
+    A row holds several cells kept apart by runs of spaces, while a numbered line of text holds one
+    run of words after its number. Without this, the first or the last column of a table counts up as
+    readily as a numbering does, with nothing but the edge of the line beside it, and a whole column
+    of the table would be read as line numbers and blanked.
+
+    Two cells are a row only where both are short. A page that sets two columns has pdftotext print
+    them on one line with a gap between, and that line would otherwise read as a row of two cells."""
+    m = _MARGIN_NUMBER.match(line)
+    body = line[m.end(1):] if m else line
+    t = _END_NUMBER.search(body)
+    cells = [c for c in re.split(r" {3,}", (body[:t.start(1)] if t else body).strip()) if c]
+    return len(cells) > 2 or (len(cells) == 2 and max(len(c) for c in cells) <= _CELL_TEXT)
+
+
+def _numbering_columns(lines: list[str],
+                       bounds: list[tuple[int, int]]) -> dict[int, list[tuple[int, int]]]:
+    """The line numbers that the paper prints in a column of its own, as
+    {line index: [(number, the column it starts in)]}.
+
+    They count up through the paper, which is what tells them apart from the numbers in a table: a
+    column of a table counts up as well, but it does so on the lines of that table alone. Each
+    column of a two-column page carries a numbering of its own, and a page can hold the end of one
+    and the start of the next, so every chain in a column is taken, not only the longest."""
+    seen: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
+    for i, line in enumerate(lines):
+        if _row_of_cells(line):
+            continue
+        starts = {m.start(1): m for m in _LONE_NUMBER.finditer(line)}
+        starts.update({m.start(1): m for m in _MARGIN_NUMBER.finditer(line)})
+        starts.update({m.start(1): m for m in _END_NUMBER.finditer(line)})
+        for m in starts.values():
+            for key in (("start", m.start(1)), ("end", m.end(1))):
+                seen.setdefault(key, []).append((i, int(m.group(1)), m.start(1)))
+    found: dict[int, list[tuple[int, int]]] = {}
+    for hits in _merge_near_columns(seen).values():
+        if len(hits) < _MIN_NUMBERING:
+            continue
+        for chain in _runs_down_the_page(hits, bounds):
+            # Most of a chain must stand in a margin, not all of it. pdftotext pushes a number
+            # out of the margin where the line beside it runs long, and one such line must not
+            # cost the paper its numbering.
+            if 2 * sum(_in_the_margin(lines[i], start, start + len(str(n)))
+                       for i, n, start in chain) < len(chain):
+                continue
+            for i, n, start in chain:
+                # The same number is found by the column it starts in and by the column it ends in.
+                if (n, start) not in found.setdefault(i, []):
+                    found[i].append((n, start))
+    return found
+
+
+def _merge_near_columns(seen: dict[tuple[str, int], list[tuple[int, int, int]]]
+                        ) -> dict[tuple[str, int], list[tuple[int, int, int]]]:
+    """`seen` with the columns that stand within _COLUMN_NEAR of each other read as one column,
+    because pdftotext sets a right-aligned number a character to either side of its neighbors."""
+    merged: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
+    for edge in ("start", "end"):
+        columns = sorted(col for side, col in seen if side == edge)
+        group: list[int] = []
+        for col in columns + [None]:
+            if group and (col is None or col - group[0] > _COLUMN_NEAR):
+                merged[(edge, group[0])] = sorted({hit for c in group for hit in seen[(edge, c)]})
+                group = []
+            if col is not None:
+                group.append(col)
+    return merged
+
+
+def _numbering_spans(lines: list[str],
+                     bounds: list[tuple[int, int]] | None = None) -> dict[int, list[tuple[int, int]]]:
+    """Where the paper prints a line number, as {line index: [(start column, end column)]}."""
+    bounds = bounds if bounds is not None else [(0, len(lines))]
+    found = _numbering_columns(lines, bounds)
+    spans: dict[int, list[tuple[int, int]]] = {}
+    for i, numbers in found.items():
+        for value, start in numbers:
+            spans.setdefault(i, []).append((start, start + len(str(value))))
+    for start, end in bounds:
+        page = {i: numbers for i, numbers in found.items() if start <= i < end}
+        _cut_other_column(lines, range(start, end), page, spans)
+    return spans
+
+
+def _cut_other_column(lines: list[str], page: range, found: dict[int, list[tuple[int, int]]],
+                      spans: dict[int, list[tuple[int, int]]]) -> None:
+    """Add the line numbers of the other column of `page` to `spans`.
+
+    On a two-column page pdftotext prints both columns on one line, so the line numbers of the right
+    column land inside the text of the left one, where no column holds them and where they are
+    sometimes glued to a word, as in "of97" or "S2299". They are still a numbering: they count up
+    line after line down the page, and that is how they are found here. Following them rather than
+    measuring one distance from the left column holds where a heading in one column shifts the
+    other, and a number is taken only where it continues the count, so a number in the text stays."""
+    numbers = sorted({value for i in page if i in found for value, _ in found[i]})
+    if len(numbers) < _MIN_NUMBERING:
+        return
+    step = min((b - a for a, b in zip(numbers, numbers[1:]) if b > a), default=1)
+    hits: list = []
+    for i in page:
+        mine = spans.get(i, [])
+        ours = {value for value, _ in found.get(i, ())}
+        for m in _GUTTER_NUMBER.finditer(lines[i]):
+            if any(begin <= m.start(1) < over for begin, over in mine):
+                continue
+            digits = m.group(1)
+            for size in range(1, len(digits) + 1):
+                value = int(digits[-size:])
+                # The numbering of a column of its own is found already, and the two are far apart.
+                if all(value - n >= _MIN_COLUMN_OFFSET for n in ours):
+                    hits.append((i, value, (m.end(1) - size, m.end(1))))
+    # The next column takes up the count where this one stopped, which a column of a table does not.
+    left = list(hits)
+    while len(left) >= _MIN_NUMBERING:
+        chain = max((_number_chain(left, step) for step in (1, 5, 10)), key=len)
+        if len(chain) < _MIN_NUMBERING:
+            return
+        if numbers[-1] < chain[0][1] <= numbers[-1] + _NUMBERING_RESUMES * step:
+            for i, _, (begin, over) in chain:
+                spans.setdefault(i, []).append((begin, over))
+            return
+        taken = set(chain)
+        left = [h for h in left if h not in taken]
+
+
+def _strip_line_numbers(lines: list[str], bounds: list[tuple[int, int]] | None = None) -> tuple[list[str], bool]:
+    """`lines` without the line numbers, and whether the paper is numbered. A number is replaced by
+    spaces rather than cut out, so that the text keeps its columns and the page can still be split
+    between them afterwards. A number that pdftotext glued to the last word of a line is cut,
+    because no column holds it."""
+    spans = _numbering_spans(lines, bounds)
+    counted = _counted_numbers(lines)
+    if not spans and not counted:
         return lines, False
-    matches = [l for l in nb if _MARGIN_BARE.match(l) or _MARGIN_GUTTER.match(l)]
-    if len(matches) / len(nb) <= 0.5:
-        return lines, False
-    margin_col = Counter(len(l) - len(l.lstrip()) for l in matches).most_common(1)[0][0]
-    return [_blank_margin(l, margin_col) for l in lines], True
+    out = []
+    for i, line in enumerate(lines):
+        for start, end in sorted(spans.get(i, []), reverse=True):
+            line = line[:start] + " " * (end - start) + line[end:]
+        # A line with its number in a column is cut there already. Cutting again would take the
+        # last digit of the text with it.
+        if i in counted and i not in spans:
+            line = _cut_number(line, counted[i])
+        out.append(line.rstrip())
+    return _cut_stray_numbers(out, counted), True
 
 
-# ── References ───────────────────────────────────────────────────────────────
+def _clean_line_numbers(page_lines: list[list[str]]) -> tuple[list[list[str]], bool]:
+    """Every page without its line numbers. The numbering is found over the whole paper, because a
+    single page can have too few numbered lines to tell one from a column of a table."""
+    bounds, k = [], 0
+    for lines in page_lines:
+        bounds.append((k, k + len(lines)))
+        k += len(lines)
+    flat, found = _strip_line_numbers([l for lines in page_lines for l in lines], bounds)
+    pages, k = [], 0
+    for lines in page_lines:
+        pages.append(flat[k:k + len(lines)])
+        k += len(lines)
+    return pages, found
+
+
+# --- References ---
 
 def _heading_key(line: str) -> str:
     return _HEADER_NUM.sub("", line.strip().rstrip(" .:").lower()).replace(" ", "")
 
 
 def _is_references_heading(line: str) -> bool:
-    return 0 < len(line.strip()) <= 40 and _heading_key(line) in _REFERENCE_HEADINGS
+    text = line.strip()
+    return 0 < len(text) <= 40 and not text.endswith(".") and _heading_key(line) in _REFERENCE_HEADINGS
 
 
-def _is_appendix_heading(line: str) -> bool:
-    return 0 < len(line.strip()) <= 80 and _heading_key(line).startswith(_APPENDIX_HEADINGS)
+def _next_lines(pages: list[Page], pi: int, li: int, n: int) -> list[str]:
+    """The next `n` non-blank lines after line `li` of page `pi`."""
+    out: list[str] = []
+    for pj in range(pi, len(pages)):
+        for line in pages[pj].lines[li + 1 if pj == pi else 0:]:
+            if line.strip():
+                out.append(line)
+                if len(out) == n:
+                    return out
+    return out
+
+
+def _is_appendix_heading(line: str, following: list[str]) -> bool:
+    """Whether `line`, after the bibliography, starts an appendix. A heading labeled with a letter,
+    as in "A Additional Results" or "B Details for RQ1", counts only if it does not end or read like
+    part of a bibliography entry and no entry follows it in `following`, because a wrapped title in
+    the bibliography can also start with "A"."""
+    text = line.strip()
+    if not 0 < len(text) <= 80:
+        return False
+    label = _LETTER_LABEL.match(text)
+    rest = _LETTER_LABEL.sub("", text)
+    if _heading_key(text).startswith(_APPENDIX_HEADINGS) or _heading_key(rest).startswith(_APPENDIX_HEADINGS):
+        return True
+    if (len(text) <= 60 and not text.endswith((".", ",")) and not any(_BIB_ENTRY.match(l) for l in following)
+            and not re.search(r"https?:|doi|\bpp\.|\bvol\.|\bProc\b|\(\d{4}\)", text, re.I)
+            and (_heading_key(text).startswith(_APPENDIX_WORDS)
+                 or _heading_key(rest).startswith(_APPENDIX_WORDS))):
+        return True
+    if label and label.group().rstrip()[-1] in ".)" and (
+            "," in rest or any(q in rest for q in _QUOTE_MARKS) or len(rest.split()) > 8):
+        return False
+    return (rest != text and len(text) <= 60 and not text.endswith((".", ","))
+            and not re.search(r"https?:|doi|\bpp\.|\bvol\.|\bProc\b|\(\d{4}\)", text, re.I)
+            and not any(_BIB_ENTRY.match(l) for l in following))
+
+
+# What a line of a bibliography carries: a link, a page range, a volume, a venue, or a year.
+_BIB_LOOK = re.compile(r"https?:|doi|\bpp\.|\bvol\.|\bno\.|\bProc\b|\bConf\b|\bJ\.|\bIEEE\b|\bACM\b"
+                       r"|\(\d{4}\)|\b(?:19|20)\d{2}[.,)]?$|\b(?:19|20)\d{2}[.,]")
+# How many lines of running text in a row end a bibliography.
+_BODY_RUN = 6
+
+
+def _stands_early(pages: list[Page], pi: int, li: int, share: float = 2 / 3) -> bool:
+    """Whether line `li` of page `pi` stands in the first `share` of the paper's lines. A
+    bibliography that starts there cannot be the tail of the paper."""
+    before = sum(1 for pj in range(pi) for l in pages[pj].lines if l.strip())
+    before += sum(1 for l in pages[pi].lines[:li] if l.strip())
+    total = sum(1 for p in pages for l in p.lines if l.strip())
+    return bool(total) and before < share * total
+
+
+def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None:
+    """Where the bibliography that starts at line `li` of page `pi` gives way to running text again.
+
+Removal runs to the end of the paper, because a bibliography is the last thing in it, and an
+    author biography that follows it goes with it. On a page whose columns interleave, the heading
+    can land in the middle of the body instead, and removing everything after it would take the body
+    with it. A run of lines that carry none of the marks of a bibliography entry ends the removal
+    there. Keeping a few entries costs the checker a little noise in `text.txt`; removing the body
+    costs the paper. Only such a page is read this way, or an author biography, which reads as
+    running text, would end the removal on every paper that prints one."""
+    run: tuple[int, int] | None = None
+    seen = 0
+    for pj in range(pi, len(pages)):
+        for lj in range(li + 1 if pj == pi else 0, len(pages[pj].lines)):
+            line = pages[pj].lines[lj]
+            if not line.strip():
+                continue
+            if _BIB_ENTRY.match(line) or _BIB_LOOK.search(line):
+                run, seen = None, 0
+                continue
+            run = run or (pj, lj)
+            seen += 1
+            if seen >= _BODY_RUN:
+                return run
+    return None
 
 
 def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
-    """Blank everything from the first References heading to the next appendix heading, or to
-    the end. Author biographies after an IEEE bibliography are removed with it."""
-    start = next(((pi, li) for pi, p in enumerate(pages)
-                  for li, l in enumerate(p.lines) if _is_references_heading(l)), None)
+    """Blank everything from the first References heading that a bibliography entry follows, to
+    the next appendix heading or the end. Author biographies after an IEEE bibliography are removed
+    with it."""
+    start = next(((pi, li) for pi, p in enumerate(pages) for li, l in enumerate(p.lines)
+                  if _is_references_heading(l)
+                  and any(_BIB_ENTRY.match(x) for x in _next_lines(pages, pi, li, 12))), None)
     if start is None:
         return None
     pi, li = start
     end = next(((pj, lj) for pj in range(pi, len(pages))
                 for lj in range(li + 1 if pj == pi else 0, len(pages[pj].lines))
-                if _is_appendix_heading(pages[pj].lines[lj])), None)
-    stop = end if end else (len(pages) - 1, len(pages[-1].lines))
+                if pages[pj].lines[lj].strip()
+                and _is_appendix_heading(pages[pj].lines[lj], _next_lines(pages, pj, lj, 12))), None)
+    # Only where the heading stands early in a paper whose page has its columns interleaved, because
+    # only there is the bibliography not the tail of the paper. A paper that prints its bibliography
+    # where it belongs is removed to the end, together with any author biography.
+    early = pages[pi].regions > 1 and _stands_early(pages, pi, li)
+    resumes = _text_resumes(pages, pi, li) if early else None
+    stop = min([x for x in (end, resumes) if x], default=(len(pages) - 1, len(pages[-1].lines)))
     for pj in range(pi, stop[0] + 1):
         lo = li if pj == pi else 0
         hi = stop[1] if pj == stop[0] else len(pages[pj].lines)
@@ -379,24 +988,94 @@ def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
     return pages[pi].number, (pages[end[0]].number if end else None)
 
 
-# ── Entry points ─────────────────────────────────────────────────────────────
+# --- Entry points ---
+
+# How many of a page's lines must be blank at a column for it to be read as the gutter where no
+# gutter runs the whole height of the page.
+_PAGE_GUTTER_BLANK = 0.8
+
+
+def _page_gutter(lines: list[str]) -> int | None:
+    """The gutter of `lines`, whether or not the page reads as two columns of prose.
+
+    A page with its right column filled for part of its height only, as a page that ends in a
+    bibliography is, has no gutter that runs its whole height. The column that is blank on most of
+    its lines and carries text on both sides is taken for it, because leaving such a page unsplit
+    puts the text of the two columns on one line, where a sentence of one runs into the other."""
+    nb = [l for l in lines if l.strip()]
+    if len(nb) < _MIN_REGION_LINES:
+        return None
+    found = _gutter(nb)
+    if found is None:
+        # The gutter is the column with the most text on the side that carries less of it. Ranking
+        # by the blank lines alone would take the right edge of the text instead, where the page is
+        # blank on almost every line and a few long lines reach past it.
+        best = None
+        for c in range(_MIN_GUTTER, max(len(l) for l in nb)):
+            blank = sum(1 for l in nb if _blank_at(l, c))
+            if blank < _PAGE_GUTTER_BLANK * len(nb):
+                continue
+            left = sum(1 for l in nb if l[:c - 1].strip())
+            right = sum(1 for l in nb if len(l) > c + 2 and l[c + 2:].strip())
+            if min(left, right) >= _MIN_SIDE_LINES and (best is None or (min(left, right), blank) > best[0]):
+                best = ((min(left, right), blank), c)
+        found = best[1] if best else None
+    # Only a page of prose is cut this way. A page filled with a wide table has a gap between two of
+    # its columns that is blank just as often, and cutting there scrambles the rows of the table.
+    if found is None or 2 * sum(_cell_gaps(l, found) >= 2 for l in nb) > len(nb):
+        return None
+    return found
+
+
+def _read_pages(page_lines: list[list[str]]) -> tuple[list[Page], bool]:
+    """Each page with its lines in reading order, and whether the paper is set in two columns.
+
+    The pages are read twice. The first pass collects the gutters at which the paper's two-column
+    prose is set, and the second pass cuts pages only near one of them. A gap inside a wide table is
+    then never taken for a gutter. A table that continues on a page without its caption stays whole,
+    and a paper printed in one column keeps every page as it is.
+
+    One case stays wrong: In a paper printed in one column, a table of three or more columns that
+    continues on a page without its caption can still be cut at a gap between two of its columns,
+    which puts its cells in the wrong order. The prose of the page is not affected, and a number
+    that stands only in a table is evidence for a claim rather than a claim."""
+    laid = [_layout(lines) for lines in page_lines]
+    votes = Counter(g for _, _, g in laid if g is not None)
+    allowed = set(votes)
+    if not allowed:
+        # No page reads as two columns of prose, but a page may still hold a region, for example
+        # where one column is much shorter than the other. Its gutter is better than none.
+        allowed = {c for (_, regions, _), page in zip(laid, page_lines) if regions
+                   for c in [_page_gutter(page)] if c}
+    known = votes.most_common(1)[0][0] if votes else None
+    pages = []
+    for number, lines in enumerate(page_lines, 1):
+        ordered, regions = lines, 0
+        if allowed:
+            ordered, regions, _ = _layout(lines, known, allowed)
+            if not regions:
+                # A page with too few lines for a region, such as a short last page.
+                ordered, regions, _ = _layout(lines, known, allowed, allow_short=True)
+        pages.append(Page(number, ordered, regions))
+    return pages, bool(allowed)
+
 
 def extract(pdf_path: str) -> Extraction:
     raw = _pages(pdf_path)
     headers = _running_headers(raw)
-    pages = []
-    for number, text in enumerate(raw, 1):
+    page_lines = []
+    for text in raw:
         lines = [l.rstrip() for l in text.split("\n")]
         _blank_edges(lines, headers)
-        ordered, regions = _layout(lines)
-        pages.append(Page(number, ordered, regions))
-    # Line numbers are detected over the whole paper, because a single page can have too few lines to decide.
-    flat, lineno = _strip_line_numbers([l for p in pages for l in p.lines])
-    k = 0
-    for p in pages:
-        p.lines, k = flat[k:k + len(p.lines)], k + len(p.lines)
+        page_lines.append(lines)
+    # The line numbers are removed before the columns are split, because pdftotext prints them in a
+    # column of their own, where they stand apart from the text. Once the columns of a page are put
+    # in reading order, the numbers of one column sit inside the sentences of the other, where a
+    # number in a sentence and a cell of a table can no longer be told apart.
+    page_lines, lineno = _clean_line_numbers(page_lines)
+    pages, two_column = _read_pages(page_lines)
     references = _drop_references(pages)
-    return Extraction(pages, lineno, references)
+    return Extraction(pages, lineno, references, two_column)
 
 
 def to_text(extraction: Extraction) -> str:
