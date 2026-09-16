@@ -199,7 +199,7 @@ It cannot tell whether a part pairs a number with the wrong item, so reread each
 python3 <skill base directory>/scripts/cea_claims.py render <output directory>/<paper_id>
 ```
 
-The render command writes `claims.md`, with the claims and rejected candidates in page order. Then tell the user, briefly:
+The render command writes `claims.md`. The claims stand under the main result each one serves, the result the paper states in the most places first, and within a result in page order, because the paper puts no order on the claims that support one result. A list of every claim in page order, and the rejected candidates, follow. Then tell the user, briefly:
 
 - where `claims.json` and `claims.md` are
 - how many broad statements, claims, and rejected candidates you recorded

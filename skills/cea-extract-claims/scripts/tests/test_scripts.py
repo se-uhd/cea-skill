@@ -634,6 +634,19 @@ class Validate(unittest.TestCase):
                          "### R1: page 2, 4 Data"):
             self.assertIn(expected, md)
 
+    def test_render_puts_the_most_stated_result_first(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Build failures are rare.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        data["claims"][1]["serves"] = ["B2"]
+        data["rejected"].append(
+            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
+             "page": 3, "section": "6 Discussion", "duplicate_of": ["B1"], "reason": "Repeats B1."})
+        md = cea_claims.render(data)
+        self.assertIn("### B1 (abstract, stated in 2 places)", md)
+        self.assertLess(md.index("### B1 (abstract"), md.index("### B2 (conclusion"))
+
     def test_render_lists_claims_in_page_order(self):
         data = valid_claims()
         data["claims"][1]["page"] = 1

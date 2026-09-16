@@ -629,6 +629,9 @@ _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
 # How many broad statements one claim can serve before they are likely one main result recorded
 # several times. The reference records a main result once, so a claim serves few statements.
 _SERVES_MANY = 3
+# The order the reference gives for the sentence that states a main result. Where the paper states
+# two results in as many places, the kind of sentence breaks the tie.
+_SOURCE_ORDER = ("rq_answer", "abstract", "contributions", "conclusion", "other")
 
 
 def _sentence_warnings(label: str, quote: str, page_text: str) -> list[str]:
@@ -807,6 +810,30 @@ def _first_page(entry: dict) -> int:
         return 0
 
 
+def _stated_in(data: dict) -> dict[str, int]:
+    """How many places the paper states each main result: the broad statement itself, and every
+    recorded sentence that repeats it. A result the paper states in its abstract, its contribution
+    list and its conclusion carries more of the paper than one stated once."""
+    places = {b["id"]: 1 for b in data["broad_statements"]}
+    for r in data["rejected"]:
+        refs = r.get("duplicate_of") or []
+        for ref in (refs if isinstance(refs, list) else [refs]):
+            if ref in places:
+                places[ref] += 1
+    return places
+
+
+def _by_weight(data: dict) -> list[dict]:
+    """The broad statements, the ones the paper states in most places first. The paper orders its
+    own results this way; it puts no order on the claims that support one result, so neither does
+    this."""
+    places = _stated_in(data)
+    def key(b):
+        source = _SOURCE_ORDER.index(b["source"]) if b["source"] in _SOURCE_ORDER else len(_SOURCE_ORDER)
+        return (-places[b["id"]], source, _first_page(b), b["id"])
+    return sorted(data["broad_statements"], key=key)
+
+
 def render(data: dict) -> str:
     paper, broad = data["paper"], data["broad_statements"]
     claims, rejected = data["claims"], data["rejected"]
@@ -834,9 +861,33 @@ def render(data: dict) -> str:
             out.append(f"- Note: {_flat(b['note'])}")
         out.append("")
 
-    out += ["## Narrow claims", ""]
+    out += ["## Narrow claims", "",
+            "Grouped under the main result each one serves, the result the paper states in the most "
+            "places first. Within a result the claims stand in page order, because the paper puts no "
+            "order on them.", ""]
     if not claims:
         out += ["None selected.", ""]
+    places = _stated_in(data)
+    shown: set[str] = set()
+    for b in _by_weight(data):
+        serving = sorted((c for c in claims if b["id"] in c["serves"]), key=_first_page)
+        if not serving:
+            continue
+        stated = places[b["id"]]
+        out += [f"### {b['id']} ({b['source']}, stated in {stated} place{'s' if stated > 1 else ''}): "
+                f"{_flat(b['quote'])}", ""]
+        for c in serving:
+            carries = "sole support" if len(serving) == 1 else f"1 of {len(serving)}"
+            out.append(f"- {c['id']}, page {c['page']}, {carries}"
+                       + (" (also under an earlier result)" if c["id"] in shown else ""))
+            shown.add(c["id"])
+        out.append("")
+    loose = [c for c in claims if not any(b in {x["id"] for x in data["broad_statements"]} for b in c["serves"])]
+    if loose:
+        out += ["### Serving no recorded broad statement", ""]
+        out += [f"- {c['id']}, page {c['page']}" for c in sorted(loose, key=_first_page)] + [""]
+
+    out += ["### Every claim", ""]
     for c in sorted(claims, key=_first_page):
         out += [f"### {c['id']}: page {c['page']}, {_flat(c['section'])}", "", *_quote_block(c["quote"]), ""]
         if c["split_from"]:
