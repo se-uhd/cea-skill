@@ -59,7 +59,7 @@
         "claims.json exists and cea_claims.py validate prints CEA_VALID",
         "Every recorded quote is found on its stated page of the paper's text",
         "No narrow claim is selected",
-        "Every rejected candidate's reason says why it is not a claim: its numbers describe the study, or no main result depends on the count",
+        "Every rejected candidate's reason says why it is not a claim: it names a ground the reference gives, or says that no main result depends on the count",
         "At least one rejected candidate is recorded, and every rejected candidate is a quoted statement with a page and a reason",
         "No number that only describes the study, such as a sample size, corpus size, codebook size, or agreement score, is recorded as a claim",
         "No purely qualitative finding or summary is recorded as a claim, a broad statement, or a rejected candidate, except a summary sentence in which the numbers describe the study, or a statement whose basis the paper leaves unclear, which is a rejected candidate with a note",

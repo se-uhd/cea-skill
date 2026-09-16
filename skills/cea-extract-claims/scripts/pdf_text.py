@@ -356,7 +356,8 @@ def _spanning_row(line: str, c: int) -> bool:
 
 
 def _last_cell_row(region: list[str], i: int, c: int) -> bool:
-    """Whether `line` is a row of a table with its last cell alone right of column `c`, which is
+    """Whether line `i` of `region` is a row of a table with its last cell alone right of column `c`,
+    which is
     where a table with a narrow last column meets the gutter. The gap before that cell falls on the
     gutter, so the row would be cut in half and its last cell read as text of the right column.
 
@@ -364,10 +365,10 @@ def _last_cell_row(region: list[str], i: int, c: int) -> bool:
     there. A line that ends a paragraph of the right column leaves a single short word there too, so
     the cell has to read as a count or a measurement, which is what such a last column holds.
 
-    One case stays wrong: a last column of words, such as one of Yes and No, is not held together
-    this way, and its cells are read as text of the right column. Comparing the column against the
-    rows nearby does not tell the two apart either, because the word that ends a paragraph falls in
-    the column of a cell as readily as a cell does. The cells are kept, each on a line of its own."""
+    One case stays wrong: A last column of words, such as a column of Yes and No values, is not held
+    together this way, and its cells are read as text of the right column. Comparing the column
+    against the rows nearby does not tell a cell from the end of a paragraph either, because the word
+    that ends a paragraph falls in the column of a cell just as often. The cells are kept, each on a line of its own."""
     line = region[i]
     last = line[c:].strip()
     if _cell_gaps(line[:c], c) == 0 or not 0 < len(last) <= _LAST_CELL or " " in last:
@@ -560,8 +561,8 @@ _END_NUMBER = re.compile(r"(?<=\s)(\d{1,4})\s*$")
 # How many numbers in one column make a numbering.
 _MIN_NUMBERING = 6
 # How much of the paper a numbering runs through, as a share of its lines. A numbering that pdftotext
-# renders in pieces reaches about half of a page, so the share is set below that. What keeps a column
-# of a table from passing is `_under_a_caption` together with `_carries_on_a_sentence`.
+# renders in pieces reaches about half of a page, so the share is set below that.
+# `_beside_a_caption` and `_reads_as_prose` together keep a column of a table from passing.
 _NUMBERING_SPAN = 0.4
 # How many lines may stand between two numbered lines. A paper numbers every line, or every fifth
 # or tenth line, and a figure or a table can stand between two of them.
@@ -705,26 +706,39 @@ def _runs_down_the_page(hits: list, bounds: list[tuple[int, int]], reach: int | 
     return kept
 
 
-# How many lines above a chain are read for the caption of a table.
-_CAPTION_NEAR = 5
+# How far above or below a block its caption may stand. A caption of several printed lines, or one
+# set below its table, has to be seen from the block.
+_CAPTION_NEAR = 12
+# The share of a block's lines that must carry on a sentence for the block to read as prose.
+_PROSE_SHARE = 0.10
+# A line that ends a sentence.
+_SENTENCE_TAIL = re.compile(r"[.!?]$")
 
 
-def _under_a_caption(lines: list[str], first: int) -> bool:
-    """Whether the caption of a table or a figure stands just above line `first`. A column of a
-    table that counts up begins under the caption of its table, and a paper's numbering does not."""
-    above = [lines[j].strip() for j in range(max(0, first - 8), first) if lines[j].strip()]
-    return any(_TABLE_CAPTION.match(x) or _CAPTION.match(x) for x in above[-_CAPTION_NEAR:])
+def _beside_a_caption(lines: list[str], first: int, last: int) -> bool:
+    """Whether the caption of a table or a figure stands beside the block from line `first` to line
+    `last`. Journals set a table's caption above it or below it, and a caption of several printed
+    lines reaches further, so both sides are read and the reach is generous."""
+    above = [lines[j].strip() for j in range(max(0, first - _CAPTION_NEAR), first) if lines[j].strip()]
+    below = [lines[j].strip() for j in range(last + 1, min(len(lines), last + 1 + _CAPTION_NEAR))
+             if lines[j].strip()]
+    return any(_TABLE_CAPTION.match(x) or _CAPTION.match(x) for x in above + below)
 
 
-def _carries_on_a_sentence(lines: list[str], chain: list) -> bool:
-    """Whether any numbered line of `chain` carries on the sentence of the line above it, which the
-    lines of a paper do and the rows of a table do not. A line that does starts in lower case."""
+def _reads_as_prose(lines: list[str], chain: list) -> bool:
+    """Whether the block reads as the running text of a paper. Enough of its lines carry on the
+    sentence of the line before, which they show by starting in lower case, and at least one line
+    ends a sentence. A table of rows that begin in lower case, such as rows named after tools or
+    files, meets the first and not the second, because a row is a phrase that stands on its own."""
+    carries = ends = rest = 0
     for i, number, start in chain:
         line = lines[i]
-        rest = (line[:start] + " " * len(str(number)) + line[start + len(str(number)):]).strip()
-        if rest and rest[0].islower():
-            return True
-    return False
+        body = (line[:start] + " " * len(str(number)) + line[start + len(str(number)):]).strip()
+        if body:
+            rest += 1
+            carries += body[0].islower()
+            ends += bool(_SENTENCE_TAIL.search(body))
+    return bool(rest) and carries / rest >= _PROSE_SHARE and ends > 0
 
 
 def _in_the_margin(line: str, start: int, over: int) -> bool:
@@ -783,9 +797,10 @@ def _numbering_columns(lines: list[str],
                        for i, n, start in chain) < len(chain):
                 continue
             # The first and the last column of a table stand in a margin as well, and a table of
-            # enough rows counts up as far as a numbering. Such a column begins under the caption of
-            # its table, and none of its rows carries on the sentence of the row above it.
-            if _under_a_caption(lines, chain[0][0]) and not _carries_on_a_sentence(lines, chain):
+            # enough rows counts up as far as a numbering does. Such a column has a caption beside
+            # its block and does not read as the running text of a paper. Both have to hold, because
+            # a paper prints figures beside its text as well, and a table can hold a sentence.
+            if _beside_a_caption(lines, chain[0][0], chain[-1][0]) and not _reads_as_prose(lines, chain):
                 continue
             for i, n, start in chain:
                 # The same number is found by the column it starts in and by the column it ends in.
@@ -970,12 +985,13 @@ def _stands_early(pages: list[Page], pi: int, li: int, share: float = 2 / 3) -> 
 def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None:
     """Where the bibliography that starts at line `li` of page `pi` gives way to running text again.
 
-    Removal runs to the end of the paper, because a bibliography is the last thing in it, and an
-    author biography that follows it goes with it. Where the heading stands early, the bibliography
+    Removal runs to the end of the paper, because a bibliography is the last thing a paper prints,
+    and an author biography set after the bibliography is removed with it. Where the heading stands
+    early, the bibliography
     is not the tail of the paper: the columns of its page can interleave, or an appendix heading can
     go unrecognized, and removing everything after it would take the body with it. A run of lines
     carrying none of the marks of a bibliography entry ends the removal there. Keeping a few entries
-    costs the checker a little noise in `text.txt`. Removing the body costs the paper."""
+    leaves a little noise in `text.txt`, while removing the body would lose text the paper needs."""
     run: tuple[int, int] | None = None
     seen = 0
     for pj in range(pi, len(pages)):
@@ -1010,6 +1026,9 @@ def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
     # Only where the heading stands early: see `_stands_early`.
     resumes = _text_resumes(pages, pi, li) if _stands_early(pages, pi, li) else None
     stop = min([x for x in (end, resumes) if x], default=(len(pages) - 1, len(pages[-1].lines)))
+    # The page reported is the one the removal reached, which is the appendix heading only where the
+    # removal ran that far.
+    end = end if end == stop else None
     for pj in range(pi, stop[0] + 1):
         lo = li if pj == pi else 0
         hi = stop[1] if pj == stop[0] else len(pages[pj].lines)

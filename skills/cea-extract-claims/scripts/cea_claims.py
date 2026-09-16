@@ -606,12 +606,18 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # section "Selection question". A candidate rejected on one of them has no main result to name,
 # because no main result stands or falls with it.
 _REJECTED_GROUND = re.compile(
-    r"describ\w*\s+(?:the|its|this)\s+(?:stud|data)|stud\w*\s+(?:size|design)|sample size|corpus size"
-    r"|codebook|inter-?rater|agreement score|repeats\s+(?:[BCR]\d|another|the)|repetition of"
-    r"|duplicates\s+[BCR]\d|cited work|prior work|background work|work of others"
-    r"|participant\s+(?:states|stated|reports|reported|gave)|number a participant"
-    r"|feature importance|accuracy of (?:a|the) model|reads only|only reads"
-    r"|qualitative|formal|theorem|proof|novelty|no main result|out of scope", re.I)
+    r"\bdescrib\w*\s+(?:the|its|this)\s+(?:stud|data)|\bstud\w*\s+(?:size|design)\b|\bsample size\b"
+    r"|\bcorpus size\b|\bcodebook\b|\binter-?rater\b|\bagreement score\b"
+    r"|\brepeats\s+(?:[BCR]\d|another|the)|\brepetition of\b|\bduplicates\s+[BCR]\d"
+    r"|\bcited work\b|\bprior work\b|\bbackground work\b|\bwork of others\b"
+    r"|\bparticipant\s+(?:states|stated|reports|reported|gave)\b|\bnumber a participant\b"
+    r"|\bfeature importance|\baccuracy of (?:a|the) model\b|\breads only\b|\bonly reads\b"
+    r"|\bqualitative\b|\bformal\b|\btheorem\b|\bproof\b|\bnovelty\b"
+    r"|\bno broad statement\b", re.I)
+# The one ground that belongs to a record with no broad statement. Where the record has them, saying
+# that no main result depends on the candidate is the selection question answered no, and the reason
+# names the statement that still stands instead.
+_NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
 
 
 def _sentence_warnings(label: str, quote: str, page_text: str) -> list[str]:
@@ -689,10 +695,12 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "serves; say which main result would fail and how")
     for i, e in enumerate(data["rejected"]):
         if not (e.get("duplicate_of") or e.get("split_from") or re.search(r"\bB\d+\b", e["reason"])
-                or _REJECTED_GROUND.search(e["reason"])):
+                or _REJECTED_GROUND.search(e["reason"])
+                or (_NO_MAIN_RESULT.search(e["reason"]) and not data["broad_statements"])):
             out.append(f"{_label('rejected', i, e)}.reason: names neither a main result nor a ground; say "
                        "which main result still stands, by the id of its broad statement, or which ground "
-                       "puts the statement out of scope")
+                       "puts the statement out of scope. Where the record has broad statements, saying that "
+                       "no main result depends on the candidate is the selection question answered no")
     entries = [(_label(key, i, e), _key(e["quote"])) for key in ("broad_statements", "claims", "rejected")
                for i, e in enumerate(data[key])]
     for label, key in entries:
