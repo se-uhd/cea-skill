@@ -593,9 +593,16 @@ class Validate(unittest.TestCase):
         data["rejected"].append(
             {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
              "page": 3, "section": "6 Discussion", "duplicate_of": ["C1"], "reason": "Repeats C1."})
-        self.assertIn("names no broad statement", self.warnings(data))
+        self.assertIn("name the broad statement as well", self.warnings(data))
         data["rejected"][-1]["duplicate_of"] = ["B1"]
-        self.assertNotIn("names no broad statement", self.warnings(data))
+        self.assertNotIn("name the broad statement as well", self.warnings(data))
+
+    def test_repeating_something_no_result_rests_on_is_quiet(self):
+        data = valid_claims()
+        data["rejected"].append(
+            {"id": "R2", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+             "section": "6 Discussion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
+        self.assertNotIn("name the broad statement as well", self.warnings(data))
 
     def test_boxed_answer_takes_the_rq_answer_source(self):
         data = valid_claims()

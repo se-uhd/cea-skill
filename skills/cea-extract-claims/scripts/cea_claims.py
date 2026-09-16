@@ -626,9 +626,6 @@ _REJECTED_GROUND = re.compile(
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
 # A section heading that names the paper's answer to a research question.
 _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
-# How many broad statements one claim can serve before they are likely one main result recorded
-# several times. The reference records a main result once, so a claim serves few statements.
-_SERVES_MANY = 3
 # The order the reference gives for the sentence that states a main result. Where the paper states
 # two results in as many places, the kind of sentence breaks the tie.
 _SOURCE_ORDER = ("rq_answer", "abstract", "contributions", "conclusion", "other")
@@ -727,12 +724,15 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "they read as one main result stated several times; record it once and keep "
                        "the other sentences as rejected candidates naming it")
     statements = {b["id"] for b in data["broad_statements"]}
+    # Only a sentence that repeats a main result has a broad statement to name. One that repeats a
+    # number no main result rests on names the claim it repeats, which the schema allows.
+    carries = {c["id"] for c in data["claims"] if set(c["serves"]) & statements}
     for i, e in enumerate(data["rejected"]):
         refs = e.get("duplicate_of") or []
         refs = refs if isinstance(refs, list) else [refs]
-        if refs and statements and not any(r in statements for r in refs):
-            out.append(f"{_label('rejected', i, e)}.duplicate_of: names no broad statement; a sentence "
-                       "that repeats a main result names the broad statement that states it")
+        if refs and statements and not any(r in statements for r in refs) and any(r in carries for r in refs):
+            out.append(f"{_label('rejected', i, e)}.duplicate_of: repeats a claim that serves a broad "
+                       "statement, so it repeats that main result; name the broad statement as well")
     for i, b in enumerate(data["broad_statements"]):
         if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
             out.append(f"{_label('broad_statements', i, b)}.source: the section names a boxed answer, "
@@ -919,7 +919,8 @@ def render(data: dict) -> str:
         out += ["### Serving no recorded broad statement", ""]
         out += [f"- {c['id']}, page {c['page']}" for c in sorted(loose, key=_first_page)] + [""]
 
-    out += ["### Every claim", ""]
+    if claims:
+        out += ["### Every claim", ""]
     for c in sorted(claims, key=_first_page):
         out += [f"### {c['id']}: page {c['page']}, {_flat(c['section'])}", "", *_quote_block(c["quote"]), ""]
         if c["split_from"]:
