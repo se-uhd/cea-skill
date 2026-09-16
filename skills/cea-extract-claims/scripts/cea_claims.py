@@ -624,6 +624,11 @@ _REJECTED_GROUND = re.compile(
 # that no main result depends on the candidate is the selection question answered no, and the reason
 # names the statement that still stands instead.
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
+# A section heading that names the paper's answer to a research question.
+_BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
+# How many broad statements one claim can serve before they are likely one main result recorded
+# several times. The reference records a main result once, so a claim serves few statements.
+_SERVES_MANY = 3
 
 
 def _sentence_warnings(label: str, quote: str, page_text: str) -> list[str]:
@@ -707,6 +712,27 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "which main result still stands, by the id of its broad statement, or which ground "
                        "puts the statement out of scope. Where the record has broad statements, saying that "
                        "no main result depends on the candidate is the selection question answered no")
+    # The record has to say which main results the paper has, and say each one once, or a reader
+    # cannot tell one result stated four ways from four results.
+    for i, c in enumerate(data["claims"]):
+        if len(c["serves"]) >= _SERVES_MANY:
+            out.append(f"{_label('claims', i, c)}.serves: names {len(c['serves'])} broad statements; "
+                       "a main result is recorded once, so check whether these state one result "
+                       "and record the repetitions as rejected candidates naming it")
+    statements = {b["id"] for b in data["broad_statements"]}
+    for i, e in enumerate(data["rejected"]):
+        refs = e.get("duplicate_of") or []
+        refs = refs if isinstance(refs, list) else [refs]
+        if refs and statements and not any(r in statements for r in refs):
+            out.append(f"{_label('rejected', i, e)}.duplicate_of: names no broad statement; a sentence "
+                       "that repeats a main result names the broad statement that states it")
+    for i, b in enumerate(data["broad_statements"]):
+        if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
+            out.append(f"{_label('broad_statements', i, b)}.source: the section names a boxed answer, "
+                       f"so the source is rq_answer, not {b.get('source')!r}")
+        if b.get("source") == "other" and not b.get("note"):
+            out.append(f"{_label('broad_statements', i, b)}.note: a broad statement with source "
+                       "'other' says why no summary sentence states it")
     entries = [(_label(key, i, e), _key(e["quote"])) for key in ("broad_statements", "claims", "rejected")
                for i, e in enumerate(data[key])]
     for label, key in entries:

@@ -47,7 +47,7 @@ Other sentences in the abstract, the contribution list, a boxed answer, or the c
 
 Judge a boxed answer sentence by sentence:
 
-- Each sentence that gives a finding in answer to the research question is one broad statement with `source` `rq_answer`. A box can give several findings, such as one about tasks and one about file types, and a single sentence of the box can state more than one. A sentence that adds a breakdown, a subgroup, or an exception of a finding in the same box is not a broad statement.
+- Each sentence that gives a finding in answer to the research question is one broad statement with `source` `rq_answer`. The source is `rq_answer` wherever the box stands, including inside a results section, because the source says which kind of sentence states the main result, not which section prints it. A box can give several findings, such as one about tasks and one about file types, and a single sentence of the box can state more than one. A sentence that adds a breakdown, a subgroup, or an exception of a finding in the same box is not a broad statement.
 - A number in the box is backed by the most specific sentence that states it. If a sentence in the results or the discussion states it more specifically, that sentence is the claim candidate.
 - When a box sentence needs the sentence before it as context, for example because it starts with "However" or refers to "them", quote the two sentences together in whatever record the second sentence gets. If the sentence before it states a finding of its own, that earlier sentence keeps its own record as well. If the second sentence gets no record of its own, leave the pair out and keep the record of the sentence before it.
 

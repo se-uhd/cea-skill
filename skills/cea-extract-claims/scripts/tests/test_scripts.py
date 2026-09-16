@@ -548,6 +548,39 @@ class Validate(unittest.TestCase):
     def test_valid_record_passes(self):
         self.assertEqual(self.check(valid_claims()), "")
 
+    def test_claim_serving_many_statements_warns(self):
+        data = valid_claims()
+        data["broad_statements"] += [
+            {"id": "B2", "quote": "Caching halves median build time.", "page": 1,
+             "section": "1 Introduction", "source": "contributions"},
+            {"id": "B3", "quote": "Caching halves median build time.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"}]
+        data["claims"][0]["serves"] = ["B1", "B2", "B3"]
+        self.assertIn("names 3 broad statements", self.warnings(data))
+
+    def test_repetition_naming_no_broad_statement_warns(self):
+        data = valid_claims()
+        data["rejected"].append(
+            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
+             "page": 3, "section": "6 Discussion", "duplicate_of": ["C1"], "reason": "Repeats C1."})
+        self.assertIn("names no broad statement", self.warnings(data))
+        data["rejected"][-1]["duplicate_of"] = ["B1"]
+        self.assertNotIn("names no broad statement", self.warnings(data))
+
+    def test_boxed_answer_takes_the_rq_answer_source(self):
+        data = valid_claims()
+        data["broad_statements"][0]["section"] = "5 Results, Summary RQ1"
+        self.assertIn("the source is rq_answer", self.warnings(data))
+        data["broad_statements"][0]["source"] = "rq_answer"
+        self.assertNotIn("the source is rq_answer", self.warnings(data))
+
+    def test_source_other_says_why(self):
+        data = valid_claims()
+        data["broad_statements"][0]["source"] = "other"
+        self.assertIn("says why no summary sentence states it", self.warnings(data))
+        data["broad_statements"][0]["note"] = "No summary sentence gives this number."
+        self.assertNotIn("says why no summary sentence states it", self.warnings(data))
+
     def test_reason_naming_a_ground_needs_no_broad_statement(self):
         data = valid_claims()
         data["rejected"][0]["reason"] = "Describes the study, not a result."
