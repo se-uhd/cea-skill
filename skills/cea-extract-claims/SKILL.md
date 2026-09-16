@@ -18,7 +18,7 @@ compatibility: Requires Python 3.10 or newer (standard library only) and pdftote
 
 This skill drafts the claim selection step of Claim-Evidence Alignment (CEA) for one paper. For each narrow quantitative claim, CEA reconstructs the chain from the claim to its evidence, and a person, the checker, reviews each step that an agent drafts. This first step records which claims the paper makes, where it makes them, and why each claim was selected. Later steps start from this record. A claim missing here is never checked, and a wrong quote makes every later step work from the wrong passage.
 
-The checker must be able to verify the record. Each statement is quoted exactly with its page, and each selection and rejection has a reason that the checker can accept or overturn. A script, the validator, confirms that each quote is on its page.
+The checker must be able to verify the record. Each statement is quoted exactly with its page, and each selection and rejection has a reason that the checker can accept or overturn. A script, the validator, confirms that each quote is on its page. A candidate is a statement that could be a claim until the selection question decides; one that the question turns down is a rejected candidate.
 
 ## Stop conditions
 
@@ -46,7 +46,7 @@ python3 <skill base directory>/scripts/cea_claims.py check-env
 python3 <skill base directory>/scripts/cea_claims.py extract <paper.pdf> --out <output directory>
 ```
 
-Use the output directory that the user names, or `cea-out` in the current directory. The paper's files go to `<output directory>/<paper_id>/`, where `paper_id` is the PDF's file name without `.pdf`. `extract` also lists pages that are empty in `text.txt`, such as pages that held only references. In a two-column paper, it lists the pages that it left in one column as well. The lines of two columns can be mixed on any page, whatever `extract` lists, so text of one column can interrupt a sentence of the other. A sentence stays quotable unless text that is not its own runs inside it and `[...]` cannot cover the break, because `[...]` stands only between two lines, never inside one. Where that happens, quote the longest run of the sentence that stands unbroken in `text.txt`, and say in `note` that the page mixes the two columns and that the quote is part of the sentence on that page. This is the one case where a quote is not a whole sentence, so the validator's warning about a quote that starts or ends in the middle of a sentence is expected here. Name the page in your report as well. Cells of a table printed between the lines of a sentence are normal and do not stop a quote.
+Use the output directory that the user names, or `cea-out` in the current directory. The paper's files go to `<output directory>/<paper_id>/`, where `paper_id` is the PDF's file name without `.pdf`. `extract` also lists pages that are empty in `text.txt`, such as pages that held only references. In a two-column paper, it lists the pages that it left in one column as well. The lines of two columns can be mixed on any page, whatever `extract` lists, so text of one column can interrupt a sentence of the other. A sentence stays quotable unless text that is not its own runs inside it and `[...]` cannot cover the break, because `[...]` stands only between two lines, never inside one. Where that happens, quote the longest run of the sentence that stands unbroken in `text.txt`, and say in `note` that text which is not part of the sentence runs inside one of its lines on that page, for example the other column's, and that the quote is the part of the sentence that stands unbroken. This is the one case where a quote is not a whole sentence, so the validator's warning about a quote that starts or ends in the middle of a sentence is expected here. Name the page in your report as well. Cells of a table printed between the lines of a sentence are normal and do not stop a quote.
 
 `text.txt` contains the paper's text, with a `=== page N ===` line before each page. N is the PDF page counted from 1, not the number printed on the page. Two-column text is in reading order. Running headers, page numbers, and the references section are removed. Tables come out as rows of cells separated by spaces and can be hard to read. A number inside a table is evidence, not a claim, but read the tables anyway. They decide whether a frequency word rests on counts, and they show where the text and a table disagree.
 
@@ -56,7 +56,7 @@ Read `references/narrow-claims.md`. It defines main results, broad statements, n
 
 ### 3. Read the whole paper
 
-Read all of `text.txt`, in parts if it is long. A candidate is a statement that could be a claim until the selection question decides. Claims also appear in answers to research questions, figure captions, the discussion, and appendices. Skimming misses them. A statement missing from the whole record is the error that a checker is least likely to notice, so record a candidate that you are unsure about as a rejected candidate with its reason, where the checker can change it into a claim. A detail selected as a claim costs the checker a full chain and hides the claims that matter. While reading, look for a sentence saying that the paper does not quantify prevalence, usually in the limitations. The reference's rule 3 for frequency words turns on it, and it often stands pages after the statements it governs.
+Read all of `text.txt`, in parts if it is long. Claims also appear in answers to research questions, figure captions, the discussion, and appendices. Skimming misses them. A statement missing from the whole record is the error that a checker is least likely to notice, so record a candidate that you are unsure about as a rejected candidate with its reason, where the checker can change it into a claim. A detail selected as a claim costs the checker a full chain and hides the claims that matter. While reading, look for a sentence saying that the paper does not quantify prevalence, usually in the limitations. The reference's rule 3 for frequency words turns on it, and it often stands pages after the statements it governs.
 
 ### 4. List the main results as broad statements
 
@@ -155,7 +155,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
   - When a page break falls inside a word, write the word whole and give the page as a range such as `"8-9"`. If a table or figure also appears between the two halves of the word in `text.txt`, write `[...]` inside the word, such as `dis[...]tinct`.
 - `text`: the quote without `[...]`, or, for one part of a split statement, only that part.
 - `page`: N from the `=== page N ===` line, or a string such as `"8-9"` when the quote runs across a page break. A range names two consecutive pages, and only when the quote needs both.
-- `section`: the heading as printed, with its number, such as `5.2 RQ2: Review effort`, `III-B Coding Procedure`, or `Abstract`. For a paragraph that begins with its own short heading, such as "Action Selection.", add that heading after a comma, such as `III-A Study Setup, Action Selection`. For a statement in a caption, a footnote, or a boxed answer, give the enclosing section and then the label of the caption, footnote, or box after a comma, such as `IV-A Annotation Overview, Fig. 2` or `5 Impact on Code Churn, Summary RQ3`.
+- `section`: the heading as printed, with its number, such as `5.2 RQ2: Review effort`, `III-B Coding Procedure`, or `Abstract`. For a paragraph that begins with its own short heading, such as "Action Selection.", add that heading after a comma, such as `III-A Study Setup, Action Selection`. For a statement in a caption, a footnote, or a boxed answer, give the enclosing section and then the label of the caption, footnote, or box after a comma, such as `IV-A Annotation Overview, Fig. 2` or `5 Impact of GenAI Usage on Code Churn, Summary RQ3`.
 - `split_from`: `null` unless the claim is one part of a split statement.
 - `duplicate_of` (rejected candidates only): a list of the ids of the claims, rejected candidates, or broad statements that the statement repeats. A sentence that repeats a main result names the broad statement that states it, so that the record shows how many places the paper states that result.
 - `text` on a rejected candidate: only for a rejected part of a split statement, together with `split_from`.
@@ -169,7 +169,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
   - why a broad statement has no claim, or why it has `source` `other`
   - which main result or passage might depend on a rejected candidate
   - what is unclear when you cannot tell what a frequency word rests on
-  - that the page mixes the two columns, and that the quote is part of a sentence on it
+  - that text which is not part of the sentence runs inside one of its lines on the page, and that the quote is the part that stands unbroken
   - for a borderline decision, the passages that support each choice
 
   Do not compare the claim with the data, model, sample, or population behind it. Do not add, divide, or otherwise compute values from tables. Do not say whether a claim is supported or which side of a disagreement is right, because later steps assess the evidence.
@@ -188,6 +188,7 @@ Fix every problem and run it again until it prints `CEA_VALID`. After that line,
 - a quote that contains another entry's quote, which the reference's rule for a box sentence and its context expects
 - a `selection_reason` that names none of the broad statements in `serves`
 - a `[...]` that skips text reading like part of the sentence
+- a quote that starts or ends in the middle of a word or a number
 - two entries that quote the same sentence on different pages
 - a rejected candidate's `reason` that names neither a main result nor one of the reference's grounds. Expect this warning where the reference gives a ground that the script does not know, such as a candidate whose basis the paper leaves unclear, and leave the reason as the reference asks
 

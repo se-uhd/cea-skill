@@ -67,7 +67,7 @@ A result is often stated several times. A sentence states it more specifically t
 
 A detail is a sentence that gives numbers for a subset of an item, for a single example, or for a pattern, subgroup, or category that the main result does not name. Ask the selection question for a detail as for any other candidate. A detail almost always fails it.
 
-A rejected candidate is a statement that a checker could expect to be a claim but that was not selected. Its record says why. If you are unsure whether a candidate passes the selection question, record it as a rejected candidate, say in its `reason` that you are unsure, and name in `note` the main result that might depend on it and the passages that support each choice, so that the checker can change it into a claim.
+A claim candidate is a statement that could be a claim until the selection question decides. A rejected candidate is a statement that a checker could expect to be a claim but that was not selected. Its record says why. If you are unsure whether a candidate passes the selection question, record it as a rejected candidate, say in its `reason` that you are unsure, and name in `note` the main result that might depend on it and the passages that support each choice, so that the checker can change it into a claim.
 
 ## Frequency words without a number
 
