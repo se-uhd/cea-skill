@@ -105,6 +105,8 @@ class Page:
     number: int        # 1-based PDF page number
     lines: list[str]   # in reading order
     regions: int = 0   # two-column regions put in reading order
+    # Set where the removal of the bibliography stopped because the paper's text starts again here.
+    resumed: bool = False
 
 
 @dataclass
@@ -116,6 +118,8 @@ class Extraction:
     references: tuple[int, int | None] | None
     # Whether the paper sets its body in two columns anywhere.
     two_column: bool = False
+    # The page where the text starts again, when the removal stopped there instead of running on.
+    resumed: int | None = None
 
 
 # --- Text layer ---
@@ -159,6 +163,10 @@ def _running_headers(pages: list[str]) -> set[str]:
                  if not (0 <= i + step < len(all_lines)) or not all_lines[i + step].strip()]
         for line in apart:
             norm = _without_page_number(line)
+            # A table that runs over a page break repeats its heading row at the top of each page.
+            # That row is the page's first line and stands apart, but it is a row, not a header.
+            if _table_line(line):
+                continue
             if re.search(r"[^\W\d_]{2,}", norm):
                 counts[norm] += 1
     return {n for n, c in counts.items()
@@ -174,6 +182,44 @@ def _numbering_continues(line: str, neighbor: str) -> bool:
                for col in (m.start() - 1, m.start(), m.start() + 1) if col in near)
 
 
+def _edge_numbers(page_lines: list[list[str]]) -> list[tuple[int, int, int, list[tuple[int, int]]]]:
+    """Every page's first and last non-blank line that holds nothing but numbers, as
+    (page, line, which edge, [(column, value)])."""
+    found = []
+    for pi, lines in enumerate(page_lines):
+        body = [i for i, l in enumerate(lines) if l.strip()]
+        if len(body) < 5:
+            continue
+        for edge in (0, -1):
+            i = body[edge]
+            if _NUMBERS_ONLY.match(lines[i]):
+                found.append((pi, i, edge,
+                              [(m.start(), int(m.group())) for m in re.finditer(r"\d+", lines[i])]))
+    return found
+
+
+def _page_number_lines(page_lines: list[list[str]]) -> dict[int, set[int]]:
+    """The lines that hold a page number, as {page: {line indices}}.
+
+    A page number counts up from one page to the next at the same edge. The last row of a table, or
+    the first row of a table carried onto the next page, holds numbers just as a page number does,
+    and the page it stands on is the only one that has it. Without counting up across the pages,
+    such a row is blanked and the paper loses it.
+
+    The column is not what ties the run together. pdftotext pads a line out to the width of the
+    widest line on its page, so a page number in the outer margin starts wherever that page happens
+    to end, and it shifts again when the count reaches two digits."""
+    found = _edge_numbers(page_lines)
+    holds: dict[int, set[int]] = {}
+    for pi, i, edge, numbers in found:
+        for _, value in numbers:
+            for pj, j, other_edge, others in found:
+                if pj == pi + 1 and other_edge == edge and any(v == value + 1 for _, v in others):
+                    holds.setdefault(pi, set()).add(i)
+                    holds.setdefault(pj, set()).add(j)
+    return holds
+
+
 def _page_number_line(line: str, width: int, neighbor: str) -> bool:
     """Whether `line` holds only a page number: one number, or a number near the middle of the page
     between the line numbers of the two columns. A row of a table holds its numbers closer together,
@@ -182,15 +228,17 @@ def _page_number_line(line: str, width: int, neighbor: str) -> bool:
         return False
     spans = [m.span() for m in re.finditer(r"\d+", line)]
     if len(spans) == 1:
-        return True
+        # Counting up across the pages decides this one; see `_page_number_lines`.
+        return False
     apart = all(b[0] - a[1] >= 10 for a, b in zip(spans, spans[1:]))
     centered = any(abs((a + b) / 2 - width / 2) <= 0.1 * width for a, b in spans)
-    return apart and centered and (not neighbor.strip() or _numbering_continues(line, neighbor))
+    return apart and centered and _numbering_continues(line, neighbor)
 
 
-def _blank_edges(lines: list[str], headers: set[str]) -> None:
-    """Blank the running header, footer, and page number at either end of a page, in place.
-    Only the ends are touched, because the same words inside a page are text."""
+def _blank_edges(lines: list[str], headers: set[str], numbers: set[int] = frozenset()) -> None:
+    """Blank the running header, footer, and page number at either end of a page, in place. Only the
+    ends are touched, because the same words inside a page are text. `numbers` holds the lines that
+    `_page_number_lines` found to carry a page number."""
     width = max((len(l) for l in lines), default=0)
     for edge in (0, -1):
         for _ in range(2):  # a page number and a running header can be stacked
@@ -200,7 +248,7 @@ def _blank_edges(lines: list[str], headers: set[str]) -> None:
             i = body[edge]
             inner = i + 1 if edge == 0 else i - 1
             neighbor = lines[inner] if 0 <= inner < len(lines) else ""
-            if (_page_number_line(lines[i], width, neighbor)
+            if (i in numbers or _page_number_line(lines[i], width, neighbor)
                     or _without_page_number(lines[i]) in headers):
                 lines[i] = ""
             else:
@@ -356,9 +404,8 @@ def _spanning_row(line: str, c: int) -> bool:
 
 
 def _last_cell_row(region: list[str], i: int, c: int) -> bool:
-    """Whether line `i` of `region` is a row of a table with its last cell alone right of column `c`,
-    which is
-    where a table with a narrow last column meets the gutter. The gap before that cell falls on the
+    """Whether line `i` of `region` is a row of a table with its last cell alone right of column
+    `c`, which is where a table with a narrow last column meets the gutter. The gap before that cell falls on the
     gutter, so the row would be cut in half and its last cell read as text of the right column.
 
     Two tables set side by side both carry cells right of the gutter, so more than one cell stands
@@ -368,7 +415,7 @@ def _last_cell_row(region: list[str], i: int, c: int) -> bool:
     One case stays wrong: A last column of words, such as a column of Yes and No values, is not held
     together this way, and its cells are read as text of the right column. Comparing the column
     against the rows nearby does not tell a cell from the end of a paragraph either, because the word
-    that ends a paragraph falls in the column of a cell just as often. The cells are kept, each on a line of its own."""
+    that ends a paragraph falls in the column of a cell as a cell does. The cells are kept, each on a line of its own."""
     line = region[i]
     last = line[c:].strip()
     if _cell_gaps(line[:c], c) == 0 or not 0 < len(last) <= _LAST_CELL or " " in last:
@@ -562,7 +609,7 @@ _END_NUMBER = re.compile(r"(?<=\s)(\d{1,4})\s*$")
 _MIN_NUMBERING = 6
 # How much of the paper a numbering runs through, as a share of its lines. A numbering that pdftotext
 # renders in pieces reaches about half of a page, so the share is set below that.
-# `_beside_a_caption` and `_reads_as_prose` together keep a column of a table from passing.
+# `_near_a_caption` and `_reads_as_prose` together keep a column of a table from passing.
 _NUMBERING_SPAN = 0.4
 # How many lines may stand between two numbered lines. A paper numbers every line, or every fifth
 # or tenth line, and a figure or a table can stand between two of them.
@@ -715,10 +762,10 @@ _PROSE_SHARE = 0.10
 _SENTENCE_TAIL = re.compile(r"[.!?]$")
 
 
-def _beside_a_caption(lines: list[str], first: int, last: int) -> bool:
-    """Whether the caption of a table or a figure stands beside the block from line `first` to line
-    `last`. Journals set a table's caption above it or below it, and a caption of several printed
-    lines reaches further, so both sides are read and the reach is generous."""
+def _near_a_caption(lines: list[str], first: int, last: int) -> bool:
+    """Whether the caption of a table or a figure stands above or below the block that runs from
+    line `first` to line `last`. Journals set a table's caption on either side of it, and a caption
+    of several printed lines reaches further, so both sides are read."""
     above = [lines[j].strip() for j in range(max(0, first - _CAPTION_NEAR), first) if lines[j].strip()]
     below = [lines[j].strip() for j in range(last + 1, min(len(lines), last + 1 + _CAPTION_NEAR))
              if lines[j].strip()]
@@ -729,7 +776,7 @@ def _reads_as_prose(lines: list[str], chain: list) -> bool:
     """Whether the block reads as the running text of a paper. Enough of its lines carry on the
     sentence of the line before, which they show by starting in lower case, and at least one line
     ends a sentence. A table of rows that begin in lower case, such as rows named after tools or
-    files, meets the first and not the second, because a row is a phrase that stands on its own."""
+    files, starts lines in lower case but never ends a sentence, because a row is a phrase that stands on its own."""
     carries = ends = rest = 0
     for i, number, start in chain:
         line = lines[i]
@@ -797,10 +844,11 @@ def _numbering_columns(lines: list[str],
                        for i, n, start in chain) < len(chain):
                 continue
             # The first and the last column of a table stand in a margin as well, and a table of
-            # enough rows counts up as far as a numbering does. Such a column has a caption beside
-            # its block and does not read as the running text of a paper. Both have to hold, because
-            # a paper prints figures beside its text as well, and a table can hold a sentence.
-            if _beside_a_caption(lines, chain[0][0], chain[-1][0]) and not _reads_as_prose(lines, chain):
+            # enough rows counts up as far as a numbering does. Such a column has a caption above
+            # or below its block and does not read as the running text of a paper. Both have to
+            # hold, because a paper prints figures among its text as well, and a table can hold a
+            # sentence.
+            if _near_a_caption(lines, chain[0][0], chain[-1][0]) and not _reads_as_prose(lines, chain):
                 continue
             for i, n, start in chain:
                 # The same number is found by the column it starts in and by the column it ends in.
@@ -987,9 +1035,9 @@ def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None
 
     Removal runs to the end of the paper, because a bibliography is the last thing a paper prints,
     and an author biography set after the bibliography is removed with it. Where the heading stands
-    early, the bibliography
-    is not the tail of the paper: the columns of its page can interleave, or an appendix heading can
-    go unrecognized, and removing everything after it would take the body with it. A run of lines
+    early, the bibliography is not the tail of the paper: the columns of its page can interleave, or
+    an appendix heading can go unrecognized, and removing everything after it would take the body
+    with it. A run of lines
     carrying none of the marks of a bibliography entry ends the removal there. Keeping a few entries
     leaves a little noise in `text.txt`, while removing the body would lose text the paper needs."""
     run: tuple[int, int] | None = None
@@ -1035,6 +1083,10 @@ def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
         for k in range(lo, hi):
             pages[pj].lines[k] = ""
     pages[pi].lines[li] = REFERENCES_REMOVED
+    if end is None and resumes:
+        # Where the text starts again, so that `extract` can say the removal stopped there rather
+        # than running to the end of the paper.
+        pages[resumes[0]].resumed = True
     return pages[pi].number, (pages[end[0]].number if end else None)
 
 
@@ -1113,11 +1165,10 @@ def _read_pages(page_lines: list[list[str]]) -> tuple[list[Page], bool]:
 def extract(pdf_path: str) -> Extraction:
     raw = _pages(pdf_path)
     headers = _running_headers(raw)
-    page_lines = []
-    for text in raw:
-        lines = [l.rstrip() for l in text.split("\n")]
-        _blank_edges(lines, headers)
-        page_lines.append(lines)
+    page_lines = [[l.rstrip() for l in text.split("\n")] for text in raw]
+    numbers = _page_number_lines(page_lines)
+    for pi, lines in enumerate(page_lines):
+        _blank_edges(lines, headers, numbers.get(pi, frozenset()))
     # The line numbers are removed before the columns are split, because pdftotext prints them in a
     # column of their own, where they stand apart from the text. Once the columns of a page are put
     # in reading order, the numbers of one column sit inside the sentences of the other, where a
@@ -1125,7 +1176,8 @@ def extract(pdf_path: str) -> Extraction:
     page_lines, lineno = _clean_line_numbers(page_lines)
     pages, two_column = _read_pages(page_lines)
     references = _drop_references(pages)
-    return Extraction(pages, lineno, references, two_column)
+    resumed = next((p.number for p in pages if p.resumed), None)
+    return Extraction(pages, lineno, references, two_column, resumed)
 
 
 def to_text(extraction: Extraction) -> str:

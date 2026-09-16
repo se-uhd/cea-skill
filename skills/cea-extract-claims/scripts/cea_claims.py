@@ -52,6 +52,7 @@ _FOLD = str.maketrans({
     "−": "-", "‘": "'", "’": "'", "‚": "'", "‛": "'", "′": "'",
     "`": "'", "´": "'", "“": '"', "”": '"', "„": '"', "‟": '"',
     "«": '"', "»": '"', "­": None,
+    "\u200b": None, "\u200c": None, "\u200d": None, "\ufeff": None,
 })
 # A footnote number that pdftotext puts directly after a word or a punctuation mark, as in
 # "revisions,13 assisted" or "media5 and". A quote may leave it out. A single digit counts only
@@ -204,7 +205,9 @@ def _find_quote(quote: str, page_text: str, literal: list[bool]) -> tuple[int, i
             pieces.append(text[start:a])
             start = b
     pieces.append(text[start:])
-    parts = [_normalized(piece)[0] for piece in pieces]
+    # A piece ending at a gap can end in the hyphen of a word the paper broke there. The page text
+    # joins such a word, so the hyphen would never be found.
+    parts = [_normalized(re.sub(r"-$", "", piece.rstrip()))[0] for piece in pieces]
     if not parts or any(not part for part in parts):
         return None
     p, skippable, breaks, origins = _normalized_page(page_text)
@@ -266,7 +269,10 @@ def _quote_words(quote: str) -> set[str]:
     """The words of a quote, also reading a gap inside a word, as in "dis[...]tinct", as no gap,
     and a word with a footnote number, as in "media5", without the number."""
     joined = GAP.sub(" ", _GAP_IN_WORD.sub("", quote))
-    return (_words(GAP.sub(" ", quote)) | _words(joined)
+    # The matcher joins a word broken across two lines, so "preregis-" and "tered" are one word to
+    # it. Reading the quote the same way keeps the check from rejecting a word the quote holds.
+    whole = re.sub(r"-\s+", "", joined)
+    return (_words(GAP.sub(" ", quote)) | _words(joined) | _words(whole)
             | _words(re.sub(r"(?<=[^\W\d_])\d{1,2}\b", "", joined)))
 
 
@@ -613,8 +619,8 @@ _REJECTED_GROUND = re.compile(
     r"|\bparticipant\s+(?:states|stated|reports|reported|gave)\b|\bnumber a participant\b"
     r"|\bfeature importance|\baccuracy of (?:a|the) model\b|\breads only\b|\bonly reads\b"
     r"|\bqualitative\b|\bformal\b|\btheorem\b|\bproof\b|\bnovelty\b"
-    r"|\bno broad statement\b", re.I)
-# The one ground that belongs to a record with no broad statement. Where the record has them, saying
+    r"|\bno broad statement\s+(?:states|covers|gives)", re.I)
+# The one ground that belongs to a record with no broad statement. Where the record has broad statements, saying
 # that no main result depends on the candidate is the selection question answered no, and the reason
 # names the statement that still stands instead.
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
@@ -758,8 +764,10 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
 # --- Rendering ---
 
 def _flat(text) -> str:
-    """`text` on one line, so that a line break in a field cannot break the Markdown."""
-    return " ".join(str(text).split())
+    """`text` on one line, so that a line break in a field cannot break the Markdown. A word that
+    the paper broke across two lines is joined, because the quote holds it as the paper printed it
+    and the checker reads one word."""
+    return " ".join(re.sub(r"-\s*\n\s*", "", str(text)).split())
 
 
 def _quote_block(text: str) -> list[str]:
@@ -857,7 +865,7 @@ def cmd_extract(args) -> int:
 
     pdf = Path(args.pdf)
     paper_id = args.id if args.id is not None else pdf.stem
-    if not paper_id or paper_id != paper_id.strip() or "/" in paper_id or "\\" in paper_id or ".." in paper_id:
+    if not paper_id or paper_id != paper_id.strip() or "/" in paper_id or "\\" in paper_id or paper_id in (".", ".."):
         print(f"CEA_FAILED: invalid paper id {paper_id!r}; use a plain name without slashes or '..'")
         return 2
     if not pdf.is_file():
@@ -894,7 +902,14 @@ def cmd_extract(args) -> int:
         print("references: no References heading found, so any bibliography is still in text.txt")
     else:
         first, appendix = extraction.references
-        rest = f"up to the appendix heading on page {appendix}" if appendix else "to the end"
+        if appendix:
+            rest = f"up to the appendix heading on page {appendix}"
+        elif extraction.resumed:
+            where = "" if extraction.resumed == first else f" on page {extraction.resumed}"
+            rest = (f"only to where the paper's text starts again{where}, "
+                    "so a bibliography entry may be left")
+        else:
+            rest = "to the end"
         print(f"references: removed from page {first} {rest}")
     empty = [str(p.number) for p in extraction.pages if not any(l.strip() for l in p.lines)]
     if empty:
