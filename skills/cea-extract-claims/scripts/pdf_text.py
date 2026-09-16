@@ -338,10 +338,9 @@ def _cell_gaps(line: str, c: int) -> int:
     return sum(1 for m in _WIDE_GAP.finditer(line) if not m.start() + 1 <= c < m.end())
 
 
-# How long the last cell of a row may be where it stands alone right of the gutter, and what it
-# holds. A last column counts or measures, while the line that ends a paragraph of the right column
-# leaves a single word there just as short.
+# How long the last cell of a row may be where it stands alone right of the gutter.
 _LAST_CELL = 15
+# What the last column of a table holds where nothing lines up with it: a count or a measurement.
 _LAST_CELL_VALUE = re.compile(r"^[\d(<>=~+-][\d.,%()<>=~+-]*$")
 # How long a cell of a row is. Where a page sets two columns, pdftotext prints them on one line with
 # a gap between, and each side carries a run of prose far longer than a cell.
@@ -356,17 +355,24 @@ def _spanning_row(line: str, c: int) -> bool:
     return _cell_gaps(line[:c], c) > 0 and _cell_gaps(" " * c + line[c:], c) > 0
 
 
-def _last_cell_row(line: str, c: int) -> bool:
+def _last_cell_row(region: list[str], i: int, c: int) -> bool:
     """Whether `line` is a row of a table with its last cell alone right of column `c`, which is
     where a table with a narrow last column meets the gutter. The gap before that cell falls on the
     gutter, so the row would be cut in half and its last cell read as text of the right column.
 
     Two tables set side by side both carry cells right of the gutter, so more than one cell stands
-    there. A line that ends a paragraph of the right column leaves a single short word there, so the
-    cell must read as a number, which is what the last column of such a table holds."""
+    there. A line that ends a paragraph of the right column leaves a single short word there too, so
+    the cell has to read as a count or a measurement, which is what such a last column holds.
+
+    One case stays wrong: a last column of words, such as one of Yes and No, is not held together
+    this way, and its cells are read as text of the right column. Comparing the column against the
+    rows nearby does not tell the two apart either, because the word that ends a paragraph falls in
+    the column of a cell as readily as a cell does. The cells are kept, each on a line of its own."""
+    line = region[i]
     last = line[c:].strip()
-    return (_cell_gaps(line[:c], c) > 0 and 0 < len(last) <= _LAST_CELL and " " not in last
-            and bool(_LAST_CELL_VALUE.match(last)))
+    if _cell_gaps(line[:c], c) == 0 or not 0 < len(last) <= _LAST_CELL or " " in last:
+        return False
+    return bool(_LAST_CELL_VALUE.match(last))
 
 
 def _row_follows(lines: list[str], j: int, c: int, lookahead: int = 3) -> bool:
@@ -517,7 +523,7 @@ def _layout(lines: list[str], known: int | None = None, allowed: set[int] | None
     # title or author block at either end of the region. Cutting such a line would break a word and
     # move its end far from its start. A line of prose is cut at the gutter as usual, or the two
     # columns would run into each other.
-    whole = [_last_cell_row(l, g)
+    whole = [_last_cell_row(region, i, g)
              or (not _blank_at(l, g) and (_spanning_row(l, g) or i < 3 or i >= len(region) - 3))
              for i, l in enumerate(region)]
     left = [l.rstrip() if w else l[:g].rstrip() for l, w in zip(region, whole)]
@@ -553,8 +559,10 @@ _MARGIN_NUMBER = re.compile(r"^\s*(\d{1,4})(?=\s{2}|\s*$)")
 _END_NUMBER = re.compile(r"(?<=\s)(\d{1,4})\s*$")
 # How many numbers in one column make a numbering.
 _MIN_NUMBERING = 6
-# How much of the paper a numbering runs through, as a share of its lines.
-_NUMBERING_SPAN = 0.5
+# How much of the paper a numbering runs through, as a share of its lines. A numbering that pdftotext
+# renders in pieces reaches about half of a page, so the share is set below that. What keeps a column
+# of a table from passing is `_under_a_caption` together with `_carries_on_a_sentence`.
+_NUMBERING_SPAN = 0.4
 # How many lines may stand between two numbered lines. A paper numbers every line, or every fifth
 # or tenth line, and a figure or a table can stand between two of them.
 _NUMBERING_GAP = 40
@@ -697,6 +705,28 @@ def _runs_down_the_page(hits: list, bounds: list[tuple[int, int]], reach: int | 
     return kept
 
 
+# How many lines above a chain are read for the caption of a table.
+_CAPTION_NEAR = 5
+
+
+def _under_a_caption(lines: list[str], first: int) -> bool:
+    """Whether the caption of a table or a figure stands just above line `first`. A column of a
+    table that counts up begins under the caption of its table, and a paper's numbering does not."""
+    above = [lines[j].strip() for j in range(max(0, first - 8), first) if lines[j].strip()]
+    return any(_TABLE_CAPTION.match(x) or _CAPTION.match(x) for x in above[-_CAPTION_NEAR:])
+
+
+def _carries_on_a_sentence(lines: list[str], chain: list) -> bool:
+    """Whether any numbered line of `chain` carries on the sentence of the line above it, which the
+    lines of a paper do and the rows of a table do not. A line that does starts in lower case."""
+    for i, number, start in chain:
+        line = lines[i]
+        rest = (line[:start] + " " * len(str(number)) + line[start + len(str(number)):]).strip()
+        if rest and rest[0].islower():
+            return True
+    return False
+
+
 def _in_the_margin(line: str, start: int, over: int) -> bool:
     """Whether the number that fills the columns `start` to `over` stands in a margin of `line`,
     with nothing but space to its left or nothing but space to its right. A paper prints its line
@@ -751,6 +781,11 @@ def _numbering_columns(lines: list[str],
             # cost the paper its numbering.
             if 2 * sum(_in_the_margin(lines[i], start, start + len(str(n)))
                        for i, n, start in chain) < len(chain):
+                continue
+            # The first and the last column of a table stand in a margin as well, and a table of
+            # enough rows counts up as far as a numbering. Such a column begins under the caption of
+            # its table, and none of its rows carries on the sentence of the row above it.
+            if _under_a_caption(lines, chain[0][0]) and not _carries_on_a_sentence(lines, chain):
                 continue
             for i, n, start in chain:
                 # The same number is found by the column it starts in and by the column it ends in.
@@ -935,13 +970,12 @@ def _stands_early(pages: list[Page], pi: int, li: int, share: float = 2 / 3) -> 
 def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None:
     """Where the bibliography that starts at line `li` of page `pi` gives way to running text again.
 
-Removal runs to the end of the paper, because a bibliography is the last thing in it, and an
-    author biography that follows it goes with it. On a page whose columns interleave, the heading
-    can land in the middle of the body instead, and removing everything after it would take the body
-    with it. A run of lines that carry none of the marks of a bibliography entry ends the removal
-    there. Keeping a few entries costs the checker a little noise in `text.txt`; removing the body
-    costs the paper. Only such a page is read this way, or an author biography, which reads as
-    running text, would end the removal on every paper that prints one."""
+    Removal runs to the end of the paper, because a bibliography is the last thing in it, and an
+    author biography that follows it goes with it. Where the heading stands early, the bibliography
+    is not the tail of the paper: the columns of its page can interleave, or an appendix heading can
+    go unrecognized, and removing everything after it would take the body with it. A run of lines
+    carrying none of the marks of a bibliography entry ends the removal there. Keeping a few entries
+    costs the checker a little noise in `text.txt`. Removing the body costs the paper."""
     run: tuple[int, int] | None = None
     seen = 0
     for pj in range(pi, len(pages)):
@@ -973,11 +1007,8 @@ def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
                 for lj in range(li + 1 if pj == pi else 0, len(pages[pj].lines))
                 if pages[pj].lines[lj].strip()
                 and _is_appendix_heading(pages[pj].lines[lj], _next_lines(pages, pj, lj, 12))), None)
-    # Only where the heading stands early in a paper whose page has its columns interleaved, because
-    # only there is the bibliography not the tail of the paper. A paper that prints its bibliography
-    # where it belongs is removed to the end, together with any author biography.
-    early = pages[pi].regions > 1 and _stands_early(pages, pi, li)
-    resumes = _text_resumes(pages, pi, li) if early else None
+    # Only where the heading stands early: see `_stands_early`.
+    resumes = _text_resumes(pages, pi, li) if _stands_early(pages, pi, li) else None
     stop = min([x for x in (end, resumes) if x], default=(len(pages) - 1, len(pages[-1].lines)))
     for pj in range(pi, stop[0] + 1):
         lo = li if pj == pi else 0

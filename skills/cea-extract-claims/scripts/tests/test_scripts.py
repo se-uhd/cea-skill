@@ -374,6 +374,12 @@ class LineNumbers(unittest.TestCase):
         self.assertTrue(out[9].rstrip().endswith("Qwen2"), out[9])
         self.assertTrue(out[10].rstrip().endswith("the observed"), out[10])
 
+    def test_a_counting_column_under_a_caption_is_not_line_numbering(self):
+        lines = ["Table 1: Participants and what they reported", ""]
+        lines += [f"  {i}   Reported improved comprehension of the code base" for i in range(1, 15)]
+        lines += [f"Sentence {i} of the running text stands outside the table." for i in range(1, 7)]
+        self.assertEqual(pdf_text._strip_line_numbers(lines), (lines, False))
+
     def test_numbers_in_a_table_stay(self):
         lines = [f"{i:>3}   Sentence {i} of the running text here." for i in range(1, 21)]
         lines[10:10] = [f"   {2010 + i}   cell a   {12 + i}" for i in range(8)]

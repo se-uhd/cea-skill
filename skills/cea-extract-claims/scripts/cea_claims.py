@@ -607,8 +607,11 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # because no main result stands or falls with it.
 _REJECTED_GROUND = re.compile(
     r"describ\w*\s+(?:the|its|this)\s+(?:stud|data)|stud\w*\s+(?:size|design)|sample size|corpus size"
-    r"|codebook|inter-?rater|agreement|repeat\w*|repetition|duplicat\w*|cited work|prior work"
-    r"|background work|participant|qualitative|no main result|out of scope", re.I)
+    r"|codebook|inter-?rater|agreement score|repeats\s+(?:[BCR]\d|another|the)|repetition of"
+    r"|duplicates\s+[BCR]\d|cited work|prior work|background work|work of others"
+    r"|participant\s+(?:states|stated|reports|reported|gave)|number a participant"
+    r"|feature importance|accuracy of (?:a|the) model|reads only|only reads"
+    r"|qualitative|formal|theorem|proof|novelty|no main result|out of scope", re.I)
 
 
 def _sentence_warnings(label: str, quote: str, page_text: str) -> list[str]:
