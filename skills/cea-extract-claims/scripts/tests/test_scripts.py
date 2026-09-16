@@ -548,15 +548,45 @@ class Validate(unittest.TestCase):
     def test_valid_record_passes(self):
         self.assertEqual(self.check(valid_claims()), "")
 
-    def test_claim_serving_many_statements_warns(self):
+    def test_statements_serving_one_result_are_named(self):
         data = valid_claims()
         data["broad_statements"] += [
             {"id": "B2", "quote": "Caching halves median build time.", "page": 1,
              "section": "1 Introduction", "source": "contributions"},
             {"id": "B3", "quote": "Caching halves median build time.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"}]
-        data["claims"][0]["serves"] = ["B1", "B2", "B3"]
-        self.assertIn("names 3 broad statements", self.warnings(data))
+        for c in data["claims"]:
+            c["serves"] = ["B1", "B2", "B3"]
+        self.assertIn("broad_statements B1, B2, B3", self.warnings(data))
+
+    def test_one_result_is_rendered_once(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Caching halves median build time.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        for c in data["claims"]:
+            c["serves"] = ["B1", "B2"]
+        md = cea_claims.render(data)
+        self.assertIn("also stated as B2", md)
+        self.assertEqual(md.count("1 of 2 for this result"), 2)
+
+    def test_a_claim_serving_two_results_says_so(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Build failures are rare.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        # Two claims of their own keep B2 a result apart from B1, rather than a restatement of it.
+        data["claims"] += [
+            {"id": "C3", "quote": "Only 3 of the 48 builds failed.", "text": "Only 3 of the 48 builds failed.",
+             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
+             "selection_reason": "B2 says failures are rare."},
+            {"id": "C4", "quote": "No project saw its failure rate rise.", "text": "No project saw its failure rate rise.",
+             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
+             "selection_reason": "B2 rests on this as well."}]
+        data["claims"][0]["serves"] = ["B1", "B2"]
+        md = cea_claims.render(data).split("### Every claim")[0]
+        self.assertIn("and of 1 other result", md)
+        self.assertIn("1 of 3 for this result", md)
 
     def test_repetition_naming_no_broad_statement_warns(self):
         data = valid_claims()

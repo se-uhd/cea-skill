@@ -632,6 +632,10 @@ _SERVES_MANY = 3
 # The order the reference gives for the sentence that states a main result. Where the paper states
 # two results in as many places, the kind of sentence breaks the tie.
 _SOURCE_ORDER = ("rq_answer", "abstract", "contributions", "conclusion", "other")
+# How much of their support two broad statements share before they are read as one main result
+# stated twice. Below this, a paper's separate results start merging; above it, its restatements of
+# one result stay apart.
+_SAME_RESULT = 0.5
 
 
 def _sentence_warnings(label: str, quote: str, page_text: str) -> list[str]:
@@ -717,11 +721,11 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "no main result depends on the candidate is the selection question answered no")
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results.
-    for i, c in enumerate(data["claims"]):
-        if len(c["serves"]) >= _SERVES_MANY:
-            out.append(f"{_label('claims', i, c)}.serves: names {len(c['serves'])} broad statements; "
-                       "a main result is recorded once, so check whether these state one result "
-                       "and record the repetitions as rejected candidates naming it")
+    for group in _one_result(data):
+        if len(group) > 1:
+            out.append(f"broad_statements {', '.join(group)}: the same claims serve all of them, so "
+                       "they read as one main result stated several times; record it once and keep "
+                       "the other sentences as rejected candidates naming it")
     statements = {b["id"] for b in data["broad_statements"]}
     for i, e in enumerate(data["rejected"]):
         refs = e.get("duplicate_of") or []
@@ -810,27 +814,49 @@ def _first_page(entry: dict) -> int:
         return 0
 
 
-def _stated_in(data: dict) -> dict[str, int]:
-    """How many places the paper states each main result: the broad statement itself, and every
-    recorded sentence that repeats it. A result the paper states in its abstract, its contribution
-    list and its conclusion carries more of the paper than one stated once."""
-    places = {b["id"]: 1 for b in data["broad_statements"]}
-    for r in data["rejected"]:
+def _one_result(data: dict) -> list[list[str]]:
+    """The broad statements grouped by the main result they state, each group in the order recorded.
+
+    The reference records a main result once and keeps the sentences that repeat it as rejected
+    candidates. Where that has not happened, the same result stands as several broad statements, and
+    the claims give it away: statements that state one result are served by the same claims."""
+    supports = {b["id"]: {c["id"] for c in data["claims"] if b["id"] in c["serves"]}
+                for b in data["broad_statements"]}
+    groups: list[list[str]] = []
+    for b, claims in supports.items():
+        for group in groups:
+            other = set().union(*(supports[x] for x in group))
+            if (claims | other) and len(claims & other) / len(claims | other) >= _SAME_RESULT:
+                group.append(b)
+                break
+        else:
+            groups.append([b])
+    return groups
+
+
+def _stated_in(data: dict, group: list[str] | None = None) -> int:
+    """How many sentences of the paper state one main result: the broad statements that hold it, and
+    the recorded sentences that repeat any of them.
+
+    The sentences are counted, not the links to them. Where one result stands as four broad
+    statements, a sentence repeating it names several of the four, and counting each statement's
+    repetitions on its own would count that sentence several times over."""
+    ids = set(group) if group is not None else {b["id"] for b in data["broad_statements"]}
+    repeats = set()
+    for i, r in enumerate(data["rejected"]):
         refs = r.get("duplicate_of") or []
-        for ref in (refs if isinstance(refs, list) else [refs]):
-            if ref in places:
-                places[ref] += 1
-    return places
+        if ids & set(refs if isinstance(refs, list) else [refs]):
+            repeats.add(r.get("id", i))
+    return len(ids) + len(repeats)
 
 
 def _by_weight(data: dict) -> list[dict]:
     """The broad statements, the ones the paper states in most places first. The paper orders its
     own results this way; it puts no order on the claims that support one result, so neither does
     this."""
-    places = _stated_in(data)
     def key(b):
         source = _SOURCE_ORDER.index(b["source"]) if b["source"] in _SOURCE_ORDER else len(_SOURCE_ORDER)
-        return (-places[b["id"]], source, _first_page(b), b["id"])
+        return (-_stated_in(data, [b["id"]]), source, _first_page(b), b["id"])
     return sorted(data["broad_statements"], key=key)
 
 
@@ -867,19 +893,25 @@ def render(data: dict) -> str:
             "order on them.", ""]
     if not claims:
         out += ["None selected.", ""]
-    places = _stated_in(data)
+    by_id = {b["id"]: b for b in data["broad_statements"]}
+    order = {b["id"]: n for n, b in enumerate(_by_weight(data))}
+    results = sorted(_one_result(data), key=lambda g: min(order[b] for b in g))
     shown: set[str] = set()
-    for b in _by_weight(data):
-        serving = sorted((c for c in claims if b["id"] in c["serves"]), key=_first_page)
+    for group in results:
+        lead = min(group, key=lambda b: order[b])
+        serving = sorted((c for c in claims if set(c["serves"]) & set(group)), key=_first_page)
         if not serving:
             continue
-        stated = places[b["id"]]
-        out += [f"### {b['id']} ({b['source']}, stated in {stated} place{'s' if stated > 1 else ''}): "
-                f"{_flat(b['quote'])}", ""]
+        stated = _stated_in(data, group)
+        also = f", also stated as {', '.join(b for b in group if b != lead)}" if len(group) > 1 else ""
+        out += [f"### {lead} ({by_id[lead]['source']}, stated in {stated} "
+                f"place{'s' if stated > 1 else ''}{also}): {_flat(by_id[lead]['quote'])}", ""]
         for c in serving:
-            carries = "sole support" if len(serving) == 1 else f"1 of {len(serving)}"
-            out.append(f"- {c['id']}, page {c['page']}, {carries}"
-                       + (" (also under an earlier result)" if c["id"] in shown else ""))
+            # What this claim carries of this result, and whether it carries another result as well.
+            carries = "the only claim for this result" if len(serving) == 1 else f"1 of {len(serving)} for this result"
+            elsewhere = sum(1 for g in results if g is not group and set(c["serves"]) & set(g))
+            also = f", and of {elsewhere} other result{'s' if elsewhere > 1 else ''}" if elsewhere else ""
+            out.append(f"- {c['id']}, page {c['page']}, {carries}{also}")
             shown.add(c["id"])
         out.append("")
     loose = [c for c in claims if not any(b in {x["id"] for x in data["broad_statements"]} for b in c["serves"])]
