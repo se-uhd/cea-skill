@@ -614,12 +614,15 @@ class Validate(unittest.TestCase):
                        "Minor rounding differences in the table describe the study, not a result.",
                        "Key numbers here come from cited work.",
                        "Central to the coding procedure, an agreement score.",
-                       "Main sizes of the corpus, not a result."):
+                       "Main sizes of the corpus, not a result.",
+                       # A reason that runs on has said something, whatever word it opens with.
+                       "An important result that the reader should certainly bear in mind here."):
             data["rejected"][0]["reason"] = reason
             self.assertNotIn("gives no ground", self.warnings(data), reason)
         for reason in ("Important result.", "Not an important number.", "Minor.", "No",
                        "Important result for the study.", "A key number of the paper.",
-                       "An important result that the reader should bear in mind."):
+                       "Important result that stands out in the discussion.",
+                       "A notable figure about the participants."):
             data["rejected"][0]["reason"] = reason
             self.assertIn("gives no ground", self.warnings(data), reason)
 
@@ -641,6 +644,16 @@ class Validate(unittest.TestCase):
                                for c in every]}
             groups = sorted(sorted(g) for g in cea_claims._one_result(data))
             self.assertEqual(groups, [["B1"], ["B2"], ["B3"], ["B4"]], order)
+
+    def test_two_statements_with_no_claims_are_not_one_result(self):
+        data = valid_claims()
+        data["broad_statements"] += [
+            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion",
+             "note": "The paper gives no result for it."},
+            {"id": "B3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+             "section": "4 Data", "source": "other", "note": "No summary sentence states it."}]
+        self.assertNotIn("the same claims serve all of them", self.warnings(data))
 
     def test_statements_sharing_most_of_their_claims_are_asked_about(self):
         data = valid_claims()

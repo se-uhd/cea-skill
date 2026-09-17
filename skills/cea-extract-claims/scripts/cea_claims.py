@@ -628,11 +628,14 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # decides: "Key numbers here come from cited work" names a ground, "A key number of the paper" names
 # none. The grounds are those the reference lists, so the words that name them are few.
 _A_GROUND = re.compile(
-    r"\b(?:describ\w+|repeat\w+|cited|participants?|agreement|accurac\w+|corpus|codebook|sample|"
-    r"sizes?|stands?|standing|comes?\s+from|came\s+from|out\s+of\s+scope)\b", re.I)
+    r"\b(?:describ\w+|repeat\w+|cited|agreement|corpus|codebook|sample\s+size|no\s+broad\s+"
+    r"statement|states?\s+the\s+main\s+result|out\s+of\s+scope|comes?\s+from|came\s+from)\b", re.I)
+# A reason that runs on has said something, whatever word it opens with, so only a short one is read
+# for a verdict.
+_VERDICT_WORDS = 8
 _EMPTY_REASON = re.compile(
     r"^\W*(?:this\s+is\s+|it\s+is\s+)?(?:not\s+)?(?:an?\s+|the\s+)?"
-    r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b[^.]*\.?\W*$"
+    r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b"
     r"|^\W*(?:not\s+a\s+claim|no|n/?a|none)\W*$", re.I)
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
 # A section heading that names the paper's answer to a research question.
@@ -640,13 +643,14 @@ _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
 # The order the reference gives for the sentence that states a main result. Where the paper states
 # two results in as many places, the kind of sentence breaks the tie.
 _SOURCE_ORDER = ("rq_answer", "abstract", "contributions", "conclusion", "other")
-# A heading copied whole, such as a research question spelled out in full. A question mark gives
-# it away; a heading with no question in it has to run very long before it is one.
-_HEADING_WHOLE = re.compile(r"\?")
-_LONG_SECTION = 120
-# How much of their support two broad statements share before they are read as one main result
-# stated twice. Below this, a paper's separate results start merging; above it, its restatements of
-# one result stay apart.
+# A heading copied whole, such as a research question spelled out in full. A question mark gives one
+# away once the heading also runs long; without a question it has to run longer still, because a
+# section title can be a sentence.
+_A_QUESTION = 60
+_LONG_SECTION = 100
+# How much of their support two broad statements share before the checker is asked whether they
+# state one main result. Below this, a paper's separate results draw the question; above it, its
+# restatements of one result stop drawing it.
 _SAME_RESULT = 0.5
 
 
@@ -729,10 +733,15 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         if _NO_MAIN_RESULT.search(reason) and data["broad_statements"] and not named:
             out.append(f"{_label('rejected', i, e)}.reason: saying that no main result depends on the "
                        "candidate is the selection question answered no; name the broad statement that "
-                       "still stands, or the ground that puts the statement out of scope")
+                       "still stands, the result that this one breaks down, or the ground that puts "
+                       "the statement out of scope")
+        verdict = _EMPTY_REASON.match(reason.strip())
+        if _NO_MAIN_RESULT.search(reason) and data["broad_statements"] and not named:
+            pass
         elif not (named or e.get("breaks_down")) and (
                 len(reason.split()) < 3
-                or (_EMPTY_REASON.match(reason.strip()) and not _A_GROUND.search(reason))):
+                or (verdict and len(reason.split()) <= _VERDICT_WORDS
+                    and not _A_GROUND.search(reason[verdict.end():]))):
             out.append(f"{_label('rejected', i, e)}.reason: gives no ground a checker can assess; say "
                        "which main result still stands, by the id of its broad statement, or what puts "
                        "the statement out of scope")
@@ -742,11 +751,12 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
     # which is why only a claim counts here.
     statements = {b["id"] for b in data["broad_statements"]}
     claims = {c["id"] for c in data["claims"]}
+    served = {c["id"]: set(c["serves"]) & statements for c in data["claims"]}
     for i, e in enumerate(data["rejected"]):
         refs = e.get("duplicate_of") or []
         refs = refs if isinstance(refs, list) else [refs]
-        if (statements and not (set(refs) & statements) and (set(refs) & claims)
-                and not e.get("breaks_down")):
+        wanted = set().union(*(served[r] for r in refs if r in claims)) if set(refs) & claims else set()
+        if statements and not (set(refs) & statements) and not wanted <= set(e.get("breaks_down") or []):
             out.append(f"{_label('rejected', i, e)}.duplicate_of: names a claim, and every claim "
                        "serves a broad statement; where the sentence restates that main result, name "
                        "the broad statement as well, or the record counts one place too few")
@@ -754,11 +764,13 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                   for b in data["broad_statements"]}
     # A statement whose claims all serve another statement that more claims serve divides that
     # result instead of stating one of its own.
+    breakdowns = set()
     for i, b in enumerate(data["broad_statements"]):
         mine = supporting[b["id"]]
         covers = [o["id"] for o in data["broad_statements"]
                   if o["id"] != b["id"] and mine and mine < supporting[o["id"]]]
         if covers:
+            breakdowns.add(b["id"])
             out.append(f"{_label('broad_statements', i, b)}: every claim that serves it also serves "
                        f"{covers[0]}, which more claims serve, so it reads as a breakdown of that "
                        "result rather than a result of its own; record it as a rejected candidate "
@@ -766,20 +778,24 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results.
     for group in _one_result(data):
-        if len(group) > 1:
+        if len(group) > 1 and not set(group) & breakdowns:
             out.append(f"broad_statements {', '.join(group)}: the same claims serve all of them, so "
                        "they read as one main result stated several times; record it once and keep "
                        "the others as rejected candidates with duplicate_of naming it")
     # Statements that share much of their support without sharing all of it are a question for the
     # checker, not a verdict. Each pair is asked about once, whichever order the record lists it in,
     # and a pair that the breakdown warning covers is left to that warning.
-    for n, one in enumerate(data["broad_statements"]):
-        for two in data["broad_statements"][n + 1:]:
-            first, second = supporting[one["id"]], supporting[two["id"]]
+    results = _one_result(data)
+    for n, one in enumerate(results):
+        for two in results[n + 1:]:
+            if set(one + two) & breakdowns:
+                continue
+            first = set().union(*(supporting[b] for b in one))
+            second = set().union(*(supporting[b] for b in two))
             if not (first and second) or first <= second or second <= first:
                 continue
             if len(first & second) / len(first | second) >= _SAME_RESULT:
-                out.append(f"broad_statements {one['id']} and {two['id']}: most of the claims that "
+                out.append(f"broad_statements {one[0]} and {two[0]}: most of the claims that "
                            "serve one serve the other as well; where they state one main result, "
                            "record it once and keep the other sentence as a rejected candidate with "
                            "duplicate_of naming it")
@@ -789,7 +805,8 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        f"so the source is rq_answer, not {b.get('source')!r}")
     whole = [(_label(key, i, e), e.get("section", "")) for key in ("broad_statements", "claims", "rejected")
              for i, e in enumerate(data[key])
-             if _HEADING_WHOLE.search(e.get("section", "")) or len(e.get("section", "")) > _LONG_SECTION]
+             if ("?" in e.get("section", "") and len(e.get("section", "")) > _A_QUESTION)
+             or len(e.get("section", "")) > _LONG_SECTION]
     if whole:
         headings = sorted({s for _, s in whole}, key=len, reverse=True)
         first = [next(label for label, s in whole if s == h) for h in headings[:3]]
@@ -884,7 +901,9 @@ def _one_result(data: dict) -> list[list[str]]:
                 for b in data["broad_statements"]}
     groups: dict[frozenset, list[str]] = {}
     for b, claims in supports.items():
-        groups.setdefault(frozenset(claims), []).append(b)
+        # A statement that no claim serves shares nothing with another such statement, and the
+        # reference lets it stand where its note says why, so it groups with nothing.
+        groups.setdefault(frozenset(claims) if claims else b, []).append(b)
     return list(groups.values())
 
 
