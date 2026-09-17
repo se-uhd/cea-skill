@@ -621,12 +621,17 @@ class Validate(unittest.TestCase):
     def test_reason_naming_a_ground_needs_no_broad_statement(self):
         data = valid_claims()
         data["rejected"][0]["reason"] = "Describes the study, not a result."
-        self.assertNotIn("names neither a main result nor a ground", self.warnings(data))
+        self.assertNotIn("gives no ground", self.warnings(data))
+        # A ground the script has no word for is a ground all the same.
+        data["rejected"][0]["reason"] = "It defines the metric rather than measuring anything."
+        self.assertNotIn("gives no ground", self.warnings(data))
 
     def test_reason_naming_neither_a_result_nor_a_ground_warns(self):
         data = valid_claims()
-        data["rejected"][0]["reason"] = "Not an important number."
-        self.assertIn("names neither a main result nor a ground", self.warnings(data))
+        for verdict in ("Not an important number.", "Important result.", "Minor.", "No"):
+            with self.subTest(reason=verdict):
+                data["rejected"][0]["reason"] = verdict
+                self.assertIn("gives no ground", self.warnings(data))
 
     def test_quote_on_wrong_page(self):
         data = valid_claims()

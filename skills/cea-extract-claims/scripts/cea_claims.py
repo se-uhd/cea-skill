@@ -608,21 +608,13 @@ def _reads_like_prose(line: str) -> bool:
             and not re.search(r"\S\s{3,}\S", line) and not re.match(r"\d{1,2}[\s A-Z]", line)
             and "http" not in line and not line.startswith("[references removed"))
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
-# The grounds that put a candidate out of reach of the selection question, from the reference's
-# section "Selection question". A candidate rejected on one of them has no main result to name,
-# because no main result stands or falls with it.
-_REJECTED_GROUND = re.compile(
-    r"\bdescrib\w*\s+(?:the|its|this)\s+(?:stud|data)|\bstud\w*\s+(?:size|design)\b|\bsample size\b"
-    r"|\bcorpus size\b|\bcodebook\b|\binter-?rater\b|\bagreement score\b"
-    r"|\brepeats\s+(?:[BCR]\d|another|the)|\brepetition of\b|\bduplicates\s+[BCR]\d"
-    r"|\bcited work\b|\bprior work\b|\bbackground work\b|\bwork of others\b"
-    r"|\bparticipant\s+(?:states|stated|reports|reported|gave)\b|\bnumber a participant\b"
-    r"|\bfeature importance|\baccuracy of (?:a|the) model\b|\breads only\b|\bonly reads\b"
-    r"|\bqualitative\b|\bformal\b|\btheorem\b|\bproof\b|\bnovelty\b"
-    r"|\bno broad statement\s+(?:states|covers|gives)", re.I)
-# The one ground that belongs to a record with no broad statement. Where the record has broad statements, saying
-# that no main result depends on the candidate is the selection question answered no, and the reason
-# names the statement that still stands instead.
+# A reason that gives a verdict instead of a ground: a word for how much the statement matters,
+# which a checker cannot accept or overturn, or too few words to say anything. The reference lets a
+# reason name any ground it gives, so a reason is read for what it lacks, not matched to a list.
+_EMPTY_REASON = re.compile(
+    r"^\W*(?:this\s+is\s+|it\s+is\s+)?(?:not\s+)?(?:an?\s+|the\s+)?"
+    r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b[^.]*\.?\W*$"
+    r"|^\W*(?:not\s+a\s+claim|no|n/?a|none)\W*$", re.I)
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
 # A section heading that names the paper's answer to a research question.
 _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
@@ -709,13 +701,16 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
             out.append(f"{_label('claims', i, e)}.selection_reason: names none of the broad statements in "
                        "serves; say which main result would fail and how")
     for i, e in enumerate(data["rejected"]):
-        if not (e.get("duplicate_of") or e.get("split_from") or re.search(r"\bB\d+\b", e["reason"])
-                or _REJECTED_GROUND.search(e["reason"])
-                or (_NO_MAIN_RESULT.search(e["reason"]) and not data["broad_statements"])):
-            out.append(f"{_label('rejected', i, e)}.reason: names neither a main result nor a ground; say "
-                       "which main result still stands, by the id of its broad statement, or which ground "
-                       "puts the statement out of scope. Where the record has broad statements, saying that "
-                       "no main result depends on the candidate is the selection question answered no")
+        reason = e["reason"]
+        named = e.get("duplicate_of") or e.get("split_from") or re.search(r"\bB\d+\b", reason)
+        if _NO_MAIN_RESULT.search(reason) and data["broad_statements"]:
+            out.append(f"{_label('rejected', i, e)}.reason: saying that no main result depends on the "
+                       "candidate is the selection question answered no; name the broad statement that "
+                       "still stands, or the ground that puts the statement out of scope")
+        elif not named and (len(reason.split()) < 3 or _EMPTY_REASON.match(reason.strip())):
+            out.append(f"{_label('rejected', i, e)}.reason: gives no ground a checker can assess; say "
+                       "which main result still stands, by the id of its broad statement, or what puts "
+                       "the statement out of scope")
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results.
     for group in _one_result(data):

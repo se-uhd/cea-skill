@@ -190,7 +190,7 @@ Fix every problem and run it again until it prints `CEA_VALID`. After that line,
 - a `[...]` that skips text reading like part of the sentence
 - a quote that starts or ends in the middle of a word or a number
 - two entries that quote the same sentence on different pages
-- a rejected candidate's `reason` that names neither a main result nor one of the reference's grounds. Expect this warning where the reference gives a ground that the script does not know, such as a candidate whose basis the paper leaves unclear, and leave the reason as the reference asks
+- a rejected candidate's `reason` that gives a verdict instead of a ground, such as "Important result", or that says no main result depends on the candidate although the record has broad statements
 
 It cannot tell whether a part pairs a number with the wrong item, so reread each part against its quote.
 
