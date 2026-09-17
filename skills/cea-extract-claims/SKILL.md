@@ -199,7 +199,7 @@ Fix every problem and run it again until it prints `CEA_VALID`. After that line,
 - a broad statement whose claims all serve another statement that more claims serve, which reads as a breakdown of that result rather than a result of its own
 - a boxed answer whose `source` is not `rq_answer`
 
-Recording a broad statement as a rejected candidate leaves every claim that served it naming an id that no longer exists, which is a problem rather than a warning, so judge those claims again under item 3 of step 5 first.
+Recording a broad statement as a rejected candidate leaves an id that no longer exists in every claim that served it, and in the `duplicate_of` or `breaks_down` of every rejected candidate that named it, which is a problem rather than a warning. Judge those claims again under item 3 of step 5, and point those rejected candidates at the entry's new id, before running the validator again.
 
 It cannot tell whether a part pairs a number with the wrong item, so reread each part against its quote.
 

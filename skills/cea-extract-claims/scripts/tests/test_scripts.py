@@ -595,17 +595,36 @@ class Validate(unittest.TestCase):
             {"id": "B2", "quote": "Caching helps most on the largest projects.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
         data["claims"][0]["serves"] = ["B1", "B2"]
-        self.assertIn("reads as a breakdown", self.warnings(data))
+        self.assertIn("may break that result down", self.warnings(data))
         # The record puts no order on the statements, so neither does the warning.
         data["broad_statements"].reverse()
-        self.assertIn("reads as a breakdown", self.warnings(data))
+        self.assertIn("may break that result down", self.warnings(data))
         data["broad_statements"].reverse()
         # A finding of its own brings a claim of its own.
         data["claims"].append(
             {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "text": "The largest projects saved 6.1 minutes.",
              "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
              "selection_reason": "B2 rests on this."})
-        self.assertNotIn("reads as a breakdown", self.warnings(data))
+        self.assertNotIn("may break that result down", self.warnings(data))
+
+    def test_a_chain_of_breakdowns_names_the_statement_that_survives(self):
+        data = valid_claims()
+        data["broad_statements"] += [
+            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"},
+            {"id": "B3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+             "section": "4 Data", "source": "other", "note": "No summary sentence states it."}]
+        # B3 is served by C1 alone, B2 by C1 and C2, B1 by C1, C2 and C3.
+        data["claims"].append(
+            {"id": "C3", "quote": "Build failures are rare in general.",
+             "text": "Build failures are rare in general.", "page": 3, "section": "5 Results",
+             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."})
+        data["claims"][0]["serves"] = ["B1", "B2", "B3"]
+        data["claims"][1]["serves"] = ["B1", "B2"]
+        warned = [w for w in self.warnings(data).splitlines() if "may break that result down" in w]
+        self.assertEqual(len(warned), 2)
+        # Both point at B1, which survives, not at each other.
+        self.assertTrue(all("naming B1" in w for w in warned), warned)
 
     def test_a_reason_keeps_its_opening_word_when_it_names_a_ground(self):
         data = valid_claims()

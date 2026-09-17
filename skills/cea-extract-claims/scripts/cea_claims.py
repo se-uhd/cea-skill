@@ -771,10 +771,15 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                   if o["id"] != b["id"] and mine and mine < supporting[o["id"]]]
         if covers:
             breakdowns.add(b["id"])
+            # The statement that the most claims serve, so that a chain of nested statements points
+            # at the one that survives rather than at each other.
+            widest = max(covers, key=lambda o: (len(supporting[o]), o))
             out.append(f"{_label('broad_statements', i, b)}: every claim that serves it also serves "
-                       f"{covers[0]}, which more claims serve, so it reads as a breakdown of that "
-                       "result rather than a result of its own; record it as a rejected candidate "
-                       f"with breaks_down naming {covers[0]}")
+                       f"{widest}, which more claims serve, so it may break that result down rather "
+                       "than state one of its own; it keeps its record where its sentence reports "
+                       "something no other broad statement mentions, and where its only addition is "
+                       "a subgroup, an exception, an example, or a subset, record it as a rejected "
+                       f"candidate with breaks_down naming {widest}")
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results.
     for group in _one_result(data):
