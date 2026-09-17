@@ -728,6 +728,17 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         if refs and statements and not any(r in statements for r in refs) and any(r in carries for r in refs):
             out.append(f"{_label('rejected', i, e)}.duplicate_of: repeats a claim that serves a broad "
                        "statement, so it repeats that main result; name the broad statement as well")
+    supporting = {b["id"]: {c["id"] for c in data["claims"] if b["id"] in c["serves"]}
+                  for b in data["broad_statements"]}
+    for i, b in enumerate(data["broad_statements"]):
+        mine = supporting[b["id"]]
+        earlier = [o["id"] for o in data["broad_statements"][:i]
+                   if mine and mine < supporting[o["id"]]]
+        if earlier:
+            out.append(f"{_label('broad_statements', i, b)}: every claim that serves it also serves "
+                       f"{earlier[0]}, which more claims serve, so it reads as a breakdown of that "
+                       "result rather than a result of its own; record it as a rejected candidate "
+                       f"with duplicate_of naming {earlier[0]}")
     for i, b in enumerate(data["broad_statements"]):
         if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
             out.append(f"{_label('broad_statements', i, b)}.source: the section names a boxed answer, "

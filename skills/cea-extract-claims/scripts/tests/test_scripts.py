@@ -604,6 +604,20 @@ class Validate(unittest.TestCase):
              "section": "6 Discussion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
         self.assertNotIn("name the broad statement as well", self.warnings(data))
 
+    def test_a_statement_whose_claims_all_serve_another_is_a_breakdown(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Caching helps most on the largest projects.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        data["claims"][0]["serves"] = ["B1", "B2"]
+        self.assertIn("reads as a breakdown", self.warnings(data))
+        # A finding of its own brings a claim of its own.
+        data["claims"].append(
+            {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "text": "The largest projects saved 6.1 minutes.",
+             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
+             "selection_reason": "B2 rests on this."})
+        self.assertNotIn("reads as a breakdown", self.warnings(data))
+
     def test_boxed_answer_takes_the_rq_answer_source(self):
         data = valid_claims()
         data["broad_statements"][0]["section"] = "5 Results, Summary RQ1"
