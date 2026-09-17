@@ -611,11 +611,15 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         for reason in ("Key numbers here come from cited work, not from this study.",
                        "Significant only as a sample size, so it describes the study.",
-                       "Minor rounding differences in the table describe the study, not a result."):
+                       "Minor rounding differences in the table describe the study, not a result.",
+                       "Key numbers here come from cited work.",
+                       "Central to the coding procedure, an agreement score.",
+                       "Main sizes of the corpus, not a result."):
             data["rejected"][0]["reason"] = reason
             self.assertNotIn("gives no ground", self.warnings(data), reason)
         for reason in ("Important result.", "Not an important number.", "Minor.", "No",
-                       "Important result for the study.", "A key number of the paper."):
+                       "Important result for the study.", "A key number of the paper.",
+                       "An important result that the reader should bear in mind."):
             data["rejected"][0]["reason"] = reason
             self.assertIn("gives no ground", self.warnings(data), reason)
 
@@ -627,7 +631,7 @@ class Validate(unittest.TestCase):
         self.assertIn("is the selection question answered no", self.warnings(data))
 
     def test_a_chain_of_overlaps_does_not_become_one_result(self):
-        # Neighbours share two claims of three, but B1 and B4 share none.
+        # Neighbours share two claims of three, but B1 and B4 share none, so nothing groups.
         support = {"B1": ["C1", "C2", "C3"], "B2": ["C2", "C3", "C4"],
                    "B3": ["C3", "C4", "C5"], "B4": ["C4", "C5", "C6"]}
         every = sorted({c for cs in support.values() for c in cs})
@@ -636,7 +640,27 @@ class Validate(unittest.TestCase):
                     "claims": [{"id": c, "serves": [b for b in support if c in support[b]]}
                                for c in every]}
             groups = sorted(sorted(g) for g in cea_claims._one_result(data))
-            self.assertEqual(groups, [["B1", "B2"], ["B3", "B4"]], order)
+            self.assertEqual(groups, [["B1"], ["B2"], ["B3"], ["B4"]], order)
+
+    def test_statements_sharing_most_of_their_claims_are_asked_about(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        for c in data["claims"]:
+            c["serves"] = ["B1", "B2"]
+        data["claims"] += [
+            {"id": "C3", "quote": "We collected 1,203 builds from 48 projects.",
+             "text": "We collected 1,203 builds from 48 projects.", "page": 2, "section": "5 Results",
+             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."},
+            {"id": "C4", "quote": "Build failures are rare in general.",
+             "text": "Build failures are rare in general.", "page": 3, "section": "5 Results",
+             "serves": ["B2"], "split_from": None, "selection_reason": "B2 rests on this."}]
+        # B1 has C1, C2, C3 and B2 has C1, C2, C4: half of four shared, so a question, not a verdict.
+        self.assertIn("broad_statements B1 and B2: most of the claims", self.warnings(data))
+        self.assertNotIn("the same claims serve all of them", self.warnings(data))
+        data["broad_statements"].reverse()
+        self.assertIn("most of the claims", self.warnings(data))
 
     def test_breaks_down_on_a_broken_record_reports_rather_than_raises(self):
         data = valid_claims()
@@ -670,16 +694,16 @@ class Validate(unittest.TestCase):
 
     def test_a_heading_copied_whole_is_reported_once(self):
         data = valid_claims()
-        # A heading with a subheading after it is long, and is what the rule asks for.
-        data["claims"][0]["section"] = ("IV-A Annotation Overview and Inter-Rater Agreement for the "
-                                        "Sampled Pull Requests, Fig. 2")
-        self.assertNotIn("longer than", self.warnings(data))
-        whole = ("IV-B RQ2: To what extent do AI-generated review comments lead to code changes "
-                 "compared to human review comments?, Results")
+        # A long heading is what the rule asks for as long as it is a heading, not a question.
+        data["claims"][0]["section"] = ("V-B Beyond Code Changes: Impact on Closed PRs and Feedback "
+                                        "on Unaddressed Comments")
+        self.assertNotIn("copied whole", self.warnings(data))
+        whole = ("IV-A RQ1: How are LLM-based code review actions adopted in GitHub repositories?, "
+                 "Results")
         data["claims"][0]["section"] = data["claims"][1]["section"] = whole
-        warned = [w for w in self.warnings(data).splitlines() if "longer than" in w]
+        warned = [w for w in self.warnings(data).splitlines() if "copied whole" in w]
         self.assertEqual(len(warned), 1)
-        self.assertIn("1 heading longer than 100 characters stands in 2 sections", warned[0])
+        self.assertIn("1 heading is copied whole into 2 sections", warned[0])
 
     def test_breaks_down_names_a_broad_statement(self):
         data = valid_claims()
@@ -697,17 +721,23 @@ class Validate(unittest.TestCase):
         data["rejected"][0]["breaks_down"] = ["B1"]
         self.assertEqual(cea_claims._stated_in(data), 1)
 
-    def test_grouping_does_not_depend_on_the_order_recorded(self):
-        # B1 and B2 share too little to group, but both share most of their support with B3.
-        support = {"B1": ["C1", "C2", "C3", "C4"], "B2": ["C3", "C4", "C5", "C6"],
-                   "B3": ["C2", "C3", "C4", "C5"]}
-        every = sorted({c for cs in support.values() for c in cs})
-        for order in itertools.permutations(support):
-            data = {"broad_statements": [{"id": b} for b in order],
-                    "claims": [{"id": c, "serves": [b for b in support if c in support[b]]}
-                               for c in every]}
+    def test_grouping_depends_on_neither_the_order_nor_the_ids(self):
+        # Two statements the same claims serve, and a third on its own.
+        shapes = [["C1", "C2"], ["C1", "C2"], ["C3"]]
+        seen = set()
+        for names in itertools.permutations(["B1", "B2", "B3"]):
+            serves: dict[str, list[str]] = {}
+            for name, shape in zip(names, shapes):
+                for c in shape:
+                    serves.setdefault(c, []).append(name)
+            data = {"broad_statements": [{"id": b} for b in names],
+                    "claims": [{"id": c, "serves": s} for c, s in sorted(serves.items())]}
             groups = cea_claims._one_result(data)
-            self.assertEqual([sorted(g) for g in groups], [["B1", "B2", "B3"]], order)
+            self.assertEqual(sorted(len(g) for g in groups), [1, 2], names)
+            # The same partition, however the statements are named and listed.
+            shape_of = dict(zip(names, (frozenset(s) for s in shapes)))
+            seen.add(frozenset(frozenset(shape_of[b] for b in g) for g in groups))
+        self.assertEqual(len(seen), 1)
 
     def test_boxed_answer_takes_the_rq_answer_source(self):
         data = valid_claims()
