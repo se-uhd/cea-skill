@@ -149,7 +149,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
 ```
 
 - `paper.pdf`: the path to the PDF as the user gave it. `paper.pages`: the number of pages in `text.txt`.
-- `quote`: the exact wording, copied from `text.txt` as extracted, including characters that the extraction garbled (explain them in `note`).
+- `quote`: the exact wording, copied from `text.txt` as extracted, including characters and whole words that the extraction garbled, such as a summation sign that comes out inside the word beside it (explain them in `note`).
   - Join lines with spaces, and write a word broken across two lines as one word. A quote may span consecutive sentences when the claim needs both, and it may leave out a footnote marker attached to a word. Quote whole sentences. The validator warns about a quote that starts or ends in the middle of a sentence.
   - Where a figure, table, footnote, or page break puts text that is not the sentence's own between two of its lines in `text.txt`, write `[...]` at that point. A page break with nothing between the two halves needs no marker. The validator accepts `[...]` only between two lines of `text.txt`, never inside a line. Where the paper itself prints `[...]`, for example in a quoted post, copy it as it stands, and the validator reads it as the paper's own text. Never use `[...]` to shorten a sentence, because the checker reads the quote as the paper's full statement.
   - When a page break falls inside a word, write the word whole and give the page as a range such as `"8-9"`. If a table or figure also appears between the two halves of the word in `text.txt`, write `[...]` inside the word, such as `dis[...]tinct`.
