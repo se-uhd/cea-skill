@@ -9,6 +9,7 @@ The tests on real papers read the PDFs in evals/papers/ and are skipped when the
 
 import contextlib
 import io
+import itertools
 import json
 import sys
 import tempfile
@@ -588,22 +589,6 @@ class Validate(unittest.TestCase):
         self.assertIn("and of 1 other result", md)
         self.assertIn("1 of 3 for this result", md)
 
-    def test_repetition_naming_no_broad_statement_warns(self):
-        data = valid_claims()
-        data["rejected"].append(
-            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
-             "page": 3, "section": "6 Discussion", "duplicate_of": ["C1"], "reason": "Repeats C1."})
-        self.assertIn("name the broad statement as well", self.warnings(data))
-        data["rejected"][-1]["duplicate_of"] = ["B1"]
-        self.assertNotIn("name the broad statement as well", self.warnings(data))
-
-    def test_repeating_something_no_result_rests_on_is_quiet(self):
-        data = valid_claims()
-        data["rejected"].append(
-            {"id": "R2", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
-             "section": "6 Discussion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
-        self.assertNotIn("name the broad statement as well", self.warnings(data))
-
     def test_a_statement_whose_claims_all_serve_another_is_a_breakdown(self):
         data = valid_claims()
         data["broad_statements"].append(
@@ -611,6 +596,10 @@ class Validate(unittest.TestCase):
              "section": "7 Conclusion", "source": "conclusion"})
         data["claims"][0]["serves"] = ["B1", "B2"]
         self.assertIn("reads as a breakdown", self.warnings(data))
+        # The record puts no order on the statements, so neither does the warning.
+        data["broad_statements"].reverse()
+        self.assertIn("reads as a breakdown", self.warnings(data))
+        data["broad_statements"].reverse()
         # A finding of its own brings a claim of its own.
         data["claims"].append(
             {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "text": "The largest projects saved 6.1 minutes.",
@@ -618,19 +607,68 @@ class Validate(unittest.TestCase):
              "selection_reason": "B2 rests on this."})
         self.assertNotIn("reads as a breakdown", self.warnings(data))
 
+    def test_a_reason_keeps_its_opening_word_when_it_names_a_ground(self):
+        data = valid_claims()
+        for reason in ("Key numbers here come from cited work, not from this study.",
+                       "Significant only as a sample size, so it describes the study.",
+                       "Minor rounding differences in the table describe the study, not a result."):
+            data["rejected"][0]["reason"] = reason
+            self.assertNotIn("gives no ground", self.warnings(data), reason)
+        for reason in ("Important result.", "Not an important number.", "Minor.", "No"):
+            data["rejected"][0]["reason"] = reason
+            self.assertIn("gives no ground", self.warnings(data), reason)
+
+    def test_a_reason_that_names_a_statement_keeps_the_phrase(self):
+        data = valid_claims()
+        data["rejected"][0]["reason"] = "B1 would still stand, because no main result depends on this subgroup."
+        self.assertNotIn("is the selection question answered no", self.warnings(data))
+        data["rejected"][0]["reason"] = "No main result depends on this subgroup."
+        self.assertIn("is the selection question answered no", self.warnings(data))
+
+    def test_a_heading_copied_whole_is_reported_once(self):
+        data = valid_claims()
+        self.assertNotIn("longer than 80 characters", self.warnings(data))
+        data["claims"][0]["section"] = ("IV-B RQ2: To what extent do AI-generated review comments "
+                                        "lead to code changes compared to human review comments?, Results")
+        data["claims"][1]["section"] = data["claims"][0]["section"]
+        warned = [w for w in self.warnings(data).splitlines() if "longer than 80 characters" in w]
+        self.assertEqual(len(warned), 1)
+        self.assertIn("2 entries", warned[0])
+
+    def test_breaks_down_names_a_broad_statement(self):
+        data = valid_claims()
+        data["rejected"][0]["breaks_down"] = ["C1"]
+        self.assertIn("is not a broad statement id", self.check(data))
+        data["rejected"][0]["breaks_down"] = ["B1"]
+        self.assertEqual(self.check(data), "")
+        self.assertIn("- Breaks down: B1", cea_claims.render(data))
+
+    def test_a_breakdown_is_not_a_place_that_states_the_result(self):
+        data = valid_claims()
+        data["rejected"][0]["duplicate_of"] = ["B1"]
+        self.assertEqual(cea_claims._stated_in(data), 2)
+        del data["rejected"][0]["duplicate_of"]
+        data["rejected"][0]["breaks_down"] = ["B1"]
+        self.assertEqual(cea_claims._stated_in(data), 1)
+
+    def test_grouping_does_not_depend_on_the_order_recorded(self):
+        # B1 and B2 share too little to group, but both share most of their support with B3.
+        support = {"B1": ["C1", "C2", "C3", "C4"], "B2": ["C3", "C4", "C5", "C6"],
+                   "B3": ["C2", "C3", "C4", "C5"]}
+        every = sorted({c for cs in support.values() for c in cs})
+        for order in itertools.permutations(support):
+            data = {"broad_statements": [{"id": b} for b in order],
+                    "claims": [{"id": c, "serves": [b for b in support if c in support[b]]}
+                               for c in every]}
+            groups = cea_claims._one_result(data)
+            self.assertEqual([sorted(g) for g in groups], [["B1", "B2", "B3"]], order)
+
     def test_boxed_answer_takes_the_rq_answer_source(self):
         data = valid_claims()
         data["broad_statements"][0]["section"] = "5 Results, Summary RQ1"
         self.assertIn("the source is rq_answer", self.warnings(data))
         data["broad_statements"][0]["source"] = "rq_answer"
         self.assertNotIn("the source is rq_answer", self.warnings(data))
-
-    def test_source_other_says_why(self):
-        data = valid_claims()
-        data["broad_statements"][0]["source"] = "other"
-        self.assertIn("says why no summary sentence states it", self.warnings(data))
-        data["broad_statements"][0]["note"] = "No summary sentence gives this number."
-        self.assertNotIn("says why no summary sentence states it", self.warnings(data))
 
     def test_reason_naming_a_ground_needs_no_broad_statement(self):
         data = valid_claims()
