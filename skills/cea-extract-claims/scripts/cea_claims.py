@@ -759,7 +759,8 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         if statements and not (set(refs) & statements) and not wanted <= set(e.get("breaks_down") or []):
             out.append(f"{_label('rejected', i, e)}.duplicate_of: names a claim, and every claim "
                        "serves a broad statement; where the sentence restates that main result, name "
-                       "the broad statement as well, or the record counts one place too few")
+                       "the broad statement as well, or the record counts one place too few, and "
+                       "where it repeats only the number, say so in the reason")
     supporting = {b["id"]: {c["id"] for c in data["claims"] if b["id"] in c["serves"]}
                   for b in data["broad_statements"]}
     # A statement whose claims all serve another statement that more claims serve divides that
