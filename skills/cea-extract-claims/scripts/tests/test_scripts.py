@@ -614,7 +614,8 @@ class Validate(unittest.TestCase):
                        "Minor rounding differences in the table describe the study, not a result."):
             data["rejected"][0]["reason"] = reason
             self.assertNotIn("gives no ground", self.warnings(data), reason)
-        for reason in ("Important result.", "Not an important number.", "Minor.", "No"):
+        for reason in ("Important result.", "Not an important number.", "Minor.", "No",
+                       "Important result for the study.", "A key number of the paper."):
             data["rejected"][0]["reason"] = reason
             self.assertIn("gives no ground", self.warnings(data), reason)
 
@@ -625,15 +626,60 @@ class Validate(unittest.TestCase):
         data["rejected"][0]["reason"] = "No main result depends on this subgroup."
         self.assertIn("is the selection question answered no", self.warnings(data))
 
+    def test_a_chain_of_overlaps_does_not_become_one_result(self):
+        # Neighbours share two claims of three, but B1 and B4 share none.
+        support = {"B1": ["C1", "C2", "C3"], "B2": ["C2", "C3", "C4"],
+                   "B3": ["C3", "C4", "C5"], "B4": ["C4", "C5", "C6"]}
+        every = sorted({c for cs in support.values() for c in cs})
+        for order in itertools.permutations(support):
+            data = {"broad_statements": [{"id": b} for b in order],
+                    "claims": [{"id": c, "serves": [b for b in support if c in support[b]]}
+                               for c in every]}
+            groups = sorted(sorted(g) for g in cea_claims._one_result(data))
+            self.assertEqual(groups, [["B1", "B2"], ["B3", "B4"]], order)
+
+    def test_breaks_down_on_a_broken_record_reports_rather_than_raises(self):
+        data = valid_claims()
+        del data["broad_statements"][0]["id"]
+        data["rejected"][0]["breaks_down"] = ["B1"]
+        self.assertIn("is not a broad statement id", self.check(data))
+
+    def test_breaks_down_and_duplicate_of_name_different_things(self):
+        data = valid_claims()
+        data["rejected"][0]["duplicate_of"] = ["B1"]
+        data["rejected"][0]["breaks_down"] = ["B1"]
+        self.assertIn("a sentence either repeats a result or breaks it down", self.check(data))
+
+    def test_breaks_down_is_a_ground_named(self):
+        data = valid_claims()
+        data["rejected"][0]["breaks_down"] = ["B1"]
+        data["rejected"][0]["reason"] = "A breakdown."
+        self.assertNotIn("gives no ground", self.warnings(data))
+
+    def test_a_repetition_names_the_statement_behind_the_claim(self):
+        data = valid_claims()
+        data["rejected"].append(
+            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
+             "page": 3, "section": "6 Discussion", "duplicate_of": ["C1"], "reason": "Repeats C1."})
+        self.assertIn("name the broad statement as well", self.warnings(data))
+        data["rejected"][-1]["duplicate_of"] = ["C1", "B1"]
+        self.assertNotIn("name the broad statement as well", self.warnings(data))
+        # A sentence repeating a number no main result rests on names no statement.
+        data["rejected"][-1]["duplicate_of"] = ["R1"]
+        self.assertNotIn("name the broad statement as well", self.warnings(data))
+
     def test_a_heading_copied_whole_is_reported_once(self):
         data = valid_claims()
-        self.assertNotIn("longer than 80 characters", self.warnings(data))
-        data["claims"][0]["section"] = ("IV-B RQ2: To what extent do AI-generated review comments "
-                                        "lead to code changes compared to human review comments?, Results")
-        data["claims"][1]["section"] = data["claims"][0]["section"]
-        warned = [w for w in self.warnings(data).splitlines() if "longer than 80 characters" in w]
+        # A heading with a subheading after it is long, and is what the rule asks for.
+        data["claims"][0]["section"] = ("IV-A Annotation Overview and Inter-Rater Agreement for the "
+                                        "Sampled Pull Requests, Fig. 2")
+        self.assertNotIn("longer than", self.warnings(data))
+        whole = ("IV-B RQ2: To what extent do AI-generated review comments lead to code changes "
+                 "compared to human review comments?, Results")
+        data["claims"][0]["section"] = data["claims"][1]["section"] = whole
+        warned = [w for w in self.warnings(data).splitlines() if "longer than" in w]
         self.assertEqual(len(warned), 1)
-        self.assertIn("2 entries", warned[0])
+        self.assertIn("1 heading longer than 100 characters stands in 2 sections", warned[0])
 
     def test_breaks_down_names_a_broad_statement(self):
         data = valid_claims()

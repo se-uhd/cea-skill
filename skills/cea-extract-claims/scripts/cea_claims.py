@@ -548,8 +548,13 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                                         "statements whose result the statement breaks down")
                         refs = [r for r in refs if _nonempty(r)] if isinstance(refs, list) else []
                     for ref in refs:
-                        if ref not in {b["id"] for b in data["broad_statements"]}:
+                        if ref not in broad_ids:
                             problems.append(f"{label}.breaks_down: '{ref}' is not a broad statement id")
+                    both = {r for r in refs if r in (e.get("duplicate_of") or [])}
+                    if both:
+                        problems.append(f"{label}.breaks_down: '{sorted(both)[0]}' is named by "
+                                        "duplicate_of as well; a sentence either repeats a result or "
+                                        "breaks it down")
                 if split and not _nonempty(e.get("text")):
                     problems.append(f"{label}.text: a rejected part of a split statement needs "
                                     "the text of that part")
@@ -619,11 +624,12 @@ def _reads_like_prose(line: str) -> bool:
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # A reason that gives a verdict instead of a ground: a word for how much the statement matters,
 # which a checker cannot accept or overturn, or too few words to say anything. The word counts only
-# where it is the whole reason, because a reason that opens with it and goes on to name a ground has
-# given the checker something to assess.
+# in a short reason, because one that opens with it and runs on names a ground: "Key numbers here
+# come from cited work" is a ground, "A key number of the paper" is a verdict.
+_VERDICT_WORDS = 8
 _EMPTY_REASON = re.compile(
     r"^\W*(?:this\s+is\s+|it\s+is\s+)?(?:not\s+)?(?:an?\s+|the\s+)?"
-    r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b(?:\s+\w+){0,2}\.?\W*$"
+    r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b[^.]*\.?\W*$"
     r"|^\W*(?:not\s+a\s+claim|no|n/?a|none)\W*$", re.I)
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
 # A section heading that names the paper's answer to a research question.
@@ -631,9 +637,8 @@ _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
 # The order the reference gives for the sentence that states a main result. Where the paper states
 # two results in as many places, the kind of sentence breaks the tie.
 _SOURCE_ORDER = ("rq_answer", "abstract", "contributions", "conclusion", "other")
-# A section longer than this is a heading copied whole, such as a research question spelled out
-# in full. The field only has to lead the checker to the page.
-_LONG_SECTION = 80
+# A section this long has a heading copied whole, such as a research question spelled out in full.
+_LONG_SECTION = 100
 # How much of their support two broad statements share before they are read as one main result
 # stated twice. Below this, a paper's separate results start merging; above it, its restatements of
 # one result stay apart.
@@ -715,20 +720,34 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "serves; say which main result would fail and how")
     for i, e in enumerate(data["rejected"]):
         reason = e["reason"]
-        named = e.get("duplicate_of") or e.get("split_from") or re.search(r"\bB\d+\b", reason)
+        named = (e.get("duplicate_of") or e.get("breaks_down") or e.get("split_from")
+                 or re.search(r"\bB\d+\b", reason))
         if _NO_MAIN_RESULT.search(reason) and data["broad_statements"] and not named:
             out.append(f"{_label('rejected', i, e)}.reason: saying that no main result depends on the "
                        "candidate is the selection question answered no; name the broad statement that "
                        "still stands, or the ground that puts the statement out of scope")
-        elif not named and (len(reason.split()) < 3 or _EMPTY_REASON.match(reason.strip())):
+        elif not named and (len(reason.split()) < 3
+                            or (len(reason.split()) <= _VERDICT_WORDS and _EMPTY_REASON.match(reason.strip()))):
             out.append(f"{_label('rejected', i, e)}.reason: gives no ground a checker can assess; say "
                        "which main result still stands, by the id of its broad statement, or what puts "
                        "the statement out of scope")
+    # A claim serves a broad statement, so a sentence repeating a claim repeats that statement's
+    # main result. Naming the claim alone leaves the repetition out of the count of the places where
+    # the paper states the result. A sentence repeating a rejected candidate names no statement,
+    # which is why only a claim counts here.
+    statements = {b["id"] for b in data["broad_statements"]}
+    claims = {c["id"] for c in data["claims"]}
+    for i, e in enumerate(data["rejected"]):
+        refs = e.get("duplicate_of") or []
+        refs = refs if isinstance(refs, list) else [refs]
+        if statements and not (set(refs) & statements) and (set(refs) & claims):
+            out.append(f"{_label('rejected', i, e)}.duplicate_of: repeats a claim, and every claim "
+                       "serves a broad statement, so the sentence repeats that main result; name the "
+                       "broad statement as well, or the record counts one place too few")
     supporting = {b["id"]: {c["id"] for c in data["claims"] if b["id"] in c["serves"]}
                   for b in data["broad_statements"]}
     # A statement whose claims all serve another statement that more claims serve divides that
-    # result instead of stating one of its own. Each statement is compared with every other, so the
-    # order in which the record happens to list them changes nothing.
+    # result instead of stating one of its own.
     breakdowns = {}
     for i, b in enumerate(data["broad_statements"]):
         mine = supporting[b["id"]]
@@ -742,13 +761,13 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        f"with breaks_down naming {covers[0]}")
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results. A statement already reported as a
-    # breakdown is left out, because that report says what to do with it.
+    # breakdown is left out, because that warning says what to do with it.
     for group in _one_result(data):
-        rest = [b for b in group if b not in breakdowns]
+        rest = [b for b in group if b not in breakdowns or breakdowns[b] not in group]
         if len(rest) > 1:
             out.append(f"broad_statements {', '.join(rest)}: most of the claims that serve one serve "
                        "the others as well, so they read as one main result stated several times; "
-                       "record it once and keep the other sentences as rejected candidates naming it")
+                       "record it once and keep the others as rejected candidates with duplicate_of naming it")
     for i, b in enumerate(data["broad_statements"]):
         if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
             out.append(f"{_label('broad_statements', i, b)}.source: the section names a boxed answer, "
@@ -756,11 +775,13 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
     long = [(_label(key, i, e), e.get("section", "")) for key in ("broad_statements", "claims", "rejected")
             for i, e in enumerate(data[key]) if len(e.get("section", "")) > _LONG_SECTION]
     if long:
-        label, section = max(long, key=lambda x: len(x[1]))
-        out.append(f"{len(long)} entries give a section longer than {_LONG_SECTION} characters, the "
-                   f"longest {label} at {len(section)}; keep the heading's number and the words that "
-                   "identify it, such as 'IV-B RQ2', because the section only has to lead the checker "
-                   "to the page")
+        headings = sorted({s for _, s in long}, key=len, reverse=True)
+        where = ", ".join(label for label, _ in long[:3]) + (" and others" if len(long) > 3 else "")
+        out.append(f"{len(headings)} heading{'s' if len(headings) > 1 else ''} longer than "
+                   f"{_LONG_SECTION} characters stand{'' if len(headings) > 1 else 's'} in {len(long)} section"
+                   f"{'s' if len(long) > 1 else ''} ({where}), the longest at {len(headings[0])} "
+                   "characters; keep the heading's number and the words that identify it, because the "
+                   "section only has to lead the checker to the page")
     entries = [(_label(key, i, e), _key(e["quote"])) for key in ("broad_statements", "claims", "rejected")
                for i, e in enumerate(data[key])]
     for label, key in entries:
@@ -840,25 +861,28 @@ def _one_result(data: dict) -> list[list[str]]:
 
     The reference records a main result once and keeps the sentences that repeat it as rejected
     candidates. Where that has not happened, the same result stands as several broad statements, and
-    the claims give it away: statements that state one result are served by the same claims. Two
-    statements that share most of their support stand in one group, as do two that share it with a
-    third, so the order in which the record lists them changes nothing."""
+    the claims give it away: statements that state one result are served by the same claims. The
+    two groups that share most of their support are joined, then the next two, until no two share
+    enough, so the order in which the record lists them changes nothing."""
     supports = {b["id"]: {c["id"] for c in data["claims"] if b["id"] in c["serves"]}
                 for b in data["broad_statements"]}
-    ids = list(supports)
-    holds = {b: n for n, b in enumerate(ids)}
-    for n, a in enumerate(ids):
-        for b in ids[n + 1:]:
-            both, either = supports[a] & supports[b], supports[a] | supports[b]
-            if either and len(both) / len(either) >= _SAME_RESULT and holds[a] != holds[b]:
-                moved, kept = holds[b], holds[a]
-                for x in ids:
-                    if holds[x] == moved:
-                        holds[x] = kept
-    groups: dict[int, list[str]] = {}
-    for b in ids:
-        groups.setdefault(holds[b], []).append(b)
-    return list(groups.values())
+    groups = [[b] for b in supports]
+    while True:
+        pairs = []
+        for n, one in enumerate(groups):
+            for m, two in enumerate(groups[n + 1:], n + 1):
+                first = set().union(*(supports[x] for x in one))
+                second = set().union(*(supports[x] for x in two))
+                share = len(first & second) / len(first | second) if first | second else 0
+                if share >= _SAME_RESULT:
+                    pairs.append((share, sorted(one + two), n, m))
+        if not pairs:
+            return groups
+        # The pair sharing most joins first. Two pairs sharing equally are settled by their ids, so
+        # that the order in which the record lists the statements decides nothing.
+        closest = max(share for share, _, _, _ in pairs)
+        _, _, n, m = min((p for p in pairs if p[0] == closest), key=lambda p: p[1])
+        groups[n] += groups.pop(m)
 
 
 def _stated_in(data: dict, group: list[str] | None = None) -> int:
@@ -866,7 +890,9 @@ def _stated_in(data: dict, group: list[str] | None = None) -> int:
     the recorded sentences that repeat any of them.
 
     A breakdown of a result is not a sentence stating it, and names `breaks_down` rather than
-    `duplicate_of`, so it is not counted here. The sentences are counted, not the links to them. Where one result stands as four broad
+    `duplicate_of`, so it is not counted here.
+
+    The sentences are counted, not the links to them. Where one result stands as four broad
     statements, a sentence repeating it names several of the four, and counting each statement's
     repetitions on its own would count that sentence several times over."""
     ids = set(group) if group is not None else {b["id"] for b in data["broad_statements"]}
@@ -967,7 +993,8 @@ def render(data: dict) -> str:
             refs = r["duplicate_of"] if isinstance(r["duplicate_of"], list) else [r["duplicate_of"]]
             out.append(f"- Repeats: {', '.join(refs)}")
         if r.get("breaks_down"):
-            out.append(f"- Breaks down: {', '.join(r['breaks_down'])}")
+            refs = r["breaks_down"] if isinstance(r["breaks_down"], list) else [r["breaks_down"]]
+            out.append(f"- Breaks down: {', '.join(refs)}")
         out.append(f"- Reason: {_flat(r['reason'])}")
         if r.get("note"):
             out.append(f"- Note: {_flat(r['note'])}")
