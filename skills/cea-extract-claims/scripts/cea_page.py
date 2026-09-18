@@ -856,31 +856,27 @@ TEMPLATE = r"""<!DOCTYPE html>
       target.scrollIntoView({ behavior: 'smooth' });
     });
   });
-  // The section the reader is in is the first one showing in the band below the nav, in document
-  // order. Taking whichever section the observer reported last marks an arbitrary one at rest, and
-  // a threshold in the section's own height never fires for a section taller than the window.
+  // The section the reader is in is the last one whose top has passed under the nav. Asking an
+  // observer which sections are on screen marks the earliest of them, so the underline lags behind
+  // the reader by the height of the band.
   var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
-  var showing = {};
-  function atBottom() {
-    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
-  }
   function markSection() {
-    // At the foot of the page the last section never reaches the band, so the nav would stay on
-    // the one before it while the reader looks at it.
-    var current = atBottom() ? sections[sections.length - 1]
-      : sections.filter(function (s) { return showing[s.id]; })[0] || sections[0];
+    var line = 100;
+    var current = sections[0];
+    sections.forEach(function (s) {
+      if (s.getBoundingClientRect().top <= line) current = s;
+    });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+      current = sections[sections.length - 1];  // the last section never reaches the line
+    }
+    if (!current) return;
     navLinks.forEach(function (l) {
       l.classList.toggle('active', l.getAttribute('href') === '#' + current.id);
     });
   }
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) { showing[entry.target.id] = entry.isIntersecting; });
-    markSection();
-  }, { threshold: 0, rootMargin: '-80px 0px -60% 0px' });
-  sections.forEach(function (s) { observer.observe(s); });
   markSection();
-
   window.addEventListener('scroll', markSection, { passive: true });
+  window.addEventListener('resize', markSection);
   window.addEventListener('resize', drawEdges);
   window.addEventListener('hashchange', function () {
     if (location.hash.length > 1) navigateTo(location.hash.slice(1));
