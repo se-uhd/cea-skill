@@ -38,11 +38,11 @@ MAX_GAP = 4000
 # Required and optional fields per entry type.
 FIELDS = {
     "paper": ({"id", "title", "pdf", "pages"}, set()),
-    "broad_statements": ({"id", "quote", "page", "section", "source"}, {"note"}),
-    "claims": ({"id", "quote", "text", "page", "section", "serves", "split_from",
+    "broad_statements": ({"id", "quote", "page", "section", "source"}, {"note", "states"}),
+    "claims": ({"id", "quote", "states", "page", "section", "serves", "split_from",
                 "selection_reason"}, {"note"}),
     "rejected": ({"id", "quote", "page", "section", "reason"},
-                 {"text", "split_from", "duplicate_of", "breaks_down", "note"}),
+                 {"states", "split_from", "duplicate_of", "breaks_down", "note"}),
 }
 
 # --- Quote matching ---
@@ -449,7 +449,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
     for key, entries in lists.items():
         for i, e in entries:
             label = _label(key, i, e)
-            texts = ["quote", "section"] + {"claims": ["text", "selection_reason"],
+            texts = ["quote", "section"] + {"claims": ["states", "selection_reason"],
                                             "rejected": ["reason"]}.get(key, [])
             for f in texts:
                 if f in e and not _nonempty(e[f]):
@@ -478,6 +478,11 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                     _check_quote(problems, label, e, span, pages)
 
             if key == "broad_statements":
+                if _nonempty(e.get("states")) and quote:
+                    extra = sorted(_words(e["states"]) - _quote_words(quote))
+                    if extra:
+                        problems.append(f"{label}.states: uses words that are not in the quote: "
+                                        f"{', '.join(extra[:5])}")
                 if "source" in e and e["source"] not in SOURCES:
                     problems.append(f"{label}.source: must be one of {', '.join(SOURCES)}")
                 if e.get("source") == "other" and not _nonempty(e.get("note")):
@@ -494,10 +499,10 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                 if split in owners:
                     problems.append(f"{label}.split_from: '{split}' must not be the id of an entry")
                 splits.setdefault(split, []).append((label, e))
-                if quote and _nonempty(e.get("text")):
-                    extra = sorted(_words(e["text"]) - _quote_words(quote))
+                if quote and _nonempty(e.get("states")):
+                    extra = sorted(_words(e["states"]) - _quote_words(quote))
                     if extra:
-                        problems.append(f"{label}.text: uses words that are not in the quote: "
+                        problems.append(f"{label}.states: uses words that are not in the quote: "
                                         f"{', '.join(extra[:8])}")
 
             if key == "claims":
@@ -522,8 +527,8 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                     if same and same not in listed:
                         problems.append(f"{label}.serves: the claim quotes the same sentence as {same}, "
                                         f"so it must serve {same}")
-                if not split and quote and _nonempty(e.get("text")) and _key(quote) != normalize(e["text"])[0]:
-                    problems.append(f"{label}.text: differs from the quote, but split_from is null; "
+                if not split and quote and _nonempty(e.get("states")) and _key(quote) != normalize(e["states"])[0]:
+                    problems.append(f"{label}.states: differs from the quote, but split_from is null; "
                                     "copy the quote, or set split_from if this claim is one part "
                                     "of a split statement")
 
@@ -556,12 +561,12 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                         problems.append(f"{label}.breaks_down: '{sorted(both)[0]}' is named by "
                                         "duplicate_of as well; a sentence either repeats a result or "
                                         "breaks it down")
-                if split and not _nonempty(e.get("text")):
-                    problems.append(f"{label}.text: a rejected part of a split statement needs "
-                                    "the text of that part")
-                if not split and "text" in e:
-                    problems.append(f"{label}.text: only a rejected part of a split statement has "
-                                    "text; remove it or set split_from")
+                if split and not _nonempty(e.get("states")):
+                    problems.append(f"{label}.states: a rejected part of a split statement needs "
+                                    "the words of that part")
+                if not split and "states" in e:
+                    problems.append(f"{label}.states: only a rejected part of a split statement has "
+                                    "words of its own; remove them or set split_from")
 
     for (quote_key, page), label in rejected_quotes.items():
         same = [b for b, e in broad_quoted.items() if b == quote_key and page in e]
@@ -601,12 +606,12 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
         if len({_key(_str(e.get("quote"))) for _, e in members}) > 1:
             problems.append(f"split_from '{split}': the parts ({', '.join(l for l, _ in members)}) "
                             "must share the same quote")
-        texts = [normalize(_str(e.get("text")))[0] for _, e in members]
+        texts = [normalize(_str(e.get("states")))[0] for _, e in members]
         if len(set(texts)) < len(texts):
             problems.append(f"split_from '{split}': two parts have the same text")
         for label, e in members:
-            if _nonempty(e.get("text")) and normalize(e["text"])[0] == _key(_str(e.get("quote"))):
-                problems.append(f"{label}.text: repeats the whole quote; each part of a split "
+            if _nonempty(e.get("states")) and normalize(e["states"])[0] == _key(_str(e.get("quote"))):
+                problems.append(f"{label}.states: repeats the whole quote; each part of a split "
                                 "statement states one part of it")
 
     return problems, data
@@ -849,21 +854,21 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
             if not e.get("split_from"):
                 continue
             groups.setdefault(e["split_from"], []).append(e)
-            numbers = _NUMBER.findall(_fold(e["text"]))
+            numbers = _NUMBER.findall(_fold(e["states"]))
             if not _in_order(numbers, _NUMBER.findall(_fold(e["quote"]))):
-                out.append(f"{_label(key, i, e)}.text: gives its numbers ({', '.join(numbers)}) in a "
+                out.append(f"{_label(key, i, e)}.states: gives its numbers ({', '.join(numbers)}) in a "
                            "different order than the quote; check that each number stays with its item")
     for split, members in groups.items():
         quote = members[0]["quote"]
-        texts = [" ".join(_fold(e["text"]).casefold().split()) for e in members]
+        texts = [" ".join(_fold(e["states"]).casefold().split()) for e in members]
         if re.search(r"\brespectively\b", quote, re.I):
             out.append(f"split_from '{split}': the quote pairs items and numbers with "
                        "\"respectively\"; check that each part keeps the right pair")
-        dropped = sorted((_words(quote) & _COMPARISON) - set().union(*(_words(e["text"]) for e in members)))
+        dropped = sorted((_words(quote) & _COMPARISON) - set().union(*(_words(e["states"]) for e in members)))
         if dropped:
             out.append(f"split_from '{split}': no part keeps {', '.join(dropped)} from the quote; check "
                        "that each comparison stays whole")
-        if _negations(quote) and not any(_negations(e["text"]) for e in members):
+        if _negations(quote) and not any(_negations(e["states"]) for e in members):
             out.append(f"split_from '{split}': the quote contains a negation "
                        f"({', '.join(sorted(_negations(quote)))}) that no part keeps; keep it unless it "
                        "belongs to a clause that is out of scope, such as a qualitative finding")
@@ -965,6 +970,8 @@ def render(data: dict) -> str:
         out += [f"### {b['id']}: {b['source']}, page {b['page']}", "", *_quote_block(b["quote"]), "",
                 f"- Section: {_flat(b['section'])}",
                 f"- Narrow claims: {', '.join(serving) if serving else 'none selected'}"]
+        if b.get("states") and _key(b["states"]) != _key(b["quote"]):
+            out.append(f"- States: {_flat(b['states'])}")
         if b.get("note"):
             out.append(f"- Note: {_flat(b['note'])}")
         out.append("")
@@ -1002,7 +1009,7 @@ def render(data: dict) -> str:
         if c["split_from"]:
             others = [x["id"] for x in claims + rejected
                       if x.get("split_from") == c["split_from"] and x is not c]
-            out += [f"- Part: {_flat(c['text'])}",
+            out += [f"- Part: {_flat(c['states'])}",
                     f"- Split from {c['split_from']}, with {', '.join(others)}"]
         out += [f"- Serves: {', '.join(c['serves'])}",
                 f"- Selection reason: {_flat(c['selection_reason'])}"]
@@ -1016,7 +1023,7 @@ def render(data: dict) -> str:
     for r in sorted(rejected, key=_first_page):
         out += [f"### {r['id']}: page {r['page']}, {_flat(r['section'])}", "", *_quote_block(r["quote"]), ""]
         if r.get("split_from"):
-            out.append(f"- Rejected part: {_flat(r['text'])} (split from {r['split_from']})")
+            out.append(f"- Rejected part: {_flat(r['states'])} (split from {r['split_from']})")
         if r.get("duplicate_of"):
             refs = r["duplicate_of"] if isinstance(r["duplicate_of"], list) else [r["duplicate_of"]]
             out.append(f"- Repeats: {', '.join(refs)}")

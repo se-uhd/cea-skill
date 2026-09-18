@@ -516,11 +516,11 @@ def valid_claims():
         ],
         "claims": [
             {"id": "C1", "quote": SPLIT_QUOTE,
-             "text": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.",
+             "states": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.",
              "page": 2, "section": "5 Results", "serves": ["B1"], "split_from": "S1",
              "selection_reason": "B1 rests on this comparison."},
             {"id": "C2", "quote": SPLIT_QUOTE,
-             "text": "Across the 48 projects, the failure rate stayed at 3%.",
+             "states": "Across the 48 projects, the failure rate stayed at 3%.",
              "page": 2, "section": "5 Results", "serves": ["B1"], "split_from": "S1",
              "selection_reason": "Needs different evidence than C1."},
         ],
@@ -578,10 +578,10 @@ class Validate(unittest.TestCase):
              "section": "7 Conclusion", "source": "conclusion"})
         # Two claims of their own keep B2 a result apart from B1, rather than a restatement of it.
         data["claims"] += [
-            {"id": "C3", "quote": "Only 3 of the 48 builds failed.", "text": "Only 3 of the 48 builds failed.",
+            {"id": "C3", "quote": "Only 3 of the 48 builds failed.", "states": "Only 3 of the 48 builds failed.",
              "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
              "selection_reason": "B2 says failures are rare."},
-            {"id": "C4", "quote": "No project saw its failure rate rise.", "text": "No project saw its failure rate rise.",
+            {"id": "C4", "quote": "No project saw its failure rate rise.", "states": "No project saw its failure rate rise.",
              "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
              "selection_reason": "B2 rests on this as well."}]
         data["claims"][0]["serves"] = ["B1", "B2"]
@@ -602,7 +602,7 @@ class Validate(unittest.TestCase):
         data["broad_statements"].reverse()
         # A finding of its own brings a claim of its own.
         data["claims"].append(
-            {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "text": "The largest projects saved 6.1 minutes.",
+            {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "states": "The largest projects saved 6.1 minutes.",
              "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
              "selection_reason": "B2 rests on this."})
         self.assertNotIn("may break that result down", self.warnings(data))
@@ -617,7 +617,7 @@ class Validate(unittest.TestCase):
         # B3 is served by C1 alone, B2 by C1 and C2, B1 by C1, C2 and C3.
         data["claims"].append(
             {"id": "C3", "quote": "Build failures are rare in general.",
-             "text": "Build failures are rare in general.", "page": 3, "section": "5 Results",
+             "states": "Build failures are rare in general.", "page": 3, "section": "5 Results",
              "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."})
         data["claims"][0]["serves"] = ["B1", "B2", "B3"]
         data["claims"][1]["serves"] = ["B1", "B2"]
@@ -683,10 +683,10 @@ class Validate(unittest.TestCase):
             c["serves"] = ["B1", "B2"]
         data["claims"] += [
             {"id": "C3", "quote": "We collected 1,203 builds from 48 projects.",
-             "text": "We collected 1,203 builds from 48 projects.", "page": 2, "section": "5 Results",
+             "states": "We collected 1,203 builds from 48 projects.", "page": 2, "section": "5 Results",
              "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."},
             {"id": "C4", "quote": "Build failures are rare in general.",
-             "text": "Build failures are rare in general.", "page": 3, "section": "5 Results",
+             "states": "Build failures are rare in general.", "page": 3, "section": "5 Results",
              "serves": ["B2"], "split_from": None, "selection_reason": "B2 rests on this."}]
         # B1 has C1, C2, C3 and B2 has C1, C2, C4: half of four shared, so a question, not a verdict.
         self.assertIn("broad_statements B1 and B2: most of the claims", self.warnings(data))
@@ -881,14 +881,14 @@ class Validate(unittest.TestCase):
 
     def test_split_part_adds_words(self):
         data = valid_claims()
-        data["claims"][1]["text"] = "Across the 48 projects, the failure rate stayed low at 3%."
+        data["claims"][1]["states"] = "Across the 48 projects, the failure rate stayed low at 3%."
         self.assertIn("uses words that are not in the quote: low", self.check(data))
 
     def test_two_claims_with_the_same_quote(self):
         data = valid_claims()
         quote = "We collected 1,203 builds from 48 projects."
         data["rejected"] = []
-        data["claims"] += [{"id": f"C{n}", "quote": quote, "text": quote, "page": 2, "section": "4 Data",
+        data["claims"] += [{"id": f"C{n}", "quote": quote, "states": quote, "page": 2, "section": "4 Data",
                             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."} for n in (3, 4)]
         self.assertIn("(C4).quote: claims[2] (C3) already quotes the same sentence", self.check(data))
 
@@ -901,7 +901,7 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["claims"][0]["serves"] = [["B1"]]
         data["claims"][1]["quote"] = 123
-        data["claims"][1]["text"] = ["median"]
+        data["claims"][1]["states"] = ["median"]
         out = self.check(data)
         self.assertIn("must list ids as strings", out)
         self.assertIn("(C2).quote: must be a non-empty string", out)
@@ -910,9 +910,9 @@ class Validate(unittest.TestCase):
         quote = "Remote caching not only cut median build time by 55% but also reduced flaky failures by 12%."
         data = valid_claims()
         data["claims"] += [
-            {"id": "C3", "quote": quote, "text": "Remote caching cut median build time by 55%.", "page": 3,
+            {"id": "C3", "quote": quote, "states": "Remote caching cut median build time by 55%.", "page": 3,
              "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
-            {"id": "C4", "quote": quote, "text": "Remote caching also reduced flaky failures by 12%.", "page": 3,
+            {"id": "C4", "quote": quote, "states": "Remote caching also reduced flaky failures by 12%.", "page": 3,
              "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
         self.assertEqual(self.check(data, TEXT + quote + "\n"), "")
 
@@ -922,18 +922,18 @@ class Validate(unittest.TestCase):
                 "respectively.\nThe rate was non-\nsignificant for 12 of the 48 projects.\n=== page 3 ===\nEnd.\n")
         data = valid_claims()
         data["claims"] = [
-            {"id": "C1", "quote": "3% more cache hits", "text": "3% more cache hits", "page": 2, "section": "5",
+            {"id": "C1", "quote": "3% more cache hits", "states": "3% more cache hits", "page": 2, "section": "5",
              "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
-            {"id": "C2", "quote": "In total, 48 projects were stud", "text": "In total, 48 projects were stud", "page": 2,
+            {"id": "C2", "quote": "In total, 48 projects were stud", "states": "In total, 48 projects were stud", "page": 2,
              "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
-            {"id": "C3", "quote": "We saw 13% more cache hits", "text": "We saw 13% more cache hits", "page": 2,
+            {"id": "C3", "quote": "We saw 13% more cache hits", "states": "We saw 13% more cache hits", "page": 2,
              "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
-            {"id": "C4", "quote": "significant for 12 of the 48 projects.", "text": "significant for 12 of the 48 projects.",
+            {"id": "C4", "quote": "significant for 12 of the 48 projects.", "states": "significant for 12 of the 48 projects.",
              "page": 2, "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."}]
         data["rejected"] = [
-            {"id": "R1", "quote": "In total, 48 projects were studied, as listed, respectively.", "text": "48 projects were studied",
+            {"id": "R1", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "48 projects were studied",
              "page": 2, "section": "5", "split_from": "S1", "reason": "Describes the study."},
-            {"id": "R2", "quote": "In total, 48 projects were studied, as listed, respectively.", "text": "as listed",
+            {"id": "R2", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "as listed",
              "page": 2, "section": "5", "split_from": "S1", "reason": "Describes the study."}]
         out = self.warnings(data, text)
         self.assertIn("(C1).quote: starts in the middle of a word or number", out)
@@ -1048,7 +1048,7 @@ class Validate(unittest.TestCase):
     def test_claim_and_rejected_candidate_with_the_same_quote(self):
         data = valid_claims()
         quote = "We collected 1,203 builds from 48 projects."
-        data["claims"].append({"id": "C3", "quote": quote, "text": quote, "page": 2, "section": "4 Data",
+        data["claims"].append({"id": "C3", "quote": quote, "states": quote, "page": 2, "section": "4 Data",
                                "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."})
         self.assertIn("(R1).quote: claims[2] (C3) already quotes the same sentence", self.check(data))
 
@@ -1072,9 +1072,9 @@ class Validate(unittest.TestCase):
     def test_two_split_groups_with_the_same_quote(self):
         data = valid_claims()
         data["rejected"] += [
-            {"id": "R2", "quote": SPLIT_QUOTE, "text": "median build time fell from 9.2 to 4.1 minutes",
+            {"id": "R2", "quote": SPLIT_QUOTE, "states": "median build time fell from 9.2 to 4.1 minutes",
              "page": 2, "section": "5 Results", "split_from": "S2", "reason": "Not selected."},
-            {"id": "R3", "quote": SPLIT_QUOTE, "text": "the failure rate stayed at 3%",
+            {"id": "R3", "quote": SPLIT_QUOTE, "states": "the failure rate stayed at 3%",
              "page": 2, "section": "5 Results", "split_from": "S2", "reason": "Not selected."}]
         self.assertIn("split_from 'S1' and 'S2' quote the same sentence", self.check(data))
 
@@ -1082,9 +1082,9 @@ class Validate(unittest.TestCase):
         quote = "No project got slower, and the failure rate stayed lower than 3%."
         data = valid_claims()
         data["claims"] += [
-            {"id": "C3", "quote": quote, "text": "project got slower", "page": 3, "section": "6",
+            {"id": "C3", "quote": quote, "states": "project got slower", "page": 3, "section": "6",
              "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
-            {"id": "C4", "quote": quote, "text": "No failure rate stayed at 3%", "page": 3, "section": "6",
+            {"id": "C4", "quote": quote, "states": "No failure rate stayed at 3%", "page": 3, "section": "6",
              "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
         out = self.warnings(data, TEXT + quote + "\n")
         self.assertIn('no part keeps "no project" from the quote', out)
@@ -1094,7 +1094,7 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         quote = "Build failures are rare in general."
         data["broad_statements"].append({"id": "B2", "quote": quote, "page": 3, "section": "6", "source": "conclusion"})
-        data["claims"].append({"id": "C3", "quote": quote, "text": quote, "page": 3, "section": "6",
+        data["claims"].append({"id": "C3", "quote": quote, "states": quote, "page": 3, "section": "6",
                                "serves": ["B1"], "split_from": None, "selection_reason": "B2 rests on it."})
         self.assertIn("so it must serve B2", self.check(data))
 
@@ -1131,23 +1131,23 @@ class Validate(unittest.TestCase):
         data["claims"][0]["serves"] = ["B1", "B1"]
         self.assertIn("'B1' is listed twice", self.check(data))
 
-    def test_text_on_a_rejected_candidate_without_split(self):
+    def test_states_on_a_rejected_candidate_without_split(self):
         data = valid_claims()
-        data["rejected"][0]["text"] = "Something else."
-        self.assertIn("only a rejected part of a split statement has text", self.check(data))
+        data["rejected"][0]["states"] = "Something else."
+        self.assertIn("only a rejected part of a split statement has words of its own", self.check(data))
 
     def test_split_part_repeats_the_whole_quote(self):
         data = valid_claims()
-        data["claims"][1]["text"] = SPLIT_QUOTE
+        data["claims"][1]["states"] = SPLIT_QUOTE
         self.assertIn("repeats the whole quote", self.check(data))
 
     def test_split_parts_drop_the_negation(self):
         quote = "Caching did not change the failure rate, and it cut build time by half."
         data = valid_claims()
         data["claims"] += [
-            {"id": "C3", "quote": quote, "text": "Caching did change the failure rate.", "page": 3,
+            {"id": "C3", "quote": quote, "states": "Caching did change the failure rate.", "page": 3,
              "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
-            {"id": "C4", "quote": quote, "text": "Caching cut build time by half.", "page": 3,
+            {"id": "C4", "quote": quote, "states": "Caching cut build time by half.", "page": 3,
              "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
         self.assertIn("contains a negation (not) that no part keeps", self.warnings(data, TEXT + quote + "\n"))
 
@@ -1159,19 +1159,19 @@ class Validate(unittest.TestCase):
         data["paper"]["pages"] = 2
         data["rejected"] = []
         data["claims"] = [
-            {"id": "C1", "quote": quote, "text": "We found ten distinct codes in the data.", "page": 2,
+            {"id": "C1", "quote": quote, "states": "We found ten distinct codes in the data.", "page": 2,
              "section": "5", "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on it."},
-            {"id": "C2", "quote": quote, "text": "We found 4 themes in the data.", "page": 2,
+            {"id": "C2", "quote": quote, "states": "We found 4 themes in the data.", "page": 2,
              "section": "5", "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on it."}]
         self.assertEqual(self.check(data, text), "")
 
     def test_warnings(self):
         data = valid_claims()
         data["rejected"][0]["quote"] = "1,203 builds from 48 projects."
-        data["claims"][0]["text"] = "Across the 48 projects, median build time fell from 4.1 to 9.2 minutes."
+        data["claims"][0]["states"] = "Across the 48 projects, median build time fell from 4.1 to 9.2 minutes."
         out = self.warnings(data)
         self.assertIn("(R1).quote: starts in the middle of a sentence", out)
-        self.assertIn("(C1).text: gives its numbers (48, 4.1, 9.2) in a different order", out)
+        self.assertIn("(C1).states: gives its numbers (48, 4.1, 9.2) in a different order", out)
 
     def test_warning_for_a_reason_that_names_no_broad_statement(self):
         data = valid_claims()
