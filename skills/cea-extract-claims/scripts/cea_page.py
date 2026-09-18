@@ -851,19 +851,36 @@ TEMPLATE = r"""<!DOCTYPE html>
     link.addEventListener('click', function (e) {
       e.preventDefault();
       var target = document.querySelector(link.getAttribute('href'));
-      if (target) target.scrollIntoView({ behavior: 'smooth' });
+      if (!target) return;
+      navLinks.forEach(function (l) { l.classList.toggle('active', l === link); });
+      target.scrollIntoView({ behavior: 'smooth' });
     });
   });
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (!entry.isIntersecting) return;
-      navLinks.forEach(function (l) { l.classList.remove('active'); });
-      var active = document.querySelector('#main-nav a[href="#' + entry.target.id + '"]');
-      if (active) active.classList.add('active');
+  // The section the reader is in is the first one showing in the band below the nav, in document
+  // order. Taking whichever section the observer reported last marks an arbitrary one at rest, and
+  // a threshold in the section's own height never fires for a section taller than the window.
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
+  var showing = {};
+  function atBottom() {
+    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+  }
+  function markSection() {
+    // At the foot of the page the last section never reaches the band, so the nav would stay on
+    // the one before it while the reader looks at it.
+    var current = atBottom() ? sections[sections.length - 1]
+      : sections.filter(function (s) { return showing[s.id]; })[0] || sections[0];
+    navLinks.forEach(function (l) {
+      l.classList.toggle('active', l.getAttribute('href') === '#' + current.id);
     });
-  }, { threshold: 0.2, rootMargin: '-80px 0px 0px 0px' });
-  document.querySelectorAll('main > section').forEach(function (s) { observer.observe(s); });
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) { showing[entry.target.id] = entry.isIntersecting; });
+    markSection();
+  }, { threshold: 0, rootMargin: '-80px 0px -60% 0px' });
+  sections.forEach(function (s) { observer.observe(s); });
+  markSection();
 
+  window.addEventListener('scroll', markSection, { passive: true });
   window.addEventListener('resize', drawEdges);
   window.addEventListener('hashchange', function () {
     if (location.hash.length > 1) navigateTo(location.hash.slice(1));
