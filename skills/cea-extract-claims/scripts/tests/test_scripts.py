@@ -1389,6 +1389,32 @@ class Page(unittest.TestCase):
             self.assertIn("CEA_UNRESOLVED", out)
             self.assertFalse((root / "site").exists(), "a half-built site must not reach a server")
 
+    def test_a_main_result_no_claim_serves_is_invalid_without_a_note(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion"})
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "fixture", data)
+            code, out = self.run_command("render", str(d))
+            self.assertEqual(code, 1)
+            self.assertIn("CEA_INVALID", out)
+            self.assertFalse((d / "claims.html").exists())
+
+    def test_a_noted_main_result_no_claim_serves_is_shown_as_a_finding(self):
+        data = valid_claims()
+        data["broad_statements"].append(
+            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+             "section": "7 Conclusion", "source": "conclusion",
+             "note": "The paper reports no failure rate for projects without caching."})
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "fixture", data)
+            code, out = self.run_command("render", str(d))
+            self.assertEqual(code, 0, out)
+            page = (d / "claims.html").read_text(encoding="utf-8")
+            self.assertIn("that no narrow claim serves", page)
+            self.assertIn("The paper reports no failure rate", page)
+
     def test_a_paper_without_a_quantitative_main_result_says_so(self):
         data = valid_claims()
         data["broad_statements"], data["claims"] = [], []

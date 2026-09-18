@@ -205,7 +205,8 @@ def build(data: dict, source: Path, out: Path) -> str:
             f'<span class="node-meta">p. {E(str(c["page"]))}'
             f'{" &middot; note" if c.get("note") else ""}</span></button>' for c in mine)
         if not mine:
-            nodes = '<p class="node-empty">No narrow claim was selected for this result.</p>'
+            nodes = ('<p class="node-empty">No narrow claim serves this result. '
+                     f'{E(_flat(b.get("note") or ""))}</p>')
         if rej:
             nodes += (f'<button class="node candidates" data-reveal="{E(rej[0])}">'
                       f'{len(rej)} rejected candidate{"s" if len(rej) != 1 else ""} &rarr;</button>')
@@ -331,20 +332,19 @@ def build(data: dict, source: Path, out: Path) -> str:
 
     # the overview
     places = _stated_in(data) if broad else 0
-    stats = [(len(broad), "quantitative main results"), (len(claims), "narrow claims"),
-             (len(rejected), "rejected candidates"), (places, "sentences stating those results")]
+    stats = [(len(broad), "main results"), (len(claims), "narrow claims"),
+             (len(rejected), "rejected candidates"), (places, "sentences stating the main results")]
     stat_html = "".join(f'<div class="stat-card"><div class="stat-value">{v}</div>'
                         f'<div class="stat-label">{E(l)}</div></div>' for v, l in stats)
 
-    structural = []
-    for b in broad:
-        if not serving[b["id"]]:
-            structural.append(f'<li>{badge(b["id"])} no narrow claim selected</li>')
-    for c in claims:
-        if len(c["serves"]) > 1:
-            structural.append(f'<li>{badge(c["id"])} serves {", ".join(c["serves"])}</li>')
-    watch_html = ('<div class="note-card"><h3>Open these first</h3><ul>'
-                  + "".join(structural) + '</ul></div>') if structural else ""
+    unserved = [b for b in broad if not serving[b["id"]]]
+    watch_html = ""
+    if unserved:
+        items = "".join(
+            f'<li>{badge(b["id"])} <span class="question">{E(snippet(b["quote"], 200))}</span>'
+            f'<p class="side">{E(_flat(b.get("note") or ""))}</p></li>' for b in unserved)
+        watch_html = (f'<div class="note-card"><h3>Main result{"s" if len(unserved) != 1 else ""} that no '
+                      f'narrow claim serves</h3><ul>{items}</ul></div>')
     if not broad:
         watch_html = ('<div class="note-card scope"><h3>Scope</h3><p>This paper states no quantitative '
                       'main result, so no main result and no narrow claim is recorded for it. '
@@ -426,6 +426,9 @@ TEMPLATE = r"""<!DOCTYPE html>
     .note-card h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #78716c; margin-bottom: 0.5rem; font-weight: 600; }
     .note-card ul { list-style: none; font-size: 0.875rem; }
     .note-card p { font-size: 0.875rem; }
+    .note-card .question { font-weight: 600; }
+    .note-card .side { font-size: 0.85rem; color: #57534e; margin: 0.3rem 0 0 2.2rem; }
+    .note-card li + li { border-top: 1px solid #f5f5f4; padding-top: 0.5rem; margin-top: 0.5rem; }
     .note-card.scope { border-left-color: #004488; }
     .note-card li + li { border-top: 1px solid #f5f5f4; padding-top: 0.5rem; }
     .note-card li + li { margin-top: 0.35rem; }
@@ -645,7 +648,9 @@ TEMPLATE = r"""<!DOCTYPE html>
     <code>cea_claims.py render</code> wrote this page from <code>@@SOURCE@@</code> on @@BUILT@@.
     Every quote is the paper's wording, and <code>cea_claims.py validate</code> checked each one against the
     page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
-    overturn any main result, claim or candidate.
+    overturn any main result, claim or candidate. Claim&ndash;Evidence Alignment covers quantitative
+    empirical claims, so a main result that the paper states as a qualitative finding is out of its scope and
+    is not recorded here.
     @@SOURCE_LINKS@@
   </footer>
 

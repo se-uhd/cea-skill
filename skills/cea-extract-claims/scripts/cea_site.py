@@ -14,7 +14,7 @@ from datetime import date
 from pathlib import Path
 
 import cea_page
-from cea_claims import _flat, _stated_in, unresolved
+from cea_claims import _flat, _stated_in, unsettled
 from cea_page import E, TEMPLATE
 
 CSS = TEMPLATE[TEMPLATE.index("<style>"):TEMPLATE.index("</style>") + len("</style>")]
@@ -79,8 +79,8 @@ def write_index(site: Path, papers: list[dict]) -> None:
   <main>
     <section id="papers">
       <h2>Papers</h2>
-      <table class="idx"><thead><tr><th>Paper</th><th>Quantitative main results</th><th>Narrow claims</th>
-      <th>Rejected candidates</th><th>Sentences stating those results</th><th>Pages</th></tr></thead>
+      <table class="idx"><thead><tr><th>Paper</th><th>Main results</th><th>Narrow claims</th>
+      <th>Rejected candidates</th><th>Sentences stating the main results</th><th>Pages</th></tr></thead>
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>
@@ -100,11 +100,11 @@ def build_site(records: list[Path], site: Path) -> tuple[int, list[str]]:
     messages, blocked = [], False
     for record in records:
         data = json.loads((record / "claims.json").read_text(encoding="utf-8"))
-        open_ids = unresolved(data)
-        if open_ids:
+        problems = unsettled(data)
+        if problems:
             blocked = True
-            messages.append(f"CEA_UNRESOLVED: {record}: unsettled entries: {', '.join(open_ids)}. "
-                            "A reason must say whether the statement is a claim.")
+            for problem in problems:
+                messages.append(f"CEA_UNRESOLVED: {record}: {problem}")
     if blocked:
         messages.append("CEA_FAILED: no site was written.")
         return 0, messages

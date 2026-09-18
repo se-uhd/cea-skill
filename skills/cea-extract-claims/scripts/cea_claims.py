@@ -1149,14 +1149,16 @@ def cmd_extract(args) -> int:
     return 0
 
 
-def unresolved(data: dict) -> list[str]:
-    """The entries whose reason does not say whether the statement is a claim.
+def unsettled(data: dict) -> list[str]:
+    """What stops a record from being published, each named by its id.
 
-    The reference lets a candidate be recorded as unsure so that the checker can settle it. Such a
-    record is a working record: the page and the site refuse to render it, because a reader cannot
-    tell an open question from a decision.
+    A candidate recorded as unsure leaves the claim-or-not decision to the checker, and a reader
+    cannot tell an open question from a decision. The other unfinished record, a broad statement
+    that no claim serves and no note explains, is already a problem for the validator, so a record
+    that reaches here has a note on every such statement and the page shows it as a finding.
     """
-    return [x["id"] for x in data["claims"] + data["rejected"]
+    return [f"{x['id']}: the reason does not say whether the statement is a claim"
+            for x in data["claims"] + data["rejected"]
             if (x.get("reason") or "").lower().startswith("unsure")]
 
 
@@ -1189,10 +1191,12 @@ def cmd_render(args) -> int:
         print(f"CEA_FAILED: cannot write {md_path}: {e}")
         return 2
     print(f"CEA_RENDERED: {md_path}")
-    open_ids = unresolved(data)
-    if open_ids:
-        print(f"CEA_UNRESOLVED: unsettled entries: {', '.join(open_ids)}. A reason must say whether "
-              f"the statement is a claim, so {html_path} was not written.")
+    problems = unsettled(data)
+    if problems:
+        print(f"CEA_UNRESOLVED: {len(problems)} thing(s) to settle before a page can be written:")
+        for problem in problems:
+            print(f"- {problem}")
+        print(f"CEA_FAILED: {html_path} was not written.")
         return 1
     import cea_page  # imported here, because cea_page reads the ordering functions above
     try:
