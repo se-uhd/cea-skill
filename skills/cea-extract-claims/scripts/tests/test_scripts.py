@@ -1378,6 +1378,16 @@ class Page(unittest.TestCase):
                 self.assertTrue((here / "claims.json").is_file())
                 self.assertTrue((here / "text.txt").is_file())
 
+    def test_only_a_page_inside_a_site_links_back_to_the_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d = self.paper(root, "one")
+            self.run_command("render", str(d))
+            self.assertNotIn('<a class="nav-home"', (d / "claims.html").read_text(encoding="utf-8"))
+            self.run_command("site", str(d), "--out", str(root / "site"))
+            page = (root / "site" / "papers" / "one" / "index.html").read_text(encoding="utf-8")
+            self.assertIn('<a class="nav-home" href="../../">', page)
+
     def test_site_writes_nothing_while_one_record_is_unsettled(self):
         data = valid_claims()
         data["rejected"][0]["reason"] = "Unsure whether B1 rests on this."

@@ -1193,7 +1193,7 @@ def cmd_render(args) -> int:
     print(f"CEA_RENDERED: {md_path}")
     problems = unsettled(data)
     if problems:
-        print(f"CEA_UNRESOLVED: {len(problems)} thing(s) to settle before a page can be written:")
+        print(f"CEA_UNRESOLVED: {len(problems)} open decision(s) to settle before a page can be written:")
         for problem in problems:
             print(f"- {problem}")
         print(f"CEA_FAILED: {html_path} was not written.")

@@ -35,7 +35,7 @@ def copy_paper(record: Path, site: Path) -> dict:
             shutil.copy2(candidate, dest / pdf_name)
             break
     out = dest / "index.html"
-    out.write_text(cea_page.build(data, dest / "claims.json", out), encoding="utf-8")
+    out.write_text(cea_page.build(data, dest / "claims.json", out, index_href="../../"), encoding="utf-8")
     return data
 
 
@@ -55,7 +55,7 @@ def write_index(site: Path, papers: list[dict]) -> None:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claim&ndash;Evidence Alignment</title>
+<title>Claim-Evidence Alignment</title>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
 {CSS}
 <style>
@@ -71,10 +71,10 @@ def write_index(site: Path, papers: list[dict]) -> None:
 <body>
   <nav id="main-nav"><span class="mark">CEA</span><a href="#papers" class="active">Papers</a></nav>
   <header>
-    <h1>Claim&ndash;Evidence Alignment</h1>
+    <h1>Claim-Evidence Alignment</h1>
     <p class="subtitle">Each paper's page records the narrow claims its main results rest on, and the
-    candidates that were considered and rejected. Claim&ndash;Evidence Alignment covers quantitative empirical
-    claims, so a paper whose main results are qualitative records candidates only.</p>
+    candidates that were considered and rejected. Claim-Evidence Alignment covers quantitative empirical
+    claims, so where a paper states its main results as qualitative findings, only the candidates are recorded.</p>
   </header>
   <main>
     <section id="papers">
@@ -84,7 +84,7 @@ def write_index(site: Path, papers: list[dict]) -> None:
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>
-  <footer><code>cea_claims.py site</code> wrote this page from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above on {date.today().isoformat()}.</footer>
+  <footer><code>cea_claims.py site</code> wrote this page on {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.</footer>
 </body>
 </html>
 """
@@ -92,7 +92,7 @@ def write_index(site: Path, papers: list[dict]) -> None:
 
 
 def build_site(records: list[Path], site: Path) -> tuple[int, list[str]]:
-    """Write the site, unless a record leaves an entry unsettled.
+    """Write the site, unless a record leaves a decision open.
 
     Every record is checked before anything is written, so a half-built site never reaches a
     server. Returns the number of papers written and the messages to print.

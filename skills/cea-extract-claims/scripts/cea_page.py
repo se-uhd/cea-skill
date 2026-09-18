@@ -163,7 +163,9 @@ def pdf_link(paper: dict, source: Path, out: Path) -> str:
     return f'<span class="nav-ext plain" title="{E(str(paper["pdf"]))}">{E(name)}</span>'
 
 
-def build(data: dict, source: Path, out: Path) -> str:
+def build(data: dict, source: Path, out: Path, index_href: str | None = None) -> str:
+    """`index_href` is the path back to the index, which only a site has; a page rendered on its own
+    has no index to return to, so it carries no link."""
     paper = data["paper"]
     broad, claims, rejected = data["broad_statements"], data["claims"], data["rejected"]
     by_id = {b["id"]: b for b in broad}
@@ -347,11 +349,11 @@ def build(data: dict, source: Path, out: Path) -> str:
                       f'narrow claim serves</h3><ul>{items}</ul></div>')
     if not broad:
         watch_html = ('<div class="note-card scope"><h3>Scope</h3><p>This paper states no quantitative '
-                      'main result, so no main result and no narrow claim is recorded for it. '
-                      'Claim&ndash;Evidence Alignment covers quantitative empirical claims, and a '
+                      'main result, so this page records no main result and no narrow claim. '
+                      'Claim-Evidence Alignment covers quantitative empirical claims, and a '
                       'qualitative finding is out of its scope, not absent from the paper. The '
-                      'candidates considered, and the reason each one is not a narrow claim, are '
-                      'below.</p></div>') + watch_html
+                      'candidates considered are below, each with the reason it is not a narrow '
+                      'claim.</p></div>') + watch_html
 
     fields = {
         "TITLE": E(_flat(paper["title"])),
@@ -359,6 +361,8 @@ def build(data: dict, source: Path, out: Path) -> str:
         "PAGES": str(pages),
         "PDF": E(str(paper["pdf"])),
         "PDF_LINK": pdf_link(paper, source, out),
+        "HOME": (f'<a class="nav-home" href="{E(index_href)}">&larr; All papers</a>'
+                 if index_href else ""),
         "SOURCE_LINKS": (f'<p class="files">{links}</p>' if (links := source_links(paper, source, out)) else ""),
         "STATS": stat_html,
         "WATCH": watch_html,
@@ -401,6 +405,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     nav a { text-decoration: none; color: #78716c; font-size: 0.875rem; font-weight: 500; padding: 0.25rem 0; border-bottom: 2px solid transparent; transition: all 0.15s; }
     nav a.active, nav a:hover { color: #1c1917; border-bottom-color: currentColor; }
     nav .nav-ext { margin-left: auto; color: #1d4ed8; border-bottom: none; }
+    nav .nav-home { color: #1d4ed8; }
     nav .nav-ext:hover { color: #1e40af; }
     nav .nav-ext.plain { color: #a8a29e; font-size: 0.8rem; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
 
@@ -566,6 +571,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <body>
   <nav id="main-nav">
     <span class="mark">CEA</span>
+    @@HOME@@
     <a href="#overview" class="active">Overview</a>
     <a href="#map">Claim Map</a>
     <a href="#results">Main Results</a>
@@ -648,7 +654,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <code>cea_claims.py render</code> wrote this page from <code>@@SOURCE@@</code> on @@BUILT@@.
     Every quote is the paper's wording, and <code>cea_claims.py validate</code> checked each one against the
     page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
-    overturn any main result, claim or candidate. Claim&ndash;Evidence Alignment covers quantitative
+    overturn any main result, claim or candidate. Claim-Evidence Alignment covers quantitative
     empirical claims, so a main result that the paper states as a qualitative finding is out of its scope and
     is not recorded here.
     @@SOURCE_LINKS@@
@@ -839,7 +845,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   setupFilter('cand-search', 'cand-count', '#candidates', true);
 
   /* -- section nav -- */
-  var navLinks = document.querySelectorAll('#main-nav a:not(.nav-ext)');
+  var navLinks = document.querySelectorAll('#main-nav a:not(.nav-ext):not(.nav-home)');
   navLinks.forEach(function (link) {
     link.addEventListener('click', function (e) {
       e.preventDefault();
