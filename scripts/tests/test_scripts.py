@@ -1345,6 +1345,25 @@ class Respectively(unittest.TestCase):
         self.assertNotIn("pairs items and numbers", self.warnings(data))
 
 
+class Framework(unittest.TestCase):
+    """The framework page, rendered from Markdown."""
+
+    def render(self, md: str) -> str:
+        sys.path.insert(0, str(SCRIPTS))
+        import cea_site
+        return cea_site.md_to_html(md)
+
+    def test_an_html_comment_is_not_published(self):
+        html = self.render("# Title\n\nVisible.\n\n<!--\nGROUNDING: a quote a reader must not see.\n-->\n")
+        self.assertIn("Visible.", html)
+        self.assertNotIn("GROUNDING", html)
+
+    def test_a_table_survives_a_fence_above_it(self):
+        html = self.render("```\ncode\n```\n\n| A | B |\n|---|---|\n| 1 | 2 |\n")
+        self.assertIn("<table>", html)
+        self.assertIn("<pre><code>code</code></pre>", html)
+
+
 class Page(unittest.TestCase):
     """The HTML page and the site that `render` and `site` write."""
 

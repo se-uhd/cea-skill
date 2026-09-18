@@ -73,6 +73,9 @@ def md_to_html(text: str) -> str:
         s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
         return s
 
+    # An HTML comment is not content: the framework document carries its grounding quotes in one,
+    # and escaping them printed the lot on the page.
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
     out, lines, i = [], text.splitlines(), 0
     while i < len(lines):
         line = lines[i]
