@@ -148,11 +148,14 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
         if (record / name).is_file():
             shutil.copy2(record / name, dest / name)
     pdf_name = str(data["paper"]["pdf"]).rsplit("/", 1)[-1]
-    for base in (Path.cwd(), record, record.parent, record.parent.parent):
-        candidate = base / str(data["paper"]["pdf"])
+    candidates = [record / pdf_name, record / f'{data["paper"]["id"]}.pdf']
+    candidates += [base / str(data["paper"]["pdf"]) for base in (Path.cwd(), record, record.parent)]
+    for candidate in candidates:
         if candidate.is_file():
             shutil.copy2(candidate, dest / pdf_name)
             break
+    else:
+        print(f"CEA_WARNING: {record}: no PDF found for {pdf_name}, the page will name it without a link")
     out = dest / "index.html"
     out.write_text(cea_page.build(data, dest / "claims.json", out, index_href="../../",
                                   framework_href=framework_href), encoding="utf-8")
@@ -208,7 +211,7 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>
-  <footer><a href="https://github.com/se-uhd/cea-skill"><code>cea_claims.py site</code></a> wrote this page on
+  <footer>The <a href="https://github.com/se-uhd/cea-skill">cea-skill</a> site skill built this page on
   {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.</footer>
 </body>
 </html>

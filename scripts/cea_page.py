@@ -188,11 +188,11 @@ def pdf_link(paper: dict, source: Path, out: Path) -> str:
         rel = os.path.relpath(candidate, out.resolve().parent)
         if rel.count("..") > 2:  # a path that climbs that far will not survive being moved
             continue
-        return f'<a class="nav-ext" href="{E(rel)}">{E(name)} &rarr;</a>'
+        return f'<a class="nav-ext" href="{E(rel)}">{E(name)}</a>'
     if paper.get("doi"):
-        return f'<a class="nav-ext" href="https://doi.org/{E(paper["doi"])}">{E(paper["doi"])} &rarr;</a>'
+        return f'<a class="nav-ext" href="https://doi.org/{E(paper["doi"])}">{E(paper["doi"])}</a>'
     if paper.get("url"):
-        return f'<a class="nav-ext" href="{E(paper["url"])}">{E(name)} &rarr;</a>'
+        return f'<a class="nav-ext" href="{E(paper["url"])}">{E(name)}</a>'
     return f'<span class="nav-ext plain" title="{E(str(paper["pdf"]))}">{E(name)}</span>'
 
 
@@ -410,7 +410,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
         "TITLE": E(_flat(paper["title"])),
         "PAPER_ID": E(paper["id"]),
         "PAGES": str(pages),
-        "PDF": E(str(paper["pdf"])),
+        "PDF": E(str(paper["pdf"]).rsplit("/", 1)[-1]),
         "PDF_LINK": pdf_link(paper, source, out),
         "NAV_LINKS": nav_links,
         "SEC_MAP": sec_map,
@@ -683,9 +683,8 @@ TEMPLATE = r"""<!DOCTYPE html>
   </main>
 
   <footer>
-    <a href="https://github.com/se-uhd/cea-skill"><code>cea_claims.py render</code></a> wrote this page from <code>@@SOURCE@@</code> on @@BUILT@@.
-    Every quote is the paper's wording, and <code>cea_claims.py validate</code> checked each one against the
-    page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
+    The <a href="https://github.com/se-uhd/cea-skill">cea-skill</a> extract-claims skill built this page from
+    <code>@@SOURCE@@</code> on @@BUILT@@, and checked every quote against the page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
     overturn any main result, claim or candidate. Claim-Evidence Alignment covers quantitative
     empirical claims, so a main result that the paper states as a qualitative finding is out of its scope and
     is not recorded here. @@FRAMEWORK@@
