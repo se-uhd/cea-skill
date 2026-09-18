@@ -170,7 +170,7 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
             f'<td class="n">{len(d["broad_statements"])}</td><td class="n">{len(d["claims"])}</td>'
             f'<td class="n">{len(d["rejected"])}</td><td class="n">{_stated_in(d) if d["broad_statements"] else 0}</td>'
             f'<td class="n">{p["pages"]}</td></tr>')
-    framework_link = ('<a class="nav-home" href="framework/">The framework</a>' if framework else "")
+    framework_link = ('<a class="nav-home" href="framework/">Framework</a>' if framework else "")
     page = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
