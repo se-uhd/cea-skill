@@ -109,7 +109,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
     {
       "id": "C1",
       "quote": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes, and the failure rate stayed at 3%.",
-      "text": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.",
+      "states": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.",
       "page": 7,
       "section": "5.1 RQ1: Build time",
       "serves": ["B1"],
@@ -119,7 +119,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
     {
       "id": "C2",
       "quote": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes, and the failure rate stayed at 3%.",
-      "text": "Across the 48 projects, the failure rate stayed at 3%.",
+      "states": "Across the 48 projects, the failure rate stayed at 3%.",
       "page": 7,
       "section": "5.1 RQ1: Build time",
       "serves": ["B1"],
@@ -153,7 +153,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
   - Join lines with spaces, and write a word broken across two lines as one word. A quote may span consecutive sentences when the claim needs both, and it may leave out a footnote marker attached to a word. Quote whole sentences. The validator warns about a quote that starts or ends in the middle of a sentence.
   - Where a figure, table, footnote, or page break puts text that is not the sentence's own between two of its lines in `text.txt`, write `[...]` at that point. A page break with nothing between the two halves needs no marker. The validator accepts `[...]` only between two lines of `text.txt`, never inside a line. Where the paper itself prints `[...]`, for example in a quoted post, copy it as it stands, and the validator reads it as the paper's own text. Never use `[...]` to shorten a sentence, because the checker reads the quote as the paper's full statement.
   - When a page break falls inside a word, write the word whole and give the page as a range such as `"8-9"`. If a table or figure also appears between the two halves of the word in `text.txt`, write `[...]` inside the word, such as `dis[...]tinct`.
-- `states`: the words of the quote that the entry states: the quote without `[...]`, or, for one part of a split statement, only that part.
+- `states` on a claim: the words of the quote that the claim states. Every claim has it. For a claim that is not one part of a split statement it repeats the quote, without any `[...]`; for one part it gives only that part.
 - `page`: N from the `=== page N ===` line, or a string such as `"8-9"` when the quote runs across a page break. A range names two consecutive pages, and only when the quote needs both.
 - `section`: the heading as printed, with its number, such as `5.2 RQ2: Review effort`, `III-B Coding Procedure`, or `Abstract`. Where the heading spells out a research question or another full sentence, keep its number and the words that identify it, such as `IV-B RQ2`, because the section only has to lead the checker to the page. For a paragraph that begins with its own short heading, such as "Action Selection.", add that heading after a comma, such as `III-A Study Setup, Action Selection`. For a list or a box that has no heading of its own, give the enclosing section and then what it is, as in `1 Introduction, contribution list`. For a statement in a caption, a footnote, or a boxed answer, give the enclosing section and then the label of the caption, footnote, or box after a comma, such as `IV-A Annotation Overview, Fig. 2` or `5 Impact of GenAI Usage on Code Churn, Summary RQ3`.
 - `split_from`: `null` unless the claim is one part of a split statement.
