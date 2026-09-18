@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -65,6 +66,7 @@ def write_index(site: Path, papers: list[dict]) -> None:
   .idx td.n {{ text-align: right; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; white-space: nowrap; }}
   .idx td.t a {{ color: #1c1917; text-decoration: none; font-weight: 600; }}
   .idx td.t a:hover {{ text-decoration: underline; }}
+  footer a {{ color: #1d4ed8; }}
   .idx .pid {{ font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 0.7rem; color: #a8a29e; }}
 </style>
 </head>
@@ -84,7 +86,10 @@ def write_index(site: Path, papers: list[dict]) -> None:
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>
-  <footer><code>cea_claims.py site</code> wrote this page on {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.</footer>
+  <footer><a href="https://github.com/se-uhd/cea-skill"><code>cea_claims.py site</code></a> wrote this page on
+  {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.
+  The command is part of the <a href="https://github.com/se-uhd/cea-skill">cea-extract-claims</a> skill, which also writes each
+  paper's page.</footer>
 </body>
 </html>
 """
@@ -108,6 +113,7 @@ def build_site(records: list[Path], site: Path) -> tuple[int, list[str]]:
     if blocked:
         messages.append("CEA_FAILED: no site was written.")
         return 0, messages
-    papers = [copy_paper(record, site) for record in records]
+    papers = sorted((copy_paper(record, site) for record in records),
+                    key=lambda d: re.sub(r"^\W+", "", _flat(d["paper"]["title"])).lower())
     write_index(site, papers)
     return len(papers), messages

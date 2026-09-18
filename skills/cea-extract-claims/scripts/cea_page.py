@@ -46,6 +46,39 @@ REJ_GROUPS = [
 ]
 
 
+SECTION_MAP = """    <section id="map">
+      <h2>Claim Map@@ANCHOR_MAP@@</h2>
+      <p class="section-desc">Hover a node for its sentence, click it for its card. Results stand in the order of
+      how many sentences state each one, and claims stand in page order.</p>
+      <div class="map" id="claim-map">
+        <svg class="map-edges" id="map-edges" aria-hidden="true"></svg>
+        <div class="map-head">Main results</div>
+        <div class="map-head">Narrow claims</div>
+        @@MAP@@
+      </div>
+    </section>
+"""
+
+SECTION_RESULTS = """    <section id="results">
+      <h2>Main Results@@ANCHOR_RESULTS@@</h2>
+      <div class="cards-grid" id="result-cards">@@RESULTS@@</div>
+    </section>
+"""
+
+SECTION_CLAIMS = """    <section id="claims">
+      <h2>Narrow Claims@@ANCHOR_CLAIMS@@</h2>
+      <div class="filter-bar">
+        <input id="claim-search" type="search" placeholder="Filter by quote, section or reason"
+               aria-label="Filter narrow claims">
+        <button class="chip" data-flag="note">Has a note</button>
+        <button class="chip" data-flag="table">Checked against a table or figure</button>
+        <span class="filter-count" id="claim-count"></span>
+      </div>
+      <div class="cards-grid" id="claim-cards">@@CLAIMS@@</div>
+    </section>
+"""
+
+
 def refs(entry: dict, field: str) -> list[str]:
     value = entry.get(field) or []
     return value if isinstance(value, list) else [value]
@@ -203,7 +236,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
         nodes = "".join(
             f'<button class="node claim" data-id="{E(c["id"])}" data-serves="{E(" ".join(c["serves"]))}" '
             f'title="{snippet(c["states"], 300)}"><span class="node-id">{E(c["id"])}</span>'
-            f'<span class="node-text">{snippet(c["states"], 110)}</span>'
+            f'<span class="node-text">{snippet(c["states"], 170)}</span>'
             f'<span class="node-meta">p. {E(str(c["page"]))}'
             f'{" &middot; note" if c.get("note") else ""}</span></button>' for c in mine)
         if not mine:
@@ -217,7 +250,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
             f'<div class="map-row">'
             f'<button class="node result{" empty" if not mine else ""}" data-id="{E(lead)}" '
             f'title="{snippet(b["quote"], 300)}"><span class="node-id">{E(lead)}</span>'
-            f'<span class="node-text">{snippet(b["quote"], 150)}</span>'
+            f'<span class="node-text">{snippet(b["quote"], 190)}</span>'
             f'<span class="node-meta">{E(b["source"])} &middot; p. {E(str(b["page"]))} &middot; '
             f'stated in {_stated_in(data, group)} sentence{"s" if _stated_in(data, group) > 1 else ""}'
             f'{also}</span></button>'
@@ -242,7 +275,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
         ])
         result_cards.append(entry_card(
             "result", lead, f'{E(b["source"])} &middot; p. {E(str(b["page"]))} &middot; '
-            f'{E(_flat(b["section"]))}', snippet(b["quote"], 220), tags, body))
+            f'{E(_flat(b["section"]))}', E(_flat(b["quote"])), tags, body))
 
     # the claim cards
     claim_cards = []
@@ -265,7 +298,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
         ])
         claim_cards.append(entry_card(
             "claim", c["id"], f'p. {E(str(c["page"]))} &middot; {E(_flat(c["section"]))}',
-            snippet(c["states"], 220), tags, body))
+            E(_flat(c["states"])), tags, body))
         ticks.append((_first_page(c), "claim", c["id"], _flat(c["section"])))
 
     # the rejected candidates, folded
@@ -304,7 +337,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
             ])
             cards.append(entry_card("candidate", r["id"],
                                     f'p. {E(str(r["page"]))} &middot; {E(_flat(r["section"]))}',
-                                    snippet(r["reason"], 200), tags, body))
+                                    E(_flat(r["reason"])), tags, body))
         cand_html.append(f'<div class="cand-group" data-group="{key}">'
                          f'<h3 class="group-head">{E(heading)} <span class="count">{len(items)}</span></h3>'
                          f'<div class="cards-grid">{"".join(cards)}</div></div>')
@@ -343,11 +376,11 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
     watch_html = ""
     if unserved:
         items = "".join(
-            f'<li>{badge(b["id"])} <span class="question">{E(snippet(b["states"], 200))}</span>'
+            f'<li>{badge(b["id"])} <span class="question">{E(_flat(b["states"]))}</span>'
             f'<p class="side">{E(_flat(b.get("note") or ""))}</p>'
-            f'<p class="side dim">The sentence it is quoted from: {E(snippet(b["quote"], 240))}</p></li>'
+            f'<p class="side dim">The sentence it is quoted from: {E(_flat(b["quote"]))}</p></li>'
             if b.get("states") and _key(b["states"]) != _key(b["quote"]) else
-            f'<li>{badge(b["id"])} <span class="question">{E(snippet(b["quote"], 200))}</span>'
+            f'<li>{badge(b["id"])} <span class="question">{E(_flat(b["quote"]))}</span>'
             f'<p class="side">{E(_flat(b.get("note") or ""))}</p></li>' for b in unserved)
         watch_html = (f'<div class="note-card"><h3>Main result{"s" if len(unserved) != 1 else ""} that no '
                       f'narrow claim serves</h3><ul>{items}</ul></div>')
@@ -359,23 +392,35 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
                       'candidates considered are below, each with the reason it is not a narrow '
                       'claim.</p></div>') + watch_html
 
+    links = [("overview", "Overview")]
+    if broad:
+        links += [("map", "Claim Map"), ("results", "Main Results")]
+    if claims:
+        links.append(("claims", "Narrow Claims"))
+    links.append(("candidates", "Rejected Candidates"))
+    nav_links = "\n    ".join(
+        f'<a href="#{i}"{" class=\"active\"" if n == 0 else ""}>{E(label)}</a>'
+        for n, (i, label) in enumerate(links))
+    sec_map = SECTION_MAP.replace("@@MAP@@", "".join(rows)) if broad else ""
+    sec_results = SECTION_RESULTS.replace("@@RESULTS@@", "".join(result_cards)) if broad else ""
+    sec_claims = SECTION_CLAIMS.replace("@@CLAIMS@@", "".join(claim_cards)) if claims else ""
+
     fields = {
         "TITLE": E(_flat(paper["title"])),
         "PAPER_ID": E(paper["id"]),
         "PAGES": str(pages),
         "PDF": E(str(paper["pdf"])),
         "PDF_LINK": pdf_link(paper, source, out),
+        "NAV_LINKS": nav_links,
+        "SEC_MAP": sec_map,
+        "SEC_RESULTS": sec_results,
+        "SEC_CLAIMS": sec_claims,
         "HOME": (f'<a class="nav-home" href="{E(index_href)}">&larr; All papers</a>'
                  if index_href else ""),
         "SOURCE_LINKS": (f'<p class="files">{links}</p>' if (links := source_links(paper, source, out)) else ""),
         "STATS": stat_html,
         "WATCH": watch_html,
         "STRIP": strip,
-        "RESULTS": "".join(result_cards) or
-                   '<p class="node-empty">The paper states no main result that a narrow claim could serve.</p>',
-        "MAP": "".join(rows) or '<p class="node-empty">The record has no main result and no narrow claim.</p>',
-        "CLAIMS": "".join(claim_cards) or
-                  '<p class="node-empty">No narrow claim was selected. The candidates are below.</p>',
         "CANDIDATES": "".join(cand_html) or '<p class="node-empty">No candidate was recorded.</p>',
         "N_CANDIDATES": str(len(rejected)),
         "SOURCE": E(source.name),
@@ -413,6 +458,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     nav .nav-home:hover { color: #1c1917; }
     nav .nav-ext:hover { color: #1e40af; }
     nav .nav-ext.plain { color: #a8a29e; font-size: 0.8rem; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
+    nav .nav-ext { overflow-wrap: anywhere; max-width: 100%; }
 
     header { text-align: left; padding: 2.5rem 2rem 1.5rem; max-width: 1260px; margin: 0 auto; }
     header h1 { font-family: 'Source Serif 4', Georgia, serif; font-size: 2.0rem; color: #1c1917; margin-bottom: 0.25rem; line-height: 1.25; }
@@ -448,7 +494,10 @@ TEMPLATE = r"""<!DOCTYPE html>
     .panel h3 { font-size: 1.0rem; color: #1c1917; margin-bottom: 0.25rem; }
     .panel .panel-desc { font-size: 0.8rem; color: #78716c; margin-bottom: 1rem; }
     .strip { overflow-x: auto; }
-    .sectable { border-collapse: collapse; font-size: 0.8rem; width: 100%; }
+    .sectable { border-collapse: collapse; font-size: 0.8rem; width: 100%; table-layout: fixed; }
+    .sectable td.sec { overflow-wrap: anywhere; }
+    .sectable th:nth-child(2), .sectable td.pp { width: 4.5rem; }
+    .sectable th:nth-child(3) { width: 34%; }
     .sectable th, .sectable td { padding: 4px 8px; border: 1px solid #e7e5e4; text-align: left; vertical-align: middle; }
     .sectable th { background: #fafaf9; color: #57534e; font-weight: 600; font-size: 0.75rem; }
     .sectable td.sec { color: #292524; }
@@ -483,7 +532,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     .node-text { font-size: 0.8rem; color: #292524; }
     .node-meta { display: block; font-size: 0.7rem; color: #a8a29e; margin-top: 0.2rem; }
     .node-also { color: #78716c; }
-    .node.candidates { background: #fff; border-left-color: #78716c; border-style: dashed; font-size: 0.75rem; color: #57534e; }
+    .node.candidates { background: #fff; border-left-color: #78716c; border-left-style: dashed; font-size: 0.75rem; color: #57534e; }
     .node-empty { font-size: 0.8rem; color: #a8a29e; font-style: italic; padding: 0.4rem 0; }
     .node.dim { opacity: 0.35; }
 
@@ -518,7 +567,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     .idbadge { display: inline-block; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 0.7rem; background: #e7e5e4; color: #57534e; padding: 1px 5px; border-radius: 3px; text-decoration: none; transition: background 0.15s; }
     .idbadge:hover { background: #d6d3d1; }
     .minitag { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #a8a29e; border: 1px solid #e7e5e4; padding: 0 4px; border-radius: 3px; }
-    .expand-icon { font-size: 0.7rem; color: #a8a29e; flex-shrink: 0; transition: transform 0.2s; }
+    .expand-icon { font-size: 0.85rem; color: #78716c; flex-shrink: 0; transition: transform 0.2s; }
+    .entry-header:hover .expand-icon { color: #1c1917; }
     .entry.expanded .expand-icon { transform: rotate(180deg); }
     .entry-body { display: none; padding: 0 1.25rem 1.25rem; border-top: 1px solid #e7e5e4; }
     .entry.expanded .entry-body { display: block; }
@@ -551,6 +601,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     footer { max-width: 1200px; margin: 2rem auto 0; padding: 1.5rem 2rem; border-top: 1px solid #e7e5e4; font-size: 0.7rem; color: #a8a29e; }
     footer code { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
     footer .files { margin-top: 0.5rem; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
+    footer a { color: #1d4ed8; }
     footer .files a { color: #1d4ed8; }
     footer .files .dim { font-family: var(--sans, inherit); color: #a8a29e; }
 
@@ -563,6 +614,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       .map-edges, .map-head { display: none; }
       .node-stack { margin: 0 0 1rem 1rem; }
       nav { padding: 0.5rem 1rem; gap: 0.75rem; }
+      nav .nav-ext { margin-left: 0; }
       header, section { padding-left: 1rem; padding-right: 1rem; }
       header h1 { font-size: 1.5rem; }
     }
@@ -578,11 +630,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <nav id="main-nav">
     <span class="mark">CEA</span>
     @@HOME@@
-    <a href="#overview" class="active">Overview</a>
-    <a href="#map">Claim Map</a>
-    <a href="#results">Main Results</a>
-    <a href="#claims">Narrow Claims</a>
-    <a href="#candidates">Rejected Candidates</a>
+    @@NAV_LINKS@@
     @@PDF_LINK@@
   </nav>
 
@@ -610,35 +658,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </section>
 
-    <section id="map">
-      <h2>Claim Map@@ANCHOR_MAP@@</h2>
-      <p class="section-desc">Hover a node for its sentence, click it for its card. Results stand in the order of
-      how many sentences state each one, and claims stand in page order.</p>
-      <div class="map" id="claim-map">
-        <svg class="map-edges" id="map-edges" aria-hidden="true"></svg>
-        <div class="map-head">Main results</div>
-        <div class="map-head">Narrow claims</div>
-        @@MAP@@
-      </div>
-    </section>
-
-    <section id="results">
-      <h2>Main Results@@ANCHOR_RESULTS@@</h2>
-      <div class="cards-grid" id="result-cards">@@RESULTS@@</div>
-    </section>
-
-    <section id="claims">
-      <h2>Narrow Claims@@ANCHOR_CLAIMS@@</h2>
-      <div class="filter-bar">
-        <input id="claim-search" type="search" placeholder="Filter by quote, section or reason"
-               aria-label="Filter narrow claims">
-        <button class="chip" data-flag="note">Has a note</button>
-        <button class="chip" data-flag="table">Checked against a table or figure</button>
-        <span class="filter-count" id="claim-count"></span>
-      </div>
-      <div class="cards-grid" id="claim-cards">@@CLAIMS@@</div>
-    </section>
-
+@@SEC_MAP@@@@SEC_RESULTS@@@@SEC_CLAIMS@@
     <section id="candidates">
       <h2>Rejected Candidates@@ANCHOR_CANDIDATES@@</h2>
       <button class="reveal" id="reveal-candidates" aria-expanded="false">Show @@N_CANDIDATES@@ rejected candidates</button>
@@ -657,7 +677,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   </main>
 
   <footer>
-    <code>cea_claims.py render</code> wrote this page from <code>@@SOURCE@@</code> on @@BUILT@@.
+    <a href="https://github.com/se-uhd/cea-skill"><code>cea_claims.py render</code></a> wrote this page from <code>@@SOURCE@@</code> on @@BUILT@@.
     Every quote is the paper's wording, and <code>cea_claims.py validate</code> checked each one against the
     page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
     overturn any main result, claim or candidate. Claim-Evidence Alignment covers quantitative
@@ -871,7 +891,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     sections.forEach(function (s) {
       if (s.getBoundingClientRect().top <= line) current = s;
     });
-    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+    var scrollable = document.documentElement.scrollHeight > window.innerHeight + 4;
+    if (scrollable && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
       current = sections[sections.length - 1];  // the last section never reaches the line
     }
     if (!current) return;
