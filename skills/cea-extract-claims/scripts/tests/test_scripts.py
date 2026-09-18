@@ -724,6 +724,20 @@ class Validate(unittest.TestCase):
         data["rejected"][-1]["duplicate_of"] = ["R1"]
         self.assertNotIn("name the broad statement as well", self.warnings(data))
 
+    def test_the_script_adds_up_the_parts_a_note_names(self):
+        data = valid_claims()
+        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+                                       "total: 700 and 503.")
+        self.assertNotIn("add up to", self.warnings(data))
+        # The same note with a row that does not belong to the total.
+        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+                                       "total: 700 and 403.")
+        self.assertIn("add up to 1103", self.warnings(data))
+        # Percentages beside the counts are not parts.
+        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+                                       "total: 700 (58.2%) and 503 (41.8%).")
+        self.assertNotIn("add up to", self.warnings(data))
+
     def test_a_heading_copied_whole_is_reported_once(self):
         data = valid_claims()
         # A long heading is what the rule asks for as long as it is a heading, not a question.

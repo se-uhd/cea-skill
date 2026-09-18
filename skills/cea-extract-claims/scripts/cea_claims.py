@@ -643,6 +643,9 @@ _EMPTY_REASON = re.compile(
     r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b"
     r"|^\W*(?:not\s+a\s+claim|no|n/?a|none)\W*$", re.I)
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
+# A note saying the table prints the parts of the sentence's value rather than the value itself.
+_PARTS_NOTE = re.compile(r"prints only the parts|no total|parts of (?:the|its) "
+                         r"(?:sentence's )?(?:value|number)|leave[s]? the arithmetic|rows under", re.I)
 # A section heading that names the paper's answer to a research question.
 _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
 # The order the reference gives for the sentence that states a main result. Where the paper states
@@ -814,6 +817,25 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
             out.append(f"{_label('broad_statements', i, b)}.source: the section names a boxed answer, "
                        f"so the source is rq_answer, not {b.get('source')!r}")
+    # Where a note says the table prints only the parts of a value, the model is forbidden to add them
+    # up, so the script does it: the sum is either the sentence's number or a discrepancy to look at.
+    for key in ("broad_statements", "claims", "rejected"):
+        for i, e in enumerate(data[key]):
+            note = e.get("note") or ""
+            if not _PARTS_NOTE.search(note):
+                continue
+            body = re.sub(r"\([^)]*%\)|\b\d[\d,]*(?:\.\d+)?\s*%", " ", note)
+            body = re.sub(r"\b(?:Table|Fig\.|Figure)\s*[\dIVXLC]+|\bpages?\s+[\d-]+", " ", body)
+            # A split part states only its own numbers, so those are the ones its rows add up to.
+            said = e.get("states") or e.get("quote", "")
+            given = {float(v.replace(",", "")) for v in _NUMBER.findall(_fold(said))}
+            # A note repeats the sentence's own numbers beside the rows; only the rows are parts.
+            parts = [float(v.replace(",", "")) for v in re.findall(r"\b\d[\d,]*(?:\.\d+)?\b(?!\s*%)", body)
+                     if float(v.replace(",", "")) not in given]
+            if len(parts) >= 2 and given and sum(parts) not in given | {sum(given)}:
+                out.append(f"{_label(key, i, e)}.note: the values it names add up to {sum(parts):.10g}, "
+                           "which the sentence does not give; check that they are the parts of its "
+                           "number, and that the note names them as printed")
     whole = [(_label(key, i, e), e.get("section", "")) for key in ("broad_statements", "claims", "rejected")
              for i, e in enumerate(data[key])
              if ("?" in e.get("section", "") and len(e.get("section", "")) > _A_QUESTION)
@@ -1089,6 +1111,18 @@ def cmd_extract(args) -> int:
     print(f"CEA_EXTRACTED: {text_path}")
     print(f"paper_id: {paper_id}")
     print(f"pages: {len(extraction.pages)}, {columns} of them with two-column text put in reading order")
+    labels: dict[str, int] = {}
+    for page in extraction.pages:
+        for line in page.lines:
+            head = re.match(r"(Fig\.|Figure|FIGURE|Table|TABLE|Listing|Algorithm)\s*([\dIVXLC]+)",
+                            line.strip())
+            if head:
+                name = f"{head.group(1).title()} {head.group(2)}"
+                labels.setdefault(name, page.number)
+    if labels:
+        print("tables and figures: " + ", ".join(f"{n} p{page}" for n, page in labels.items()))
+        print("  a number in the text is looked up against this list; a caption missing from it did not "
+              "survive the extraction, so nothing can be compared with it")
     single = [str(p.number) for p in extraction.pages
               if extraction.two_column and not p.regions and sum(1 for l in p.lines if l.strip()) >= 8]
     if single:
