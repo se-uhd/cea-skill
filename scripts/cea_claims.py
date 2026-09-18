@@ -1216,7 +1216,11 @@ def cmd_site(args) -> int:
     if missing:
         print(f"CEA_FAILED: no claims.json in {', '.join(missing)}")
         return 2
-    written, messages = cea_site.build_site(records, Path(args.out))
+    framework = Path(args.framework) if args.framework else None
+    if framework and not framework.is_file():
+        print(f"CEA_FAILED: no framework document at {framework}")
+        return 2
+    written, messages = cea_site.build_site(records, Path(args.out), framework)
     for message in messages:
         print(message)
     if not written:
@@ -1242,6 +1246,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("site")
     p.add_argument("paper_dirs", nargs="+")
     p.add_argument("--out", default="_site", help="output directory (default: _site)")
+    p.add_argument("--framework", help="a Markdown document to publish as the framework page")
     p.set_defaults(func=cmd_site)
     args = parser.parse_args(argv)
     return args.func(args)

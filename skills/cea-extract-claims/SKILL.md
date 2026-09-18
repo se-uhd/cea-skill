@@ -6,13 +6,15 @@ description: >-
   research-question answers, and conclusion that they serve, and the candidates considered and
   rejected, each with its exact wording, page, and reason. A claim is one that a main result would
   fail without, so this is the skill for finding which numbers a paper's conclusions rest on. Writes
-  claims.json and a readable claims.md, and checks every quote against the page text of the PDF. Use
+  claims.json, a readable claims.md and a claims.html page, and checks every quote against the page text of
+  the PDF. Use
   this skill whenever someone wants to extract, list, identify, or select the claims or key
   quantitative results of a paper PDF, prepare a paper for a claim-evidence, reproducibility, or
   artifact check, or start a CEA chain, even if they do not say "CEA" or "narrow claim". It reads the
   paper only, and it comes first, before any evidence is examined and even where a replication
   package or artifact exists, because later steps assess whether that evidence supports each claim.
-  For linking an artifact appendix's claims to its experiments, use claim-evidence-map.
+  For linking an artifact appendix's claims to its experiments, use claim-evidence-map. For publishing the
+  pages of several papers as one site, use cea-site.
 license: MIT
 compatibility: Requires Python 3.10 or newer (standard library only) and pdftotext (poppler).
 ---
@@ -32,21 +34,21 @@ The checker must be able to verify the record. Each statement is quoted exactly 
 
 ## Scripts
 
-The scripts are in `scripts/` in this skill's base directory, which Claude Code shows when it loads the skill. Run them as:
+The scripts are in `scripts/` at the root of the plugin, beside this skill's directory, and the other CEA skills share them. Claude Code shows the skill's base directory when it loads the skill, and the plugin root is two levels above it. Run them as:
 
 ```sh
-python3 <skill base directory>/scripts/cea_claims.py <command> ...
+python3 <plugin root>/scripts/cea_claims.py <command> ...
 ```
 
-The first output line starts with `CEA_OK`, `CEA_EXTRACTED`, `CEA_VALID`, `CEA_RENDERED`, or `CEA_SITE` on success, and with `CEA_FAILED`, `CEA_INVALID`, or `CEA_UNRESOLVED` otherwise.
+The first output line starts with `CEA_OK`, `CEA_EXTRACTED`, `CEA_VALID`, or `CEA_RENDERED` on success, and with `CEA_FAILED`, `CEA_INVALID`, or `CEA_UNRESOLVED` otherwise.
 
 ## Workflow
 
 ### 1. Extract the text
 
 ```sh
-python3 <skill base directory>/scripts/cea_claims.py check-env
-python3 <skill base directory>/scripts/cea_claims.py extract <paper.pdf> --out <output directory>
+python3 <plugin root>/scripts/cea_claims.py check-env
+python3 <plugin root>/scripts/cea_claims.py extract <paper.pdf> --out <output directory>
 ```
 
 Use the output directory that the user names, or `cea-out` in the current directory. The paper's files go to `<output directory>/<paper_id>/`, where `paper_id` is the PDF's file name without `.pdf`. `extract` also lists pages that are empty in `text.txt`, such as pages that held only references. In a two-column paper, it lists the pages that it left in one column as well. The lines of two columns can be mixed on any page, whatever `extract` lists, so text of one column can interrupt a sentence of the other. A sentence stays quotable unless text that is not its own runs inside it and `[...]` cannot cover the break, because `[...]` stands only between two lines, never inside one. Where that happens, quote the longest run of the sentence that stands unbroken in `text.txt`, and say in `note` that other text, such as the other column's, runs inside one of the sentence's lines on that page, and that the quote is the part that stands unbroken. This is the one case where a quote is not a whole sentence, so the validator's warning about a quote that starts or ends in the middle of a sentence is expected here. Name the page in your report as well. Cells of a table printed between the lines of a sentence are normal and do not stop a quote.
@@ -184,7 +186,7 @@ Write `<output directory>/<paper_id>/claims.json`. Use this structure:
 ### 7. Validate
 
 ```sh
-python3 <skill base directory>/scripts/cea_claims.py validate <output directory>/<paper_id>
+python3 <plugin root>/scripts/cea_claims.py validate <output directory>/<paper_id>
 ```
 
 Fix every problem and run it again until it prints `CEA_VALID`. After that line, it can print `warning:` lines, for example about a quote that ends in the middle of a sentence. Read each warning, and fix the record where it is right. If a quote is not found, copy it again from `text.txt`. If it was found on another page, correct `page`. The validator also checks that the `states` of a split part uses only words from its quote. The validator warns when no part of a split statement keeps a negation of the quote. The negation words are the ones the reference's section "Splitting" lists. Keep the negation unless it belongs to a clause that is out of scope, such as a qualitative finding. It also warns about:
@@ -212,7 +214,7 @@ It cannot tell whether a part pairs a number with the wrong item, so reread each
 ### 8. Render and report
 
 ```sh
-python3 <skill base directory>/scripts/cea_claims.py render <output directory>/<paper_id>
+python3 <plugin root>/scripts/cea_claims.py render <output directory>/<paper_id>
 ```
 
 The render command writes `claims.md` and `claims.html`. `claims.md` is the working document that the checker reads and it is always written. `claims.html` is the page for readers outside the check, so it is written only when every entry states a decision: where a `reason` begins with "Unsure", the command prints `CEA_UNRESOLVED`, names those entries, writes no page, and exits 1. A broad statement that no claim serves reaches the page as a finding, under its own heading with the note that says why the paper's own evidence does not reach it, which is why the validator rejects such a statement without a note. Report that to the user rather than working around it. The checker settles each one in `claims.json`, by turning the candidate into a claim or by replacing the reason with the ground that excludes it, and then you render again.
@@ -227,14 +229,6 @@ The render command writes `claims.md` and `claims.html`. `claims.md` is the work
 - whether the paper's own sentence about not quantifying prevalence removed statements that give a frequency only in words, and where that sentence stands, and say so if the paper has no such sentence
 - which entries you compared with a table or a figure, which of those disagree, and which numbers no table reports
 - any extraction problems, such as pages with garbled text, or a figure the extraction left as scattered labels
-
-### 9. Build a site for several papers, when asked
-
-```sh
-python3 <skill base directory>/scripts/cea_claims.py site <paper directory> [<paper directory> ...] --out <site directory>
-```
-
-Only when the user asks for a site. It writes `<site directory>/index.html`, listing each paper with its counts, and `<site directory>/papers/<paper_id>/` holding the record, both renderings, and the PDF where it can be found, so the page's links to them work wherever the folder is served. Every record is checked before anything is written, so one unsettled record stops the whole site rather than leaving half of it on a server.
 
 ## Left to later steps
 

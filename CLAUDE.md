@@ -1,17 +1,22 @@
 # cea-skill
 
 Claude Code skills for Claim-Evidence Alignment (CEA). `README.md` says what CEA is and how to install the
-plugin. `skills/cea-extract-claims/SKILL.md` is the instruction the agent follows; the rules it applies are in
-`skills/cea-extract-claims/references/narrow-claims.md`.
+plugin. Two skills share one set of scripts:
+
+| Skill | What it is for |
+|---|---|
+| `skills/cea-extract-claims` | one paper: extract its text, select its claims, validate, and render `claims.md` and `claims.html`. The rules it applies are in its `references/narrow-claims.md`. |
+| `skills/cea-site` | several papers: assemble their pages, an index, and the framework page into a site |
 
 ## Where the outputs go
 
-`skills/cea-extract-claims/scripts/cea_claims.py` has the commands. `extract` writes `text.txt`, the agent
+`scripts/cea_claims.py`, at the root of the plugin, has the commands for both skills. `extract` writes `text.txt`, the agent
 writes `claims.json`, `validate` checks every quote against the page text, and `render` writes `claims.md` and
-`claims.html`. `site` assembles several papers into a static site with an index.
+`claims.html`. `site` assembles several papers into a static site with an index, and its `--framework` option publishes
+a Markdown document as the page that defines the terms the pages use.
 
-The page template is `cea_page.py` and the site assembly is `cea_site.py`. Both are modules of the skill and
-have no command line of their own; `cea_claims.py` is the only entry point. `cea_page.py` reuses the ordering
+The page template is `cea_page.py` and the site assembly is `cea_site.py`. Both are modules with no command
+line of their own; `cea_claims.py` is the only entry point. `cea_page.py` reuses the ordering
 functions of `cea_claims.py`, so the page and `claims.md` cannot disagree about which claims stand under which
 main result. Changing the page design means editing `cea_page.py`; changing what a record holds means editing
 `SKILL.md`, the reference, the validator, and the existing records together.
@@ -32,7 +37,7 @@ names a tag that contains the change, so release a tag and bump it there.
 ## Tests
 
 ```sh
-python3 -m unittest discover skills/cea-extract-claims/scripts/tests
+python3 -m unittest discover scripts/tests
 ```
 
 The tests that read real papers use the PDFs in `evals/papers/`, which are not committed, and are skipped when

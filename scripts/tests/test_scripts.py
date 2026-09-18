@@ -2,7 +2,7 @@
 
 Run from the repository root:
 
-    python3 -m unittest discover skills/cea-extract-claims/scripts/tests
+    python3 -m unittest discover scripts/tests
 
 The tests on real papers read the PDFs in evals/papers/ and are skipped when the PDFs are missing.
 """
@@ -22,7 +22,7 @@ sys.path.insert(0, str(SCRIPTS))
 import cea_claims  # noqa: E402
 import pdf_text  # noqa: E402
 
-PAPERS = SCRIPTS.parents[2] / "evals" / "papers"
+PAPERS = SCRIPTS.parent / "evals" / "papers"
 
 
 class Layout(unittest.TestCase):

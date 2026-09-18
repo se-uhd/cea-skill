@@ -196,7 +196,8 @@ def pdf_link(paper: dict, source: Path, out: Path) -> str:
     return f'<span class="nav-ext plain" title="{E(str(paper["pdf"]))}">{E(name)}</span>'
 
 
-def build(data: dict, source: Path, out: Path, index_href: str | None = None) -> str:
+def build(data: dict, source: Path, out: Path, index_href: str | None = None,
+          framework_href: str | None = None) -> str:
     """`index_href` is the path back to the index, which only a site has; a page rendered on its own
     has no index to return to, so it carries no link."""
     paper = data["paper"]
@@ -415,6 +416,8 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
         "SEC_MAP": sec_map,
         "SEC_RESULTS": sec_results,
         "SEC_CLAIMS": sec_claims,
+        "FRAMEWORK": (f'The terms on this page are defined in <a href="{E(framework_href)}">the framework</a>.'
+                      if framework_href else ""),
         "HOME": (f'<a class="nav-home" href="{E(index_href)}">&larr; All papers</a>'
                  if index_href else ""),
         "SOURCE_LINKS": (f'<p class="files">{links}</p>' if (links := source_links(paper, source, out)) else ""),
@@ -682,7 +685,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     page text of <code>@@PDF@@</code>. An agent drafted this page's contents and a person, the checker, reviews them and can
     overturn any main result, claim or candidate. Claim-Evidence Alignment covers quantitative
     empirical claims, so a main result that the paper states as a qualitative finding is out of its scope and
-    is not recorded here.
+    is not recorded here. @@FRAMEWORK@@
     @@SOURCE_LINKS@@
   </footer>
 
