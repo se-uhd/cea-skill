@@ -456,10 +456,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     nav .mark { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.8rem; color: #1c1917; font-weight: 600; margin-right: 1.5rem; }
     nav a { text-decoration: none; color: #78716c; font-size: 0.875rem; font-weight: 500; padding: 0.25rem 0; border-bottom: 2px solid transparent; transition: all 0.15s; }
     nav a.active, nav a:hover { color: #1c1917; border-bottom-color: currentColor; }
-    nav .nav-right { margin-left: auto; display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; }
-    nav .nav-ext { color: #1d4ed8; border-bottom: none; }
-    nav .nav-repo { color: #1d4ed8; border-bottom: none; white-space: nowrap; }
-    nav .nav-repo:hover { color: #1e40af; }
+    nav .nav-ext { margin-left: auto; color: #1d4ed8; border-bottom: none; }
     nav .nav-home { color: #78716c; }
     nav .nav-home:hover { color: #1c1917; }
     nav .nav-ext:hover { color: #1e40af; }
@@ -620,7 +617,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       .map-edges, .map-head { display: none; }
       .node-stack { margin: 0 0 1rem 1rem; }
       nav { padding: 0.5rem 1rem; gap: 0.75rem; }
-      nav .nav-right { margin-left: 0; gap: 0.75rem; }
+      nav .nav-ext { margin-left: 0; }
       header, section { padding-left: 1rem; padding-right: 1rem; }
       header h1 { font-size: 1.5rem; }
     }
@@ -637,7 +634,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <span class="mark">CEA</span>
     @@HOME@@
     @@NAV_LINKS@@
-    <span class="nav-right">@@PDF_LINK@@<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub</a></span>
+    @@PDF_LINK@@
   </nav>
 
   <header>
