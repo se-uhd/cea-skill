@@ -207,9 +207,7 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
     </section>
   </main>
   <footer><a href="https://github.com/se-uhd/cea-skill"><code>cea_claims.py site</code></a> wrote this page on
-  {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.
-  The command is part of the <a href="https://github.com/se-uhd/cea-skill">cea-extract-claims</a> skill, which also writes each
-  paper's page.</footer>
+  {date.today().isoformat()} from the {len(papers)} paper{"s" if len(papers) != 1 else ""} listed above.</footer>
 </body>
 </html>
 """

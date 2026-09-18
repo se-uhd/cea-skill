@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line scripts for the cea-extract-claims skill.
+"""Command-line scripts for the CEA skills: extract-claims and site.
 
   check-env                          check for Python 3.10 or newer and pdftotext
   extract PDF [--out DIR] [--id ID]  write DIR/<paper_id>/text.txt, the paper's text with page markers

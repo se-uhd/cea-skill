@@ -1,11 +1,11 @@
 ---
-name: cea-site
+name: site
 description: >-
   Build a static site from a set of Claim-Evidence Alignment (CEA) records, one directory per paper:
   a page per paper, an index listing every paper with its counts, and the framework text that the
   pages' terms come from. Use this skill when someone wants to publish, deploy, or preview the claim
   records of several papers together, add a paper to such a site, or rebuild it after a record
-  changed. It renders records that cea-extract-claims has already produced and checked; it does not
+  changed. It renders records that the extract-claims skill has already produced and checked; it does not
   read a PDF or select any claim. A record that still leaves a decision open stops the build.
 license: MIT
 compatibility: Requires Python 3.10 or newer (standard library only).
@@ -13,7 +13,7 @@ compatibility: Requires Python 3.10 or newer (standard library only).
 
 # Build a site from claim records
 
-This skill publishes the records that `cea-extract-claims` writes. One directory per paper holds
+This skill publishes the records that `extract-claims` writes. One directory per paper holds
 `claims.json`, `claims.md`, `text.txt` and the PDF, and the build turns each one into a page and
 lists them on an index. The pages are generated, never hand-edited: the record is the source, and
 changing what a page says means changing the record or the skill that renders it.
@@ -30,7 +30,7 @@ changing what a page says means changing the record or the skill that renders it
 ## The command
 
 The scripts are in `scripts/` at the root of the plugin, beside this skill's directory, shared with
-`cea-extract-claims`.
+`extract-claims`.
 
 ```sh
 python3 <plugin root>/scripts/cea_claims.py validate <paper directory>

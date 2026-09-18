@@ -1,5 +1,5 @@
 ---
-name: cea-extract-claims
+name: extract-claims
 description: >-
   Extract the claims of a research paper from its PDF for Claim-Evidence Alignment (CEA): the narrow
   quantitative empirical claims, the broad statements from the abstract, contributions,
@@ -14,7 +14,7 @@ description: >-
   paper only, and it comes first, before any evidence is examined and even where a replication
   package or artifact exists, because later steps assess whether that evidence supports each claim.
   For linking an artifact appendix's claims to its experiments, use claim-evidence-map. For publishing the
-  pages of several papers as one site, use cea-site.
+  pages of several papers as one site, use the site skill.
 license: MIT
 compatibility: Requires Python 3.10 or newer (standard library only) and pdftotext (poppler).
 ---

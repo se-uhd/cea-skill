@@ -5,8 +5,8 @@ plugin. Two skills share one set of scripts:
 
 | Skill | What it is for |
 |---|---|
-| `skills/cea-extract-claims` | one paper: extract its text, select its claims, validate, and render `claims.md` and `claims.html`. The rules it applies are in its `references/narrow-claims.md`. |
-| `skills/cea-site` | several papers: assemble their pages, an index, and the framework page into a site |
+| `skills/extract-claims` | one paper: extract its text, select its claims, validate, and render `claims.md` and `claims.html`. The rules it applies are in its `references/narrow-claims.md`. |
+| `skills/site` | several papers: assemble their pages, an index, and the framework page into a site |
 
 ## Where the outputs go
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render a claim record as one HTML page.
 
-A third output for cea-extract-claims, beside claims.json and claims.md. It follows the page
+A third output of the extract-claims skill, beside claims.json and claims.md. It follows the page
 skeleton of codebook_visualizer.html and annotation_explorer.html: a sticky section nav, a serif
 masthead, stat cards, an overview visual with nodes that jump to the detail cards below, and
 accordion cards for the records.
