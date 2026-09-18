@@ -1149,6 +1149,17 @@ def cmd_extract(args) -> int:
     return 0
 
 
+def unresolved(data: dict) -> list[str]:
+    """The entries whose reason does not say whether the statement is a claim.
+
+    The reference lets a candidate be recorded as unsure so that the checker can settle it. Such a
+    record is a working record: the page and the site refuse to render it, because a reader cannot
+    tell an open question from a decision.
+    """
+    return [x["id"] for x in data["claims"] + data["rejected"]
+            if (x.get("reason") or "").lower().startswith("unsure")]
+
+
 def cmd_validate(args) -> int:
     paper_dir = Path(args.paper_dir)
     problems, data = validate(paper_dir)
@@ -1171,12 +1182,42 @@ def cmd_render(args) -> int:
         print(f"CEA_INVALID: {len(problems)} problem(s); run validate and fix them before rendering")
         return 1
     md_path = paper_dir / "claims.md"
+    html_path = paper_dir / "claims.html"
     try:
         md_path.write_text(render(data), encoding="utf-8")
     except OSError as e:
         print(f"CEA_FAILED: cannot write {md_path}: {e}")
         return 2
     print(f"CEA_RENDERED: {md_path}")
+    open_ids = unresolved(data)
+    if open_ids:
+        print(f"CEA_UNRESOLVED: unsettled entries: {', '.join(open_ids)}. A reason must say whether "
+              f"the statement is a claim, so {html_path} was not written.")
+        return 1
+    import cea_page  # imported here, because cea_page reads the ordering functions above
+    try:
+        html_path.write_text(cea_page.build(data, paper_dir / "claims.json", html_path),
+                             encoding="utf-8")
+    except OSError as e:
+        print(f"CEA_FAILED: cannot write {html_path}: {e}")
+        return 2
+    print(f"CEA_RENDERED: {html_path}")
+    return 0
+
+
+def cmd_site(args) -> int:
+    import cea_site
+    records = [Path(r) for r in args.paper_dirs]
+    missing = [str(r) for r in records if not (r / "claims.json").is_file()]
+    if missing:
+        print(f"CEA_FAILED: no claims.json in {', '.join(missing)}")
+        return 2
+    written, messages = cea_site.build_site(records, Path(args.out))
+    for message in messages:
+        print(message)
+    if not written:
+        return 1
+    print(f"CEA_SITE: {args.out} with {written} paper{'s' if written != 1 else ''}")
     return 0
 
 
@@ -1194,6 +1235,10 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name)
         p.add_argument("paper_dir")
         p.set_defaults(func=func)
+    p = sub.add_parser("site")
+    p.add_argument("paper_dirs", nargs="+")
+    p.add_argument("--out", default="_site", help="output directory (default: _site)")
+    p.set_defaults(func=cmd_site)
     args = parser.parse_args(argv)
     return args.func(args)
 

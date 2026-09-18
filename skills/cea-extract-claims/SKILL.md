@@ -38,7 +38,7 @@ The scripts are in `scripts/` in this skill's base directory, which Claude Code 
 python3 <skill base directory>/scripts/cea_claims.py <command> ...
 ```
 
-The first output line starts with `CEA_OK`, `CEA_EXTRACTED`, `CEA_VALID`, or `CEA_RENDERED` on success, and with `CEA_FAILED` or `CEA_INVALID` otherwise.
+The first output line starts with `CEA_OK`, `CEA_EXTRACTED`, `CEA_VALID`, `CEA_RENDERED`, or `CEA_SITE` on success, and with `CEA_FAILED`, `CEA_INVALID`, or `CEA_UNRESOLVED` otherwise.
 
 ## Workflow
 
@@ -215,7 +215,9 @@ It cannot tell whether a part pairs a number with the wrong item, so reread each
 python3 <skill base directory>/scripts/cea_claims.py render <output directory>/<paper_id>
 ```
 
-The render command writes `claims.md`. The claims stand under each main result they serve, the result the paper states in the most places first, and within a result in page order, because the paper puts no order on the claims that support one result. Broad statements that the same claims serve are shown together as one result, which usually means that the paper states one result twice, so check that grouping against the quotes. A list of every claim in page order and the rejected candidates come next. Then tell the user, briefly:
+The render command writes `claims.md` and `claims.html`. `claims.md` is the working document that the checker reads and it is always written. `claims.html` is the page for readers outside the check, so it is written only when every entry states a decision: where a `reason` begins with "Unsure", the command prints `CEA_UNRESOLVED`, names those entries, writes no page, and exits 1. Report that to the user rather than working around it. The checker settles each one in `claims.json`, by turning the candidate into a claim or by replacing the reason with the ground that excludes it, and then you render again.
+
+`claims.md` The claims stand under each main result they serve, the result the paper states in the most places first, and within a result in page order, because the paper puts no order on the claims that support one result. Broad statements that the same claims serve are shown together as one result, which usually means that the paper states one result twice, so check that grouping against the quotes. A list of every claim in page order and the rejected candidates come next. Then tell the user, briefly:
 
 - where `claims.json` and `claims.md` are
 - how many broad statements, claims, and rejected candidates you recorded
@@ -225,6 +227,14 @@ The render command writes `claims.md`. The claims stand under each main result t
 - whether the paper's own sentence about not quantifying prevalence removed statements that give a frequency only in words, and where that sentence stands, and say so if the paper has no such sentence
 - which entries you compared with a table or a figure, which of those disagree, and which numbers no table reports
 - any extraction problems, such as pages with garbled text, or a figure the extraction left as scattered labels
+
+### 9. Build a site for several papers, when asked
+
+```sh
+python3 <skill base directory>/scripts/cea_claims.py site <paper directory> [<paper directory> ...] --out <site directory>
+```
+
+Only when the user asks for a site. It writes `<site directory>/index.html`, listing each paper with its counts, and `<site directory>/papers/<paper_id>/` holding the record, both renderings, and the PDF where it can be found, so the page's links to them work wherever the folder is served. Every record is checked before anything is written, so one unsettled record stops the whole site rather than leaving half of it on a server.
 
 ## Left to later steps
 

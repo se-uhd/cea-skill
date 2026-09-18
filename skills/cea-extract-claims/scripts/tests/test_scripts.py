@@ -1311,3 +1311,91 @@ class CommandLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Page(unittest.TestCase):
+    """The HTML page and the site that `render` and `site` write."""
+
+    def paper(self, parent: Path, paper_id: str, data=None) -> Path:
+        d = parent / paper_id
+        d.mkdir()
+        data = data or valid_claims()
+        data["paper"] = dict(data["paper"], id=paper_id)
+        (d / "text.txt").write_text(TEXT, encoding="utf-8")
+        (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+        return d
+
+    def run_command(self, *argv) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cea_claims.main(list(argv))
+        return code, out.getvalue()
+
+    def test_render_writes_the_page_beside_the_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "fixture")
+            code, out = self.run_command("render", str(d))
+            self.assertEqual(code, 0, out)
+            page = (d / "claims.html").read_text(encoding="utf-8")
+            self.assertIn('id="B1"', page)
+            self.assertIn('id="C2"', page)
+            self.assertIn("Caching halves median build time.", page)
+            self.assertIn("claims.html", out)
+
+    def test_the_page_carries_the_record_it_was_built_from(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "fixture")
+            self.run_command("render", str(d))
+            page = (d / "claims.html").read_text(encoding="utf-8")
+            blob = page.split('id="cea-data">')[1].split("</script>")[0]
+            self.assertEqual(json.loads(blob.replace("<\\/", "</"))["paper"]["id"], "fixture")
+
+    def test_an_unsettled_record_writes_no_page(self):
+        data = valid_claims()
+        data["rejected"][0]["reason"] = ("Unsure whether B1 rests on this, recorded as rejected so "
+                                         "that the checker can change it into a claim.")
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "fixture", data)
+            code, out = self.run_command("render", str(d))
+            self.assertEqual(code, 1)
+            self.assertIn("CEA_UNRESOLVED", out)
+            self.assertIn("R1", out)
+            self.assertFalse((d / "claims.html").exists())
+            self.assertTrue((d / "claims.md").exists(), "the checker still needs the Markdown")
+
+    def test_site_writes_one_directory_per_paper_and_an_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first, second = self.paper(root, "one"), self.paper(root, "two")
+            code, out = self.run_command("site", str(first), str(second), "--out", str(root / "site"))
+            self.assertEqual(code, 0, out)
+            index = (root / "site" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("papers/one/", index)
+            self.assertIn("papers/two/", index)
+            for paper_id in ("one", "two"):
+                here = root / "site" / "papers" / paper_id
+                self.assertTrue((here / "index.html").is_file())
+                self.assertTrue((here / "claims.json").is_file())
+                self.assertTrue((here / "text.txt").is_file())
+
+    def test_site_writes_nothing_while_one_record_is_unsettled(self):
+        data = valid_claims()
+        data["rejected"][0]["reason"] = "Unsure whether B1 rests on this."
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settled, unsettled = self.paper(root, "one"), self.paper(root, "two", data)
+            code, out = self.run_command("site", str(settled), str(unsettled), "--out", str(root / "site"))
+            self.assertEqual(code, 1)
+            self.assertIn("CEA_UNRESOLVED", out)
+            self.assertFalse((root / "site").exists(), "a half-built site must not reach a server")
+
+    def test_a_paper_without_a_quantitative_main_result_says_so(self):
+        data = valid_claims()
+        data["broad_statements"], data["claims"] = [], []
+        data["rejected"][0]["reason"] = "Describes the data, not a result."
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self.paper(Path(tmp), "qualitative", data)
+            code, out = self.run_command("render", str(d))
+            self.assertEqual(code, 0, out)
+            page = (d / "claims.html").read_text(encoding="utf-8")
+            self.assertIn("states no quantitative main result", page)
