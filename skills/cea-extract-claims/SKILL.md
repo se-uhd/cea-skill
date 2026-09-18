@@ -4,12 +4,15 @@ description: >-
   Extract the claims of a research paper from its PDF for Claim-Evidence Alignment (CEA): the narrow
   quantitative empirical claims, the broad statements from the abstract, contributions,
   research-question answers, and conclusion that they serve, and the candidates considered and
-  rejected, each with its exact wording, page, and reason. Writes claims.json and a readable
-  claims.md, and checks every quote against the page text of the PDF. Use this skill whenever
-  someone wants to extract, list, identify, or select the claims or key quantitative results of a
-  paper PDF, prepare a paper for a claim-evidence, reproducibility, or artifact check, or start a
-  CEA chain, even if they do not say "CEA" or "narrow claim". It reads the paper only. For linking
-  an artifact appendix's claims to its experiments, use claim-evidence-map.
+  rejected, each with its exact wording, page, and reason. A claim is one that a main result would
+  fail without, so this is the skill for finding which numbers a paper's conclusions rest on. Writes
+  claims.json and a readable claims.md, and checks every quote against the page text of the PDF. Use
+  this skill whenever someone wants to extract, list, identify, or select the claims or key
+  quantitative results of a paper PDF, prepare a paper for a claim-evidence, reproducibility, or
+  artifact check, or start a CEA chain, even if they do not say "CEA" or "narrow claim". It reads the
+  paper only, and it comes first, before any evidence is examined and even where a replication
+  package or artifact exists, because later steps assess whether that evidence supports each claim.
+  For linking an artifact appendix's claims to its experiments, use claim-evidence-map.
 license: MIT
 compatibility: Requires Python 3.10 or newer (standard library only) and pdftotext (poppler).
 ---
