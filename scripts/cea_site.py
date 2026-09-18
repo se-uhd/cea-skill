@@ -196,7 +196,7 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
 </style>
 </head>
 <body>
-  <nav id="main-nav"><span class="mark">CEA</span><a href="#papers" class="active">Papers</a>{framework_link}<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub &nearr;</a></nav>
+  <nav id="main-nav"><span class="mark">CEA</span><a href="#papers" class="active">Papers</a>{framework_link}<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub</a></nav>
   <header>
     <h1>Claim-Evidence Alignment</h1>
     <p class="subtitle">Each paper's page records the narrow claims its main results rest on, and the

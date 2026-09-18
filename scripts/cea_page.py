@@ -637,7 +637,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <span class="mark">CEA</span>
     @@HOME@@
     @@NAV_LINKS@@
-    <span class="nav-right">@@PDF_LINK@@<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub &nearr;</a></span>
+    <span class="nav-right">@@PDF_LINK@@<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub</a></span>
   </nav>
 
   <header>
