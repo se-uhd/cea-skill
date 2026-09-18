@@ -187,11 +187,13 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
   .idx td.t a {{ color: #1c1917; text-decoration: none; font-weight: 600; }}
   .idx td.t a:hover {{ text-decoration: underline; }}
   footer a {{ color: #1d4ed8; }}
+  nav .nav-repo {{ margin-left: auto; color: #1d4ed8; border-bottom: none; white-space: nowrap; }}
+  nav .nav-repo:hover {{ color: #1e40af; }}
   .idx .pid {{ font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 0.7rem; color: #a8a29e; }}
 </style>
 </head>
 <body>
-  <nav id="main-nav"><span class="mark">CEA</span><a href="#papers" class="active">Papers</a>{framework_link}</nav>
+  <nav id="main-nav"><span class="mark">CEA</span><a href="#papers" class="active">Papers</a>{framework_link}<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub &nearr;</a></nav>
   <header>
     <h1>Claim-Evidence Alignment</h1>
     <p class="subtitle">Each paper's page records the narrow claims its main results rest on, and the
