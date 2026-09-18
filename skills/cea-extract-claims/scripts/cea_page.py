@@ -343,6 +343,10 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None) ->
     watch_html = ""
     if unserved:
         items = "".join(
+            f'<li>{badge(b["id"])} <span class="question">{E(snippet(b["states"], 200))}</span>'
+            f'<p class="side">{E(_flat(b.get("note") or ""))}</p>'
+            f'<p class="side dim">The sentence it is quoted from: {E(snippet(b["quote"], 240))}</p></li>'
+            if b.get("states") and _key(b["states"]) != _key(b["quote"]) else
             f'<li>{badge(b["id"])} <span class="question">{E(snippet(b["quote"], 200))}</span>'
             f'<p class="side">{E(_flat(b.get("note") or ""))}</p></li>' for b in unserved)
         watch_html = (f'<div class="note-card"><h3>Main result{"s" if len(unserved) != 1 else ""} that no '
@@ -434,6 +438,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     .note-card p { font-size: 0.875rem; }
     .note-card .question { font-weight: 600; }
     .note-card .side { font-size: 0.85rem; color: #57534e; margin: 0.3rem 0 0 2.2rem; }
+    .note-card .side.dim { color: #a8a29e; font-family: 'Source Serif 4', Georgia, serif; }
     .note-card li + li { border-top: 1px solid #f5f5f4; padding-top: 0.5rem; margin-top: 0.5rem; }
     .note-card.scope { border-left-color: #004488; }
     .note-card li + li { border-top: 1px solid #f5f5f4; padding-top: 0.5rem; }
