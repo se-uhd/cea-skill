@@ -1313,6 +1313,38 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class Respectively(unittest.TestCase):
+    """The pairing warning stands until the record says how the pairing goes."""
+
+    def record(self, note_first=None, note_second=None):
+        data = valid_claims()
+        quote = ("Across the 48 projects, median build time and the failure rate were 4.1 minutes "
+                 "and 3%, respectively.")
+        data["claims"][0].update(quote=quote, states="Across the 48 projects, median build time was 4.1 minutes.",
+                                 note=note_first)
+        data["claims"][1].update(quote=quote, states="Across the 48 projects, the failure rate was 3%.",
+                                 note=note_second)
+        return data
+
+    def warnings(self, data):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            return "\n".join(cea_claims.advisories(d, data))
+
+    def test_it_warns_while_no_note_says_how_the_pairing_goes(self):
+        self.assertIn("respectively", self.warnings(self.record()))
+
+    def test_one_note_is_not_enough(self):
+        data = self.record(note_first="The sentence pairs them by \"respectively\".")
+        self.assertIn("respectively", self.warnings(data))
+
+    def test_it_is_silent_once_every_part_records_the_pairing(self):
+        data = self.record(note_first="The sentence pairs its items by \"respectively\", first the time.",
+                           note_second="The sentence pairs its items by \"respectively\", second the rate.")
+        self.assertNotIn("pairs items and numbers", self.warnings(data))
+
+
 class Page(unittest.TestCase):
     """The HTML page and the site that `render` and `site` write."""
 

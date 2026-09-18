@@ -883,9 +883,13 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
     for split, members in groups.items():
         quote = members[0]["quote"]
         texts = [" ".join(_fold(e["states"]).casefold().split()) for e in members]
-        if re.search(r"\brespectively\b", quote, re.I):
+        if re.search(r"\brespectively\b", quote, re.I) and not all(
+                re.search(r"\brespectively\b", e.get("note") or "", re.I) for e in members):
+            # The warning asks a person to check the pairing. Once every part's note records how
+            # the pairing goes, the check has been made and saying it again is noise.
             out.append(f"split_from '{split}': the quote pairs items and numbers with "
-                       "\"respectively\"; check that each part keeps the right pair")
+                       "\"respectively\"; check that each part keeps the right pair, and say in "
+                       "each part's note how the pairing goes")
         dropped = sorted((_words(quote) & _COMPARISON) - set().union(*(_words(e["states"]) for e in members)))
         if dropped:
             out.append(f"split_from '{split}': no part keeps {', '.join(dropped)} from the quote; check "

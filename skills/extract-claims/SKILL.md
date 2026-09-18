@@ -191,7 +191,7 @@ python3 <plugin root>/scripts/cea_claims.py validate <output directory>/<paper_i
 
 Fix every problem and run it again until it prints `CEA_VALID`. After that line, it can print `warning:` lines, for example about a quote that ends in the middle of a sentence. Read each warning, and fix the record where it is right. If a quote is not found, copy it again from `text.txt`. If it was found on another page, correct `page`. The validator also checks that the `states` of a split part uses only words from its quote. The validator warns when no part of a split statement keeps a negation of the quote. The negation words are the ones the reference's section "Splitting" lists. Keep the negation unless it belongs to a clause that is out of scope, such as a qualitative finding. It also warns about:
 
-- a split quote with "respectively"
+- a split quote with "respectively", until every part's note says how the pairing goes
 - a part that reorders numbers or loses a comparison word
 - a part that separates a negation from the word it negates
 - a quote that contains another entry's quote, which the reference's rule for a box sentence and its context expects
