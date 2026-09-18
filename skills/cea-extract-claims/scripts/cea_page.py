@@ -405,7 +405,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     nav a { text-decoration: none; color: #78716c; font-size: 0.875rem; font-weight: 500; padding: 0.25rem 0; border-bottom: 2px solid transparent; transition: all 0.15s; }
     nav a.active, nav a:hover { color: #1c1917; border-bottom-color: currentColor; }
     nav .nav-ext { margin-left: auto; color: #1d4ed8; border-bottom: none; }
-    nav .nav-home { color: #1d4ed8; }
+    nav .nav-home { color: #78716c; }
+    nav .nav-home:hover { color: #1c1917; }
     nav .nav-ext:hover { color: #1e40af; }
     nav .nav-ext.plain { color: #a8a29e; font-size: 0.8rem; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
 
