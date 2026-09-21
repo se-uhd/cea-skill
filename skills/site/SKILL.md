@@ -68,9 +68,11 @@ The pages use the framework's terms: main result, broad statement, narrow claim,
 candidate, checker, and mapping level. Every claim card carries an `M1` badge over six dots, so
 the document has to define the mapping levels and name the six links of the chain the badge shows:
 interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `--framework <file.md>` publishes the framework text as a page of the site and links
-it from every footer, so a reader has the definitions at hand. Point it at the project's own
-framework document. Do not write a summary of the framework instead: a second, shorter account of
-the rules is the thing most likely to contradict them.
+it from every footer, so a reader has the definitions at hand. Point it at
+`<plugin root>/framework.md`, which is the framework this plugin builds records against and holds
+every term the pages use. Do not write a summary of the framework instead: a second, shorter
+account of the rules is the thing most likely to contradict them, and it is the reason the
+framework and the selection rules are one document rather than two.
 
 ## Publishing
 

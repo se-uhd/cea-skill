@@ -835,7 +835,10 @@ class TheGate(unittest.TestCase):
             raise unittest.SkipTest("this is the run the gate started")
         cls.tree = Path(tempfile.mkdtemp())
         root = Path(__file__).resolve().parent.parent.parent
-        for name in ("scripts", "skills", "evals", "claims.schema.json", ".claude-plugin"):
+        # framework.md belongs here as much as the scripts do: both skills name it, so a tree
+        # without it is not a tree the gate can judge.
+        for name in ("scripts", "skills", "evals", "claims.schema.json", "framework.md",
+                     ".claude-plugin"):
             src = root / name
             if not src.exists():
                 continue
@@ -3982,6 +3985,68 @@ class ExtractionThatFailsSaysSoRatherThanPublishingPart(unittest.TestCase):
         self.assertEqual(len(set(said)), 3, f"two failures read the same: {said}")
         self.assertIn("Syntax Error: no xref", said[2],
                       "the reason poppler gave has to reach the user")
+
+
+class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
+    """The published pages stamp `M1` on every claim card and link to the framework page for what
+    it means, and the record's own vocabulary is the framework's. Nothing tied them: `--framework`
+    took any Markdown file, the framework document lived in another repository, and no script here
+    read the selection rules. The framework is one document in this repository now, so the terms
+    the pages show and the terms it defines can be held together."""
+
+    FRAMEWORK = SCRIPTS.parent / "framework.md"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = cls.FRAMEWORK.read_text(encoding="utf-8")
+        cls.folded = " ".join(cls.text.lower().split())
+
+    def test_it_defines_every_term_the_pages_use(self):
+        for term in ("main result", "broad statement", "narrow claim", "rejected candidate",
+                     "checker", "mapping level"):
+            with self.subTest(term=term):
+                self.assertIn(term, self.folded,
+                              f"the pages use {term!r} and the framework does not define it")
+
+    def test_it_names_every_link_the_claim_card_shows(self):
+        """The badge shows six dots, one per link, and the tooltip names them from LINKS."""
+        for link in cea_page.LINKS:
+            with self.subTest(link=link):
+                self.assertIn(link.lower(), self.folded,
+                              f"the card names the {link!r} link and the framework does not")
+
+    def test_it_defines_the_level_every_card_carries(self):
+        """A card stamped M1 is unreadable without the level it names."""
+        self.assertRegex(self.text, r"\|\s*M1\s*\|",
+                         "the mapping level table has no M1 row")
+        self.assertIn("M1", cea_page.chain_track())
+
+    def test_the_selection_rules_and_the_framework_are_one_document(self):
+        """Two accounts of the same rules is what contradicts them, so there is only one. The
+        selection question is the load-bearing sentence: a second copy that drifted would select
+        different claims."""
+        question = ("If this statement were false or unsupported, would a main result or key "
+                    "contribution fail or need substantial revision?")
+        self.assertEqual(self.text.count(question), 1,
+                         "the selection question has to stand exactly once")
+        skill = (SCRIPTS.parent / "skills" / "extract-claims" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn(question, skill, "the skill restates the question instead of naming it")
+        self.assertIn("framework.md", skill, "the skill has to name the framework")
+
+    def test_the_framework_still_renders_as_a_page(self):
+        """It carries tables, a fenced diagram, and a block quote, and the site's renderer covers
+        only what the document uses."""
+        import cea_site
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "site"
+            out.mkdir()
+            href = cea_site.write_framework(out, self.FRAMEWORK)
+            page = (out / "framework" / "index.html").read_text(encoding="utf-8")
+        self.assertTrue(href)
+        self.assertGreaterEqual(page.count("<table"), 6, "the tables did not render")
+        self.assertIn("<blockquote", page, "the selection question did not render")
+        self.assertIn("flowchart LR", page, "the chain diagram was dropped")
+        self.assertNotIn("GROUNDING", page, "the grounding comment reached the page")
 
 
 class WhatTheLayoutSaysThePapersHold(unittest.TestCase):
@@ -7160,6 +7225,11 @@ class Skills(unittest.TestCase):
                 named = sorted(set(re.findall(r"(?<!\w)scripts/[\w./-]+\.py", body)))
                 self.assertTrue(named, "no script reference found; check the pattern")
                 for ref in named:
+                    self.assertTrue((self.PLUGIN / ref).is_file(), f"{ref} is missing")
+                # A document both skills use sits at the plugin root beside the scripts, and the
+                # skills name it the same way. framework.md is the one account of the terms, so a
+                # skill naming a file that is not there would send the agent to a second copy.
+                for ref in sorted(set(re.findall(r"<plugin root>/([\w./-]+\.md)", body))):
                     self.assertTrue((self.PLUGIN / ref).is_file(), f"{ref} is missing")
 
 
