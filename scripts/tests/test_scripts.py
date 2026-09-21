@@ -3983,6 +3983,53 @@ class ExtractionThatFailsSaysSoRatherThanPublishingPart(unittest.TestCase):
                       "the reason poppler gave has to reach the user")
 
 
+class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
+    """Thirty places write the record's entry lists out by hand, in the scripts and in this suite.
+    A field rename leaves any of them naming a list no record holds, and a loop over a name that
+    matches nothing does not fail: it does less. behaviour.py named two of the three after format 2
+    and reported success over 250 cases where it had produced 466."""
+
+    KEYS = frozenset(cea_claims._ID_PREFIX) | {"paper"}
+
+    def sources(self):
+        for f in sorted(SCRIPTS.glob("*.py")):
+            yield f
+        yield Path(__file__).resolve()
+
+    def test_every_record_field_a_script_names_is_a_real_one(self):
+        import ast
+        # The names that were the record's lists before format 2, and any other near miss.
+        suspect = re.compile(r"^(?:broad_statements|rejected|narrow_claims|main_result|claim|"
+                             r"excluded_candidates|results)$")
+        for f in self.sources():
+            source = f.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source)
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+                    continue
+                names = [e.value for e in node.elts
+                         if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+                # a literal that names any real entry list is meant to name the record's lists
+                if not (set(names) & set(cea_claims._ID_PREFIX)):
+                    continue
+                for name in names:
+                    if name in self.KEYS:
+                        continue
+                    with self.subTest(file=f.name, line=node.lineno, name=name):
+                        self.assertFalse(
+                            suspect.match(name),
+                            f"{f.name}:{node.lineno} names {name!r} beside the record's real "
+                            f"lists; the record holds {sorted(self.KEYS)}")
+
+    def test_the_change_note_is_the_one_place_the_old_names_survive(self):
+        """The format-2 entry has to name them, since it says what changed."""
+        self.assertIn("broad_statements", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
+        self.assertIn("main_results", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
+
+
 class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
     """The published pages stamp `L1` on every claim card and link to the framework page for what
     it means, and the record's own vocabulary is the framework's. Nothing tied them: `--framework`
