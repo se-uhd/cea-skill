@@ -7,6 +7,7 @@ Run from the repository root:
 The tests on real papers read the PDFs in evals/papers/ and are skipped when the PDFs are missing.
 """
 
+import collections
 import contextlib
 import faulthandler
 from html import unescape
@@ -829,7 +830,11 @@ class NoTestCanFakeACleanRun(unittest.TestCase):
         # What a commit carries, not a list written out here. The list left out framework.md, and
         # then README.md and CLAUDE.md, each time giving the inner run a tree the tests could not
         # judge: a test that reads a document cannot fail over one that is absent.
-        listed = subprocess.run(["git", "ls-files", "-z"], cwd=root,
+        # The same listing gates.sh uses: tracked files and the untracked ones a commit would
+        # carry. Plain `git ls-files` leaves out a new script, and then a test that imports it
+        # errors in here for a reason that has nothing to do with the tree being judged.
+        listed = subprocess.run(["git", "ls-files", "--cached", "--others",
+                                 "--exclude-standard", "-z"], cwd=root,
                                 capture_output=True, text=True, timeout=120)
         names = [n for n in listed.stdout.split("\0") if n] if listed.returncode == 0 else []
         if not names:
@@ -4032,6 +4037,154 @@ class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
         """The format-2 entry has to name them, since it says what changed."""
         self.assertIn("broad_statements", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
         self.assertIn("main_results", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
+
+
+class TheSectionStripCountsWhatItShows(unittest.TestCase):
+    """The strip prints, per section of the paper, one mark per entry recorded there and a tooltip
+    counting them by kind. Inverting the count's own comparison, so each kind was counted as every
+    other kind, left the whole suite green: nothing held the tooltip against the marks."""
+
+    def record(self):
+        data = valid_claims()
+        data["main_results"] = [
+            {"id": "R1", "quote": "Caching halves median build time.", "page": 1,
+             "section": "Abstract", "source": "abstract"},
+            {"id": "R2", "quote": "Failures did not increase with caching.", "page": 1,
+             "section": "Abstract", "source": "abstract"}]
+        for c in data["claims"]:
+            c["section"] = "5 Results"
+        data["excluded"] = [
+            {"id": "E1", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+             "section": "5 Results", "reason": "Describes the data, not a result."},
+            {"id": "E2", "quote": "As Section 5 showed, caching cut build time.", "page": 2,
+             "section": "5 Results", "duplicate_of": ["R1"],
+             "reason": "Repeats the result R1 states."}]
+        return data
+
+    def strip_rows(self, html):
+        """Each section row as (section, marks by kind, tooltip)."""
+        rows = {}
+        for m in re.finditer(r'<tr><td class="sec">([^<]*)</td>.*?title="([^"]*)">'
+                             r'<div class="marks">(.*?)</div>', html, re.S):
+            sec, tip, marks = m.group(1), m.group(2), m.group(3)
+            kinds = collections.Counter(re.findall(r'class="mk (\w+)"', marks))
+            rows[sec] = (kinds, tip)
+        return rows
+
+    def test_the_tooltip_counts_the_marks_beside_it(self):
+        html = cea_page.build(self.record(), Path("claims.json"), Path("out.html"))
+        rows = self.strip_rows(html)
+        self.assertTrue(rows, "the section strip has no rows")
+        label = {"result": "main result", "claim": "claim", "candidate": "excluded claim candidate"}
+        for sec, (kinds, tip) in rows.items():
+            with self.subTest(section=sec):
+                for kind, n in kinds.items():
+                    plural = "s" if n > 1 else ""
+                    self.assertIn(f"{n} {label[kind]}{plural}", tip,
+                                  f"{sec} shows {n} {kind} mark(s) and its tooltip says {tip!r}")
+
+    def test_a_section_holding_two_kinds_counts_each(self):
+        """Abstract holds two main results and 5 Results holds two claims and two candidates."""
+        rows = self.strip_rows(cea_page.build(self.record(), Path("claims.json"),
+                                              Path("out.html")))
+        self.assertEqual(rows["Abstract"][0], collections.Counter({"result": 2}))
+        self.assertEqual(rows["5 Results"][0],
+                         collections.Counter({"claim": 2, "candidate": 2}))
+        self.assertIn("2 main results", rows["Abstract"][1])
+        self.assertIn("2 claims", rows["5 Results"][1])
+        self.assertIn("2 excluded claim candidates", rows["5 Results"][1])
+
+
+class ACandidateIsShownAgainstTheResultItWeighs(unittest.TestCase):
+    """The map puts each excluded claim candidate under the main result its reason weighs it
+    against. Inverting that test, so every candidate was shown under every result it does not
+    name, left the whole suite green."""
+
+    def record(self):
+        data = valid_claims()
+        data["main_results"].append(
+            {"id": "R2", "quote": "Failures did not increase with caching.", "page": 1,
+             "section": "Abstract", "source": "abstract"})
+        data["excluded"] = [
+            {"id": "E1", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+             "section": "4 Data", "reason": "R1 would still stand, because it describes the data."},
+            {"id": "E2", "quote": "The cache was cold on 3 of the runs.", "page": 2,
+             "section": "4 Data", "reason": "R2 would still stand, because it names no failure."}]
+        return data
+
+    def test_each_candidate_stands_under_the_result_its_reason_names(self):
+        data = self.record()
+        known = {b["id"] for b in data["main_results"]}
+        self.assertEqual(cea_page.weighed_against(data["excluded"][0], known), {"R1"})
+        self.assertEqual(cea_page.weighed_against(data["excluded"][1], known), {"R2"})
+        html = cea_page.build(data, Path("claims.json"), Path("out.html"))
+        # Which candidate stands under which result, not how many: the two are swapped by
+        # inverting the test, and a count alone cannot tell that apart.
+        rows = re.findall(r'<div class="map-row">.*?data-id="(\w+)".*?'
+                          r'(?:class="node candidates" data-reveal="\w+" title="([^"]*)")?'
+                          r'(?=<div class="map-row">|$)', html, re.S)
+        under = {}
+        for row in re.split(r'(?=<div class="map-row">)', html):
+            rid = re.search(r'class="node result[^"]*" data-id="(\w+)"', row)
+            tip = re.search(r'class="node candidates" data-reveal="\w+" title="([^"]*)"', row)
+            if rid:
+                under[rid.group(1)] = tip.group(1) if tip else ""
+        self.assertIn("R1", under, f"the map has no row for R1: {sorted(under)}")
+        self.assertIn("R2", under, f"the map has no row for R2: {sorted(under)}")
+        self.assertEqual(under["R1"], "E1",
+                         f"R1 should show only E1, the candidate its reason names; it shows "
+                         f"{under['R1']!r}")
+        self.assertEqual(under["R2"], "E2",
+                         f"R2 should show only E2, the candidate its reason names; it shows "
+                         f"{under['R2']!r}")
+
+
+class TheMutationHarnessRefusesAMeaninglessRun(unittest.TestCase):
+    """It reported 152 of 153 mutants killed once, from a run where `check.sh` could not find a
+    python new enough for its own version gate. The two tests that run the gate failed for every
+    mutant, so the number said nothing about the code. Both guards against that are held here,
+    because a measurement that cannot fail is worse than no measurement."""
+
+    def setUp(self):
+        sys.path.insert(0, str(SCRIPTS))
+        import mutants
+        self.mutants = mutants
+
+    def case(self, killers):
+        return {"module": "cea_page.py", "kind": "cmp", "n": 0, "where": "L1", "killed": killers}
+
+    def test_one_test_killing_nearly_everything_is_refused(self):
+        many = [self.case(["A.t"]) for _ in range(19)] + [self.case(["B.t"])]
+        self.assertEqual(self.mutants.one_test_dominates(many), ("A.t", 19))
+
+    def test_a_spread_of_killers_is_not_refused(self):
+        spread = [self.case([f"T{i}.t"]) for i in range(20)]
+        self.assertIsNone(self.mutants.one_test_dominates(spread))
+
+    def test_survivors_alone_are_not_refused(self):
+        """Nothing killed is a coverage result, not a fault in the run."""
+        self.assertIsNone(self.mutants.one_test_dominates([self.case([]) for _ in range(20)]))
+        self.assertIsNone(self.mutants.one_test_dominates([]))
+
+    def test_the_environment_it_builds_carries_pdftotext_when_there_is_one(self):
+        """The run that measured nothing had a PATH without it, and without a modern python."""
+        built = self.mutants.env()["PATH"].split(":")
+        self.assertIn(str(Path(sys.executable).parent), built,
+                      "the interpreter running the suite has to be on the PATH it builds")
+        found = shutil.which("pdftotext")
+        if found:
+            self.assertTrue(any(str(Path(found).parent) == d for d in built),
+                            f"pdftotext is at {found} and the PATH it builds is {built}")
+
+    def test_a_mutation_changes_exactly_one_decision(self):
+        source = "def f(a, b):\n    return a > b and a == 1\n"
+        first, where = self.mutants.mutate(source, "cmp", 0)
+        self.assertIn("a >= b", first)
+        self.assertIn("a == 1", first, "the second comparison must be left alone")
+        self.assertTrue(where)
+        second, _ = self.mutants.mutate(source, "cmp", 1)
+        self.assertIn("a > b", second)
+        self.assertIn("a != 1", second)
 
 
 class EveryFlagTheDocsShowIsOneTheCommandTakes(unittest.TestCase):
