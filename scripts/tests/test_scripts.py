@@ -810,7 +810,7 @@ class TheSumAdvisory(unittest.TestCase):
         self.assertNotIn("add up to", out)
 
 
-class TheGate(unittest.TestCase):
+class NoTestCanFakeACleanRun(unittest.TestCase):
     """`scripts/check.sh` is the only step CI runs, and nothing exercised it.
 
     A test runs in the same interpreter as the runner, so it can take the exit status, rewrite the
@@ -891,7 +891,11 @@ class TheGate(unittest.TestCase):
         self.assertNotEqual(code, 0, out[-600:])
 
 
-class TheSumAdvisoryResidue(unittest.TestCase):
+class ASumIsCheckedAgainstTheNumberTheNoteNames(unittest.TestCase):
+    """The advisory adds a note's values up against the number the note says they are the parts of,
+    so it has to find that number and no other. An entry id and a second quantity in the same note
+    both read as a total once."""
+
     def check(self, note):
         data = valid_claims()
         data["rejected"][0]["note"] = note
@@ -920,7 +924,7 @@ class TheSumAdvisoryResidue(unittest.TestCase):
             "Table 2 prints the parts of the sentence's 1,203 and no total: 700 and 403."))
 
 
-class TheDocumentedReasonShapes(unittest.TestCase):
+class EveryGroundTheFrameworkGivesPassesTheReasonCheck(unittest.TestCase):
     """Every ground the reference prescribes has to pass the check that reads a reason."""
 
     def warns(self, reason):
@@ -3833,7 +3837,7 @@ class AQuoteWithManyMarkers(unittest.TestCase):
         self.assertLess(worst, 1.0, f"an unmatched quote took {worst:.2f}s")
 
 
-class TheGateFailsWhenAReleaseNeedsThePapers(unittest.TestCase):
+class ARunThatSkippedFailsAReleaseCheck(unittest.TestCase):
     """`CEA_REQUIRE_PAPERS=1` is the documented release mode, and nothing covered the branch that
     makes a skipping run fail. It could never pass at all until the variable stopped leaking into
     the inner gate run, so the branch had never been exercised either way."""
