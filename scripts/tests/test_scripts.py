@@ -4030,6 +4030,44 @@ class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
         self.assertIn("main_results", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
 
 
+class EveryFlagTheDocsShowIsOneTheCommandTakes(unittest.TestCase):
+    """README.md told a reader to run `site ... --framework <framework.md>` after the option was
+    removed, which fails at the argument parser. A document that shows a command is the one place a
+    reader copies it from."""
+
+    COMMANDS = ("check-env", "extract", "validate", "render", "site", "schema")
+
+    def accepted(self, command):
+        done = subprocess.run([sys.executable, str(SCRIPTS / "cea_claims.py"), command, "--help"],
+                              capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        return set(re.findall(r"(--[a-z][a-z-]*)", done.stdout))
+
+    def test_no_document_shows_a_flag_the_command_rejects(self):
+        takes = {c: self.accepted(c) for c in self.COMMANDS}
+        shown = 0
+        for md in sorted(SCRIPTS.parent.rglob("*.md")):
+            if any(part in (".git", "cea-extract-claims-workspace") for part in md.parts):
+                continue
+            # A usage block continues over a backslash, which is where the skills put the flags.
+            text = re.sub(r"\\\n\s*", " ", md.read_text(encoding="utf-8"))
+            for m in re.finditer(r"cea_claims\.py\s+(" + "|".join(self.COMMANDS) + r")\b([^\n`]*)",
+                                 text):
+                command, rest = m.group(1), m.group(2)
+                for flag in re.findall(r"(--[a-z][a-z-]*)", rest):
+                    shown += 1
+                    with self.subTest(doc=md.name, command=command, flag=flag):
+                        self.assertIn(flag, takes[command],
+                                      f"{md.name} shows `{command} {flag}`, which it does not take")
+        self.assertGreaterEqual(shown, 4, f"only {shown} documented flag(s) were found, so the pattern has stopped matching the usage blocks")
+
+    def test_every_command_the_docstring_lists_can_be_run(self):
+        """The module docstring is the list a reader scans first."""
+        listed = set(re.findall(r"^  ([a-z][a-z-]+) ", cea_claims.__doc__, re.M))
+        self.assertEqual(listed, set(self.COMMANDS),
+                         "the docstring and this test disagree about the commands")
+
+
 class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
     """The terms retired at format 2 kept turning up after the rename: in the site skill's own list
     of the terms the pages use, in the validator's messages, and in `evals/`, where the graders are

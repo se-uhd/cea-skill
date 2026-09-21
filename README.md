@@ -22,12 +22,14 @@ The scripts, in `scripts/` at the root of the plugin and shared by both skills, 
 
 ## The site
 
-`cea_claims.py site <paper directory> ... --out _site --framework <framework.md>` builds a static site from a set of claim records: one page per paper, an index listing them, and the framework text as a page that the footers link. [se-uhd/cea-website](https://github.com/se-uhd/cea-website) holds the published records and runs this in CI, pinned to a tag of this plugin. An entry whose reason still says it is unsure stops the build, because a reader cannot tell an open question from a decision.
+`cea_claims.py site <paper directory> ... --out _site` builds a static site from a set of claim records: one page per paper, an index listing them, and the framework text as a page that the footers link. The framework is the plugin's own `skills/extract-claims/references/framework.md`, so there is nothing to pass and no way to publish a site whose pages define none of the terms they use. [se-uhd/cea-website](https://github.com/se-uhd/cea-website) holds the published records and runs this in CI, pinned to a tag of this plugin. An entry whose reason still says it is unsure stops the build, because a reader cannot tell an open question from a decision.
 
 ## Tests
 
 ```sh
-python3 -m unittest discover scripts/tests
+sh scripts/gates.sh
 ```
 
-The tests that read real papers use the PDFs in `evals/papers/`, which are not committed. These tests are skipped when the PDFs are missing.
+That runs every check twice: once over a fresh clone, holding only what a commit carries, and once over the working tree in release mode, where the papers have to be present and no skipped test is tolerated. `python3 -m unittest discover scripts/tests` is the quick pass while working.
+
+The tests that read real papers use the PDFs in `evals/papers/`, which are not committed, and need `pdftotext` on `PATH`. They skip without either.
