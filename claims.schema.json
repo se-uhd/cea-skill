@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CEA claim record",
+  "description": "The record that the extract-claims skill writes for one paper. cea_claims.py validate checks everything this schema cannot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "broad_statements",
+    "claims",
+    "paper",
+    "rejected"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": 1,
+      "description": "The record format this record is written in. A record without it is read as format 1, which every record written before the stamp is."
+    },
+    "paper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "pages",
+        "pdf",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "maxLength": 200
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pdf": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "broad_statements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "page",
+          "quote",
+          "section",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^B\\d+$"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "string",
+                "pattern": "^\\d+-\\d+$"
+              }
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          },
+          "section": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "enum": [
+              "abstract",
+              "contributions",
+              "rq_answer",
+              "conclusion",
+              "other"
+            ]
+          },
+          "states": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "page",
+          "quote",
+          "section",
+          "selection_reason",
+          "serves",
+          "split_from",
+          "states"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^C\\d+$"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "string",
+                "pattern": "^\\d+-\\d+$"
+              }
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          },
+          "section": {
+            "type": "string",
+            "minLength": 1
+          },
+          "selection_reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serves": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^B\\d+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "split_from": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "pattern": "^S\\d+$"
+              }
+            ]
+          },
+          "states": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "page",
+          "quote",
+          "reason",
+          "section"
+        ],
+        "properties": {
+          "breaks_down": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^B\\d+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "duplicate_of": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[BCR]\\d+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^R\\d+$"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "string",
+                "pattern": "^\\d+-\\d+$"
+              }
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "section": {
+            "type": "string",
+            "minLength": 1
+          },
+          "split_from": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "pattern": "^S\\d+$"
+              }
+            ]
+          },
+          "states": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

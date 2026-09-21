@@ -1,0 +1,30 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor the skills promise in their compatibility field, and a current release.
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install pdftotext
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Install skills-ref
+        # skills-ref requires Python 3.11+; check.sh reports it as skipped when absent.
+        if: matrix.python != '3.10'
+        run: pip install "skills-ref @ git+https://github.com/agentskills/agentskills#subdirectory=skills-ref"
+      - name: Run every check
+        run: sh scripts/check.sh

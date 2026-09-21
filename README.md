@@ -14,11 +14,15 @@ Claude Code skills for Claim-Evidence Alignment (CEA). CEA reconstructs the chai
 /plugin install cea-skill@cea-skill
 ```
 
-The scripts, in `scripts/` at the root of the plugin and shared by both skills, need Python 3.10 or newer (standard library only) and `pdftotext` from poppler (`brew install poppler` or `apt-get install poppler-utils`).
+The scripts, in `scripts/` at the root of the plugin and shared by both skills, need Python 3.10 or newer (standard library only) and `pdftotext` from poppler (`brew install poppler` or `apt-get install poppler-utils`). Both skills call those shared scripts, so a `skills/<name>/` directory copied on its own does not run. Install the plugin.
+
+## The record
+
+`claims.json` holds the record for one paper. `cea_claims.py schema` prints its JSON Schema, generated from the field definitions in the script itself. `claims.schema.json` at the repository root is that file. A checker editing a record by hand can point their editor at it, with `"$schema"` set to the file's absolute path or URL. The path is local either way: `site` republishes `claims.json` without the `$schema` key, so whatever a checker sets never reaches a reader. `cea_claims.py validate` checks everything a schema cannot, such as whether each quote stands on its page.
 
 ## The site
 
-`cea_claims.py site <paper directory> ... --out _site --framework <framework.md>` builds a static site from a set of claim records: one page per paper, an index listing them, and the framework text as a page that the footers link. [se-uhd/cea-website](https://github.com/se-uhd/cea-website) holds the published records and runs this in CI, pinned to a tag of this plugin. A record whose reason still says "Unsure" stops the build, because a reader cannot tell an open question from a decision.
+`cea_claims.py site <paper directory> ... --out _site --framework <framework.md>` builds a static site from a set of claim records: one page per paper, an index listing them, and the framework text as a page that the footers link. [se-uhd/cea-website](https://github.com/se-uhd/cea-website) holds the published records and runs this in CI, pinned to a tag of this plugin. An entry whose reason still says it is unsure stops the build, because a reader cannot tell an open question from a decision.
 
 ## Tests
 

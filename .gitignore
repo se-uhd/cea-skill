@@ -1,5 +1,7 @@
 # Test papers are third-party PDFs and stay local.
 evals/papers/
+# `claude plugin eval` run artifacts, including judge reasoning and cost data.
+evals/results/
 # Skill Creator eval runs.
 *-workspace/
 # Default output directory of cea_claims.py extract.

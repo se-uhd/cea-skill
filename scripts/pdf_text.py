@@ -118,18 +118,29 @@ class Extraction:
     references: tuple[int, int | None] | None
     # Whether the paper sets its body in two columns anywhere.
     two_column: bool = False
+    # What pdftotext said while reading the file, where it said anything.
+    unreadable: str = ""
     # The page where the text starts again, when the removal stopped there instead of running on.
     resumed: int | None = None
 
 
 # --- Text layer ---
 
-def _pages(pdf_path: str) -> list[str]:
+def _pages(pdf_path: str) -> tuple[list[str], str]:
+    """The pages of the PDF as text, and what pdftotext said about reading it.
+
+    A damaged PDF makes poppler report on stderr and exit 0 all the same, with the pages it could
+    not read left out. Every later page then carries the number of a page it is not, so the second
+    value is given to the caller rather than dropped.
+    """
     try:
-        out = subprocess.run(["pdftotext", "-layout", pdf_path, "-"], capture_output=True,
-                             encoding="utf-8", errors="replace", check=True).stdout
+        done = subprocess.run(["pdftotext", "-layout", pdf_path, "-"], capture_output=True,
+                              encoding="utf-8", errors="replace", check=True, timeout=300)
+        out, said = done.stdout, (done.stderr or "").strip()
     except FileNotFoundError:
         raise RuntimeError("pdftotext not found; install poppler (e.g. `brew install poppler`)")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"pdftotext did not finish reading {pdf_path} within five minutes")
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"pdftotext failed: {(e.stderr or '').strip() or e}")
     pages = out.split("\x0c")
@@ -137,7 +148,7 @@ def _pages(pdf_path: str) -> list[str]:
     # the document stays, because dropping it would shift every later page number.
     if pages and not pages[-1].strip():
         pages.pop()
-    return pages
+    return pages, said
 
 
 # --- Running headers, footers, and page numbers ---
@@ -345,6 +356,22 @@ def _blank_at(line: str, c: int) -> bool:
     return all(k >= len(line) or line[k] == " " for k in range(c - 1, c + 2))
 
 
+def _centred_across(line: str, width: int) -> bool:
+    """Whether `line` is one run of text centred on the page, with a margin on both sides.
+
+    A title, an author list, an affiliation or a centred heading looks like this. Two columns of
+    prose do not: their text reaches both edges of the page. Such a line has to stay whole, because
+    every character between its two margins is text, so a cut anywhere inside it breaks a word.
+    """
+    text = line.rstrip()
+    start = len(text) - len(text.lstrip())
+    if not text.strip() or width <= 0:
+        return False
+    margin = 0.1 * width
+    return (start > margin and len(text) < width - margin
+            and abs(start + (len(text) - start) / 2 - width / 2) <= margin)
+
+
 def _captions_across(lines: list[str], blank: list[bool]) -> list[bool]:
     """Lines of a caption that runs across the candidate gutter: a crossing line that starts with
     "Figure 2." or "TABLE V", and the crossing lines right after it. A two-column region must not
@@ -386,6 +413,67 @@ def _cell_gaps(line: str, c: int) -> int:
     return sum(1 for m in _WIDE_GAP.finditer(line) if not m.start() + 1 <= c < m.end())
 
 
+def _centred_over(indent: int, length: int, width: int, below: list[str], c: int) -> bool:
+    """Whether a caption at `indent` is centred on the page, or on the table below it.
+
+    A full-width table is announced by a caption centred above it. The page may hold a line wider
+    than the table, so the page's own width is not always what the caption is centred on: the rows
+    of the table are. Only the lines that reach across the gutter are measured, because a line of
+    body text beside another column is not part of the table and is wider than all of it.
+
+    Either measure will do, because a caption inside one column is centred on neither.
+    """
+    middle = indent + length / 2
+    if abs(middle - width / 2) <= 0.1 * width:
+        return True
+    # A caption of two lines, "TABLE III" over its title, is centred on one axis with the title.
+    # The page can hold a line wider than the table, so its own middle is not always that axis.
+    title = next((l for l in below if l.strip()), "")
+    if title:
+        start = len(title) - len(title.lstrip())
+        end = len(title.rstrip())
+        # Wide, so that a caption centred over one column of a two-column page is not taken for
+        # one centred over the whole of it: the title of a full-width table reaches across most
+        # of the page.
+        if (end - start > 0.5 * width
+                and abs(middle - (start + end) / 2) <= 0.1 * width):
+            return True
+    across = [l for l in below if l.strip() and not _blank_at(l, c)]
+    if len(across) < 2:
+        return False
+    left = min(len(l) - len(l.lstrip()) for l in across)
+    right = max(len(l.rstrip()) for l in across)
+    return right - left > 0.3 * width and abs(middle - (left + right) / 2) <= 0.1 * (right - left)
+
+
+def _spans_with_cells(line: str, c: int) -> bool:
+    """Whether `line` is a row of a full-width table with one cell boundary.
+
+    A table of two columns, such as a name beside its description, has one gap per row. Two columns
+    of body text also have one gap, at the gutter, and that is the difference: their gap is where
+    this line has text. A row that reaches across the gutter and keeps a cell apart somewhere else
+    is full-width content, and cutting the page through it would break a word.
+
+    The gap may fall on either side. A table with a long label and a short value at the right
+    margin keeps its only gap right of the gutter, and requiring the left side cut those rows in
+    half. Justified prose can stretch a gap on either side too, so the side settles nothing.
+    """
+    return not _blank_at(line, c) and _cell_gaps(line, c) >= 1
+
+
+def _keeps_the_cells(line: str, c: int, cells: set[int]) -> bool:
+    """Whether `line` is another row of a table whose cells are already known.
+
+    A row of a full-width table can have a cell boundary that falls on the gutter, and that gap is
+    the one `_cell_gaps` leaves out, so such a row counts one gap and reads as body text. It is
+    still a row when it keeps a boundary the table has already used: a line of prose beside another
+    column has no reason to break where the table's cells break.
+    """
+    gaps = list(_WIDE_GAP.finditer(line))
+    return (len(gaps) >= 2 and any(m.start() + 1 <= c < m.end() for m in gaps)
+            and any(abs(m.end() - x) <= 1 for m in gaps for x in cells))
+
+
 # How long the last cell of a row may be where it stands alone right of the gutter.
 _LAST_CELL = 15
 # What the last column of a table holds where nothing lines up with it: a count or a measurement.
@@ -423,14 +511,21 @@ def _last_cell_row(region: list[str], i: int, c: int) -> bool:
     return bool(_LAST_CELL_VALUE.match(last))
 
 
-def _row_follows(lines: list[str], j: int, c: int, lookahead: int = 3) -> bool:
+def _row_follows(lines: list[str], j: int, c: int, lookahead: int = 3,
+                 cells: set[int] | None = None) -> bool:
     """Whether one of the next `lookahead` non-blank lines after line `j` is a table row. A short
-    label inside a table, such as a category name on a line of its own, then does not end it."""
+    label inside a table, such as a category name on a line of its own, then does not end it.
+
+    A row whose cell boundary falls on the gutter counts too, where the table's own boundaries are
+    known: those rows are the ones `_cell_gaps` cannot see, and a run of them would otherwise end
+    the table at the first line that is not a row of its own.
+    """
     seen = 0
     for line in lines[j + 1:]:
         if not line.strip():
             continue
-        if _cell_gaps(line, c) >= 2:
+        if (_cell_gaps(line, c) >= 2 or _spans_with_cells(line, c)
+                or (cells and _keeps_the_cells(line, c, cells))):
             return True
         seen += 1
         if seen >= lookahead:
@@ -454,19 +549,24 @@ def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, 
         # Judge the caption by its own text, because the same line can also hold text of the other
         # column or the caption of a second table beside it.
         caption = re.split(r"\s{3,}", text)[0]
-        if text and _TABLE_CAPTION.match(text) and abs(indent + len(caption) / 2 - width / 2) <= 0.1 * width:
+        if text and _TABLE_CAPTION.match(text) and _centred_over(indent, len(caption), width,
+                                                                lines[i + 1:i + 9], c):
             rows, end, j, cells = 0, i + 1, i + 1, set()
             while j < len(lines):
                 line = lines[j]
                 if line.strip():
                     right = re.search(r"\S", line[c:]) if len(line) > c else None
                     right_start = c + right.start() if right else None
-                    if _cell_gaps(line, c) >= 2:
+                    if (_cell_gaps(line, c) >= 2 or _keeps_the_cells(line, c, cells)
+                            or _spans_with_cells(line, c)):
                         rows += 1
                         cells.update(m.end() for m in _WIDE_GAP.finditer(line))
                     elif _blank_at(line, c) and not (
-                            # A category label on a line of its own, followed by more rows.
-                            (len(line.strip()) <= 30 and _row_follows(lines, j, c))
+                            # A line inside the table that is not a row of its own: a category
+                            # label, or the rest of a cell that ran over. Another row right after
+                            # it says the table has not ended. Body text below the table has no
+                            # row after it, so the table still ends where it ends.
+                            _row_follows(lines, j, c, cells=cells)
                             # The next line of a row with a right half that continues a cell. It follows
                             # the row directly, and its right text starts where a cell starts, well
                             # right of the gutter, where a right column of body text would not start.
@@ -571,8 +671,11 @@ def _layout(lines: list[str], known: int | None = None, allowed: set[int] | None
     # title or author block at either end of the region. Cutting such a line would break a word and
     # move its end far from its start. A line of prose is cut at the gutter as usual, or the two
     # columns would run into each other.
+    page_width = max((len(l.rstrip()) for l in lines if l.strip()), default=0)
     whole = [_last_cell_row(region, i, g)
-             or (not _blank_at(l, g) and (_spanning_row(l, g) or i < 3 or i >= len(region) - 3))
+             or (not _blank_at(l, g) and (_spanning_row(l, g) or _spans_with_cells(l, g)
+                                          or i < 3 or i >= len(region) - 3
+                                          or _centred_across(l, page_width)))
              for i, l in enumerate(region)]
     left = [l.rstrip() if w else l[:g].rstrip() for l, w in zip(region, whole)]
     right = ["" if w else l[g:].rstrip() for l, w in zip(region, whole)]
@@ -634,6 +737,24 @@ def _table_line(line: str) -> bool:
     return len(_WIDE_GAP.findall(line)) >= 2
 
 
+def _last_cell_of_a_row(line: str, at: int) -> bool:
+    """Whether the number at `at` is the last cell of a table row rather than a line number.
+
+    A table of two columns, such as a study beside its year, counts up down its last column just as
+    line numbers do, and has one gap per row where `_table_line` looks for two. What stands before
+    the gap tells them apart: a cell holds a few words, and the line of prose that a line number
+    follows holds a sentence.
+    """
+    before = line[:at].rstrip()
+    # The gap is the spaces right before the number, so it has to be measured there: searching
+    # `line[:at]` for a gap between two characters cannot see one whose right side is the number.
+    return bool(re.search(r"\S\s{3,}$", line[:at])) and len(before.split()) <= _CELL_WORDS
+
+
+# How many words stand before the gap in a table row, rather than in a line of prose.
+_CELL_WORDS = 5
+
+
 def _counted_numbers(lines: list[str]) -> dict[int, int]:
     """Line numbers at the end of lines, with or without a space before them, as {line index:
     number}. pdftotext can put the line numbers of the right column at the end of the left
@@ -651,7 +772,8 @@ def _counted_numbers(lines: list[str]) -> dict[int, int]:
         decimal = before[-1:] in (".", ",") and before[-2:-1].isdigit()
         # A word that ends in a digit, such as "Qwen2", must not seed a run of line numbers.
         label = (w := _GLUED_END.search(line)) and w.group(1)[:1].isupper()
-        digits.append("" if not m or decimal or label or _table_line(line) else m.group(1))
+        digits.append("" if not m or decimal or label or _table_line(line)
+                      or _last_cell_of_a_row(line, m.start(1)) else m.group(1))
     found: dict[int, int] = {}
     k = 0
     while k < len(nb):
@@ -973,8 +1095,15 @@ def _heading_key(line: str) -> str:
 
 
 def _is_references_heading(line: str) -> bool:
+    """Whether `line` is the heading of a bibliography.
+
+    Not one written with a colon: a section heading does not carry one, while a prompt that a paper
+    quotes says "References:" before showing an entry, and taking that for the paper's own would
+    remove every claim printed after it.
+    """
     text = line.strip()
-    return 0 < len(text) <= 40 and not text.endswith(".") and _heading_key(line) in _REFERENCE_HEADINGS
+    return (0 < len(text) <= 40 and not text.endswith((".", ":"))
+            and _heading_key(line) in _REFERENCE_HEADINGS)
 
 
 def _next_lines(pages: list[Page], pi: int, li: int, n: int) -> list[str]:
@@ -989,6 +1118,22 @@ def _next_lines(pages: list[Page], pi: int, li: int, n: int) -> list[str]:
     return out
 
 
+def _entries_follow(following: list[str]) -> bool:
+    """Whether the lines below read as bibliography entries rather than an ordinary numbered list.
+
+    "1. How many years have you reviewed code?" opens a survey instrument in an appendix and looks
+    like "1. A. Smith, ..." to `_BIB_ENTRY`. An entry also carries what an entry carries: a link, a
+    page range, a volume, a venue, or a year.
+    """
+    return any(_BIB_ENTRY.match(l) and (_BIB_LOOK.search(l) or not re.match(r"^\s*\d{1,3}\.", l))
+               for l in following)
+
+
+def _bibliography_follows(pages: list[Page], pi: int, li: int) -> bool:
+    """Whether a bibliography follows this heading."""
+    return any(_BIB_ENTRY.match(x) for x in _next_lines(pages, pi, li, 12))
+
+
 def _is_appendix_heading(line: str, following: list[str]) -> bool:
     """Whether `line`, after the bibliography, starts an appendix. A heading labeled with a letter,
     as in "A Additional Results" or "B Details for RQ1", counts only if it does not end or read like
@@ -1001,7 +1146,7 @@ def _is_appendix_heading(line: str, following: list[str]) -> bool:
     rest = _LETTER_LABEL.sub("", text)
     if _heading_key(text).startswith(_APPENDIX_HEADINGS) or _heading_key(rest).startswith(_APPENDIX_HEADINGS):
         return True
-    if (len(text) <= 60 and not text.endswith((".", ",")) and not any(_BIB_ENTRY.match(l) for l in following)
+    if (len(text) <= 60 and not text.endswith((".", ",")) and not _entries_follow(following)
             and not re.search(r"https?:|doi|\bpp\.|\bvol\.|\bProc\b|\(\d{4}\)", text, re.I)
             and (_heading_key(text).startswith(_APPENDIX_WORDS)
                  or _heading_key(rest).startswith(_APPENDIX_WORDS))):
@@ -1011,7 +1156,7 @@ def _is_appendix_heading(line: str, following: list[str]) -> bool:
         return False
     return (rest != text and len(text) <= 60 and not text.endswith((".", ","))
             and not re.search(r"https?:|doi|\bpp\.|\bvol\.|\bProc\b|\(\d{4}\)", text, re.I)
-            and not any(_BIB_ENTRY.match(l) for l in following))
+            and not _entries_follow(following))
 
 
 # What a line of a bibliography carries: a link, a page range, a volume, a venue, or a year.
@@ -1033,13 +1178,12 @@ def _stands_early(pages: list[Page], pi: int, li: int, share: float = 2 / 3) -> 
 def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None:
     """Where the bibliography that starts at line `li` of page `pi` gives way to running text again.
 
-    Removal runs to the end of the paper, because a bibliography is the last thing a paper prints,
-    and an author biography set after the bibliography is removed with it. Where the heading stands
-    early, the bibliography is not the tail of the paper: the columns of its page can interleave, or
-    an appendix heading can go unrecognized, and removing everything after it would take the body
-    with it. A run of lines
-    carrying none of the marks of a bibliography entry ends the removal there. Keeping a few entries
-    leaves a little noise in `text.txt`, while removing the body would lose text the paper needs."""
+    Removal would otherwise run to the end of the paper, because a bibliography is the last thing
+    a paper prints. It is not always: the columns of its page can interleave, an appendix heading
+    can go unrecognized, and a paper about prompting prints "References:" inside a prompt it
+    quotes, anywhere at all. A run of lines carrying none of the marks of a bibliography entry ends
+    the removal there. Keeping a few entries leaves a little noise in `text.txt`, while removing the
+    body would lose text the paper needs."""
     run: tuple[int, int] | None = None
     seen = 0
     for pj in range(pi, len(pages)):
@@ -1047,7 +1191,11 @@ def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None
             line = pages[pj].lines[lj]
             if not line.strip():
                 continue
-            if _BIB_ENTRY.match(line) or _BIB_LOOK.search(line):
+            # The same rule `_is_appendix_heading` uses: a numbered line is a bibliography entry
+            # only where it carries what an entry carries. An appendix opening with a numbered
+            # questionnaire would otherwise reset this run at every item, and the removal would
+            # never stop, taking the appendix's own results with it.
+            if _entries_follow([line]) or _BIB_LOOK.search(line):
                 run, seen = None, 0
                 continue
             run = run or (pj, lj)
@@ -1060,10 +1208,15 @@ def _text_resumes(pages: list[Page], pi: int, li: int) -> tuple[int, int] | None
 def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
     """Blank everything from the first References heading that a bibliography entry follows, to
     the next appendix heading or the end. Author biographies after an IEEE bibliography are removed
-    with it."""
+    with it.
+
+    A heading written with a colon is not one: a paper about prompting quotes a prompt that says
+    "References:", and taking that for the paper's own would remove everything after it."""
+    # The first heading a bibliography follows. A later one belongs to an appendix, and removing
+    # from there would take the appendix's own results with it while leaving the paper's real
+    # bibliography in the text, where its entries read as sentences of this paper.
     start = next(((pi, li) for pi, p in enumerate(pages) for li, l in enumerate(p.lines)
-                  if _is_references_heading(l)
-                  and any(_BIB_ENTRY.match(x) for x in _next_lines(pages, pi, li, 12))), None)
+                  if _is_references_heading(l) and _bibliography_follows(pages, pi, li)), None)
     if start is None:
         return None
     pi, li = start
@@ -1071,7 +1224,8 @@ def _drop_references(pages: list[Page]) -> tuple[int, int | None] | None:
                 for lj in range(li + 1 if pj == pi else 0, len(pages[pj].lines))
                 if pages[pj].lines[lj].strip()
                 and _is_appendix_heading(pages[pj].lines[lj], _next_lines(pages, pj, lj, 12))), None)
-    # Only where the heading stands early: see `_stands_early`.
+    # Only where the heading stands early: see `_stands_early`. A heading in the last third is the
+    # paper's own, and the biographies after it go with it.
     resumes = _text_resumes(pages, pi, li) if _stands_early(pages, pi, li) else None
     stop = min([x for x in (end, resumes) if x], default=(len(pages) - 1, len(pages[-1].lines)))
     # The page reported is the one the removal reached, which is the appendix heading only where the
@@ -1163,7 +1317,7 @@ def _read_pages(page_lines: list[list[str]]) -> tuple[list[Page], bool]:
 
 
 def extract(pdf_path: str) -> Extraction:
-    raw = _pages(pdf_path)
+    raw, said = _pages(pdf_path)
     headers = _running_headers(raw)
     page_lines = [[l.rstrip() for l in text.split("\n")] for text in raw]
     numbers = _page_number_lines(page_lines)
@@ -1177,11 +1331,18 @@ def extract(pdf_path: str) -> Extraction:
     pages, two_column = _read_pages(page_lines)
     references = _drop_references(pages)
     resumed = next((p.number for p in pages if p.resumed), None)
-    return Extraction(pages, lineno, references, two_column, resumed)
+    return Extraction(pages, lineno, references, two_column, said, resumed)
+
+
+PAGE_MARKER = re.compile(r"^=== page (\d{1,6}) ===$")
 
 
 def to_text(extraction: Extraction) -> str:
-    """The pages as text, each after a `=== page N ===` line, with runs of blank lines collapsed."""
+    """The pages as text, each after a `=== page N ===` line, with runs of blank lines collapsed.
+
+    A body line that reads as a page marker is indented by one space, so that the paper's own text
+    cannot open a page of its own.
+    """
     out: list[str] = []
     for p in extraction.pages:
         out.append(f"=== page {p.number} ===")
@@ -1193,7 +1354,10 @@ def to_text(extraction: Extraction) -> str:
                     out.append("")
                 previous_blank = True
                 continue
-            out.append(line)
+            # A paper that prints this exact shape in its body would otherwise start a new page
+            # in text.txt, and everything recorded for the real page would be read as that one's.
+            # One space keeps the words and stops the marker.
+            out.append(" " + line if PAGE_MARKER.match(line) else line)
             previous_blank = False
         if out and out[-1] == "":
             out.pop()

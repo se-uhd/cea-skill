@@ -1,0 +1,191 @@
+"""What the scripts say about a wide set of records, in one comparable file.
+
+Every regression this codebase has shipped passed the whole test suite and changed no verdict on
+the 30 real records. Both signals are blind to it, because a test asks about the case it was
+written for and the corpus holds only the shapes its authors happened to write. The signal that
+was missing is a differential one: run everything over a large, deliberately varied set of
+records, write down every answer, and after a change look at what moved.
+
+    python3 scripts/behaviour.py --out before.json     # on the tree as it stands
+    ... make a change ...
+    python3 scripts/behaviour.py --diff before.json    # every answer that moved, and why
+
+A move is not a failure. It is the question to answer: did I mean to change this? An unintended
+move is a regression, found in seconds rather than in the next review round.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import io
+import json
+import re
+import sys
+import tempfile
+from contextlib import redirect_stdout
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cea_claims as C  # noqa: E402
+import cea_page as P  # noqa: E402
+
+WORKSPACE = Path(__file__).resolve().parent.parent / "skills" / "cea-extract-claims-workspace"
+
+
+def seeds():
+    """Every real record, as the starting point for the cases."""
+    for path in sorted(WORKSPACE.rglob("claims.json")):
+        record = path.parent
+        if not (record / "text.txt").is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and "paper" in data:
+            yield str(record.relative_to(WORKSPACE)), record, data
+
+
+def _entries(data):
+    for key in ("broad_statements", "claims", "rejected"):
+        for i, e in enumerate(data.get(key, [])):
+            if isinstance(e, dict):
+                yield key, i, e
+
+
+def variants(data):
+    """The record as it stands, and a set of one-field edits across the whole field space.
+
+    Each edit is a shape a record could really take, not a random mutation: the point is to ask
+    the scripts a wide range of questions, not to fuzz them.
+    """
+    yield "as recorded", data
+    edits = [
+        ("title dropped", lambda d: d["paper"].update(title="A Title The Paper Does Not Print")),
+        ("format dropped", lambda d: d.pop("format", None)),
+        ("pdf renamed", lambda d: d["paper"].update(pdf="somewhere-else.pdf")),
+    ]
+    for name, edit in edits:
+        one = copy.deepcopy(data)
+        try:
+            edit(one)
+        except Exception:  # a record without that field
+            continue
+        yield name, one
+
+    # One edit per field that reaches the page, on the first entry of each kind.
+    seen = set()
+    for key, i, e in _entries(data):
+        if key in seen:
+            continue
+        seen.add(key)
+        for field in ("states", "section", "source", "note", "reason", "selection_reason"):
+            if field not in e:
+                continue
+            one = copy.deepcopy(data)
+            target = one[key][i]
+            if field == "section":
+                target[field] = "IX Some Other Section"
+            elif field == "source":
+                target[field] = "rq_answer" if target[field] != "rq_answer" else "abstract"
+            elif field == "states":
+                target[field] = " ".join(reversed(str(target[field]).split()))
+            else:
+                target[field] = "Changed."
+            yield f"{key}[{i}].{field}", one
+        for field, value in (("duplicate_of", ["B1"]), ("breaks_down", ["B1"]),
+                             ("split_from", "S9")):
+            if key == "broad_statements":
+                continue
+            one = copy.deepcopy(data)
+            one[key][i][field] = value
+            yield f"{key}[{i}].{field} added", one
+
+
+def answers(record: Path, data: dict) -> dict:
+    """Everything the scripts say about one record."""
+    out: dict[str, object] = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        here = Path(tmp)
+        (here / "text.txt").write_bytes((record / "text.txt").read_bytes())
+        (here / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+        problems, parsed = C.validate(here)
+        out["problems"] = sorted(problems)
+        if problems or parsed is None:
+            return out
+        out["warnings"] = sorted(C.advisories(here, parsed))
+        out["unsettled"] = sorted(C.unsettled(parsed))
+        try:
+            out["claims_md"] = C.render(parsed)
+        except Exception as e:  # a crash is an answer too
+            out["claims_md"] = f"<raised {type(e).__name__}: {e}>"
+        try:
+            page = P.build(parsed, here / "claims.json", here / "index.html")
+        except Exception as e:
+            out["page"] = f"<raised {type(e).__name__}: {e}>"
+        else:
+            # The page's own assertions, not its markup: the labels and counts it applies.
+            out["page"] = sorted(set(re.findall(
+                r"<h3>([^<]{0,80})</h3>|class=\"taglabel\">([^<]{0,40})<|"
+                r"stat-value\">(\d+)</div><div class=\"stat-label\">([^<]{0,60})<|"
+                r"stated in ([^<·]{0,40})", page)))
+    return out
+
+
+def collect() -> dict:
+    found = {}
+    for name, record, data in seeds():
+        for label, one in variants(data):
+            found[f"{name} :: {label}"] = answers(record, one)
+    return found
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--out", help="write the answers here")
+    ap.add_argument("--diff", help="compare the answers with a file written earlier")
+    args = ap.parse_args(argv)
+
+    with redirect_stdout(io.StringIO()):
+        now = collect()
+
+    # The diff runs before the write, and neither returns early: passing both used to write the
+    # snapshot and silently skip the comparison, so a run that looked like a check was not one.
+    if args.diff:
+        was = json.loads(Path(args.diff).read_text(encoding="utf-8"))
+        # Through JSON first: the baseline is read back as lists and the fresh answers hold
+        # tuples, so comparing them directly reported every tuple as a change. 147 of 466 cases
+        # "moved" on a tree where nothing had.
+        now = json.loads(json.dumps(now))
+        moved = 0
+        for case in sorted(set(was) | set(now)):
+            before, after = was.get(case), now.get(case)
+            if before == after:
+                continue
+            moved += 1
+            print(f"\n=== {case}")
+            for field in sorted(set(before or {}) | set(after or {})):
+                a, b = (before or {}).get(field), (after or {}).get(field)
+                if a == b:
+                    continue
+                if isinstance(a, list) and isinstance(b, list):
+                    for gone in sorted(set(map(str, a)) - set(map(str, b))):
+                        print(f"  - {field}: {gone[:150]}")
+                    for came in sorted(set(map(str, b)) - set(map(str, a))):
+                        print(f"  + {field}: {came[:150]}")
+                else:
+                    print(f"  ~ {field} changed ({len(str(a))} -> {len(str(b))} chars)")
+        print(f"\nCEA_BEHAVIOUR: {moved} of {len(now)} case(s) moved")
+
+    if args.out:
+        Path(args.out).write_text(json.dumps(now, indent=1, sort_keys=True), encoding="utf-8")
+        print(f"CEA_BEHAVIOUR: {len(now)} case(s) written to {args.out}")
+
+    if not args.diff and not args.out:
+        print(f"CEA_BEHAVIOUR: {len(now)} case(s); pass --out or --diff")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

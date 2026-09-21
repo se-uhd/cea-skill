@@ -1,0 +1,271 @@
+{
+ "papers": {
+  "ieeesw26-ai-slop": {
+   "chars": 36849,
+   "pages": 8,
+   "per_page": {
+    "1": {
+     "lines": 107,
+     "sha256": "5ec8fde8cba859cf42d56a8b92869192739bcdd401ad4757f459bd5788b421e4",
+     "words": 620
+    },
+    "2": {
+     "lines": 118,
+     "sha256": "ffe232ff651e03055100e52eb6ffa06396fe6845d219f283cbfb409395929b05",
+     "words": 854
+    },
+    "3": {
+     "lines": 142,
+     "sha256": "3d735cb8c3264554754b6e79e0becf13c520ff68c2b8f56c6647213db5c92201",
+     "words": 655
+    },
+    "4": {
+     "lines": 92,
+     "sha256": "724d22d52b4f3196faad1511a3e3d75415dcbc1ba88f180e465e14b707db4424",
+     "words": 875
+    },
+    "5": {
+     "lines": 118,
+     "sha256": "4c630b774d5fc1ab4e2c23d4c2a3de2dae9684c1eec7c0fede069e1e23679461",
+     "words": 1011
+    },
+    "6": {
+     "lines": 107,
+     "sha256": "f7526afef831253bb9112b769f2923cca8f6cd4f0525777a42853aee9c97c2c6",
+     "words": 621
+    },
+    "7": {
+     "lines": 1,
+     "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+     "words": 0
+    },
+    "8": {
+     "lines": 1,
+     "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+     "words": 0
+    }
+   },
+   "said": [
+    "CEA_EXTRACTED: <out>/ieeesw26-ai-slop/text.txt",
+    "paper_id: ieeesw26-ai-slop",
+    "pdf: ieeesw26-ai-slop.pdf, copied here; write that name as paper.pdf",
+    "pages: 8, 6 of them with two-column text put in reading order",
+    "tables and figures: Fig. 1 p3, Fig. 2 p3, Table I p4",
+    "  a number in the text is looked up against this list; a caption missing from it did not survive the extraction, so nothing can be compared with it",
+    "references: removed from page 6 to the end",
+    "empty pages: 7, 8 (no text left, for example after removing references)"
+   ],
+   "sha256": "2791a4e849825f16e977ddf98a9ad3f87c990d02f2b3986fe1d3e54487df49b4"
+  },
+  "tse26-ai-code-review": {
+   "chars": 93932,
+   "pages": 17,
+   "per_page": {
+    "1": {
+     "lines": 118,
+     "sha256": "4a105728c95ce9a665c23ea695050a87034f1a8e64c4e3a79869fdfe0544a64a",
+     "words": 798
+    },
+    "10": {
+     "lines": 144,
+     "sha256": "54ffb11368f3ba51236c226eaaf4f319930af9ed4c7e1a90a149ae52e3a10aa8",
+     "words": 963
+    },
+    "11": {
+     "lines": 94,
+     "sha256": "e7ed56f3bd06ad760b126ddb2068bda5aa7c8182b19dc2ac2715c7f6bdafa282",
+     "words": 705
+    },
+    "12": {
+     "lines": 133,
+     "sha256": "dfbfbabd7857acc10fcc40c83fec9d3d3bce6d15375f0408b99586050f733652",
+     "words": 897
+    },
+    "13": {
+     "lines": 115,
+     "sha256": "67c1cbc94ec9dc6ce65348491057fd1fe4427899d89932760d60c307dbf4896a",
+     "words": 932
+    },
+    "14": {
+     "lines": 116,
+     "sha256": "0f30adbccfef18116b7c3f857cf1fba6481aa455882862122931698cc899464e",
+     "words": 940
+    },
+    "15": {
+     "lines": 20,
+     "sha256": "56c4bcc8528cd81d602e8a2c4e0ca634dc6ef68baf981048ec72bcec01d270f0",
+     "words": 156
+    },
+    "16": {
+     "lines": 16,
+     "sha256": "5925ececbd7aef9adc7f6cd7d7ec6faea0f0d474a5807c6a8e5283e3a7cc8571",
+     "words": 69
+    },
+    "17": {
+     "lines": 1,
+     "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+     "words": 0
+    },
+    "2": {
+     "lines": 81,
+     "sha256": "a7d90986d86ee4bc76806e12ff20f438fbb3b95077a7454afb891d80c4800ac5",
+     "words": 620
+    },
+    "3": {
+     "lines": 119,
+     "sha256": "434d1dcdc6bee3fffee1676186c498ecaf9987ff44b27110b0287362e9643fc1",
+     "words": 855
+    },
+    "4": {
+     "lines": 146,
+     "sha256": "5cac252a839a21f1df4bd0a3f1f9eb6c246f2cdced53d8ab2d5c64a912e4e1db",
+     "words": 911
+    },
+    "5": {
+     "lines": 101,
+     "sha256": "a7d9f151465d44faa78637f2712ae5489b1609978394a483ac43e6f5cb5e5806",
+     "words": 745
+    },
+    "6": {
+     "lines": 173,
+     "sha256": "ea66a5cdd486e182c6c339b4855c4ad8c34109a5b793f2e78174adddff5831dc",
+     "words": 922
+    },
+    "7": {
+     "lines": 160,
+     "sha256": "17d40d395dcb26ca352620acbcf9f3c4f83c5f8a935b0101a42c0715a8b22e05",
+     "words": 931
+    },
+    "8": {
+     "lines": 141,
+     "sha256": "c8e3b41ef41661189caeeac7549d02ad0bef05070f9f513ca981914823f97be9",
+     "words": 1079
+    },
+    "9": {
+     "lines": 139,
+     "sha256": "bd8f86652293498f718990d85a186649058b70e8af8bf96eaa9c89b51e80b5a9",
+     "words": 945
+    }
+   },
+   "said": [
+    "CEA_EXTRACTED: <out>/tse26-ai-code-review/text.txt",
+    "paper_id: tse26-ai-code-review",
+    "pdf: tse26-ai-code-review.pdf, copied here; write that name as paper.pdf",
+    "pages: 17, 16 of them with two-column text put in reading order",
+    "tables and figures: Fig. 1 p2, Fig. 2 p2, Table I p3, Table II p3, Table III p4, Table IV p4, Table V p5, Fig. 3 p5, Table VI p7, Table VII p7, Table VIII p7, Table IX p7, Table X p8, Table XI p9, Table XII p9, Table XIII p10, Table XIV p10, Table XV p10, Table XVI p10, Fig. 4 p11",
+    "  a number in the text is looked up against this list; a caption missing from it did not survive the extraction, so nothing can be compared with it",
+    "references: removed from page 16 to the end",
+    "empty pages: 17 (no text left, for example after removing references)"
+   ],
+   "sha256": "4b787819cacd677a6908c54cdda8c4a6cc04d48967c82f96728595fff8b72333"
+  },
+  "tse26-genai-usage": {
+   "chars": 123167,
+   "pages": 18,
+   "per_page": {
+    "1": {
+     "lines": 123,
+     "sha256": "be5c4c8168e84647853c38142d131e870b39917b4d10b068481ae8b01a3c4a93",
+     "words": 797
+    },
+    "10": {
+     "lines": 174,
+     "sha256": "18c9d35aec79e4520d0c8f86b88e72f38eef5fe4b9d542a7185cab7ef89329fc",
+     "words": 1149
+    },
+    "11": {
+     "lines": 155,
+     "sha256": "5cb7bc51b32b57d0f4a04b18fd13a84e850da3faad51f02920dfa881f3ab684b",
+     "words": 1003
+    },
+    "12": {
+     "lines": 136,
+     "sha256": "e696b3d40e93f3c7038b120563933b86dc8f9e8ee4feba884d5bfede0950b5d8",
+     "words": 676
+    },
+    "13": {
+     "lines": 141,
+     "sha256": "ecd856bb57f1756370559e6b7485631d845e9c439110385e114e3e2ec990c613",
+     "words": 1194
+    },
+    "14": {
+     "lines": 138,
+     "sha256": "6616fcd0f2df641bf35b252dd5efc5ee9e4cb1d5aafb96d72b0b3d39f77b0cc2",
+     "words": 1148
+    },
+    "15": {
+     "lines": 139,
+     "sha256": "d0ad70087ec2dadffaa5e6b2a546081ad08718869085da38fc75eb9cf5329d79",
+     "words": 1131
+    },
+    "16": {
+     "lines": 169,
+     "sha256": "4e5c0376caccc424ea1d451c80061186794ba5af76e24cdbf952e51e01b2022c",
+     "words": 1097
+    },
+    "17": {
+     "lines": 27,
+     "sha256": "cc7511bb435a44dd101ce8943f22ef2a0d0490b4d43801b36c9b331589f64160",
+     "words": 185
+    },
+    "18": {
+     "lines": 1,
+     "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+     "words": 0
+    },
+    "2": {
+     "lines": 129,
+     "sha256": "82fe2e070f4d774335a7fb6dc72de948f839ca95abb51f5befb0d7f3e66aa1c3",
+     "words": 960
+    },
+    "3": {
+     "lines": 145,
+     "sha256": "a68920f77f882422995a5805df16ad531a0894061ae48dcc6ebc7f7e4cfe753d",
+     "words": 871
+    },
+    "4": {
+     "lines": 130,
+     "sha256": "49f5cea340af4fb0fadb5f42a9ca9c6e61846197c376c628bb7bd73092b8d3c5",
+     "words": 953
+    },
+    "5": {
+     "lines": 96,
+     "sha256": "245a676030d5bd9b2f13bb3488a7598c727d07f7a1a27b65b7e9b1b5f08a4b10",
+     "words": 874
+    },
+    "6": {
+     "lines": 153,
+     "sha256": "4274747e8eabecaa5868e60fc7d4f319193a4fd9d9dd68100ef14c8426f25d94",
+     "words": 974
+    },
+    "7": {
+     "lines": 107,
+     "sha256": "89f434bacda10efa2ec986303b97476b0920017151a952990e3011ecbc0f2c2e",
+     "words": 925
+    },
+    "8": {
+     "lines": 139,
+     "sha256": "bc550a5811aded0852c6d08c863da2795246e3d9c6e8a8d1635bd2b5395b4482",
+     "words": 1175
+    },
+    "9": {
+     "lines": 103,
+     "sha256": "5bd94525a7127ff240be2426266e8513b93e76a86ff6b7efe30cef2f9f231b0d",
+     "words": 1269
+    }
+   },
+   "said": [
+    "CEA_EXTRACTED: <out>/tse26-genai-usage/text.txt",
+    "paper_id: tse26-genai-usage",
+    "pdf: tse26-genai-usage.pdf, copied here; write that name as paper.pdf",
+    "pages: 18, 17 of them with two-column text put in reading order",
+    "tables and figures: Fig. 1 p3, Table 1 p3, Table 2 p3, Table 3 p5, Table 4 p6, Table 5 p7, Table 6 p7, Table 7 p9, Table 8 p11, Table 9 p11, Table 10 p11, Fig. 2 p12",
+    "  a number in the text is looked up against this list; a caption missing from it did not survive the extraction, so nothing can be compared with it",
+    "references: removed from page 17 to the end",
+    "empty pages: 18 (no text left, for example after removing references)"
+   ],
+   "sha256": "a18bdb524f513aea19ef526bb8b5b742a9502d96c03d95bef1e6e667dbc73d52"
+  }
+ },
+ "pdftotext": "26.03.0"
+}

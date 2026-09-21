@@ -20,16 +20,17 @@ changing what a page says means changing the record or the skill that renders it
 
 ## Stop conditions
 
-- A record whose `reason` starts with "Unsure" leaves open whether the statement is a claim. Every
+- An entry whose `reason`, or whose `selection_reason` on a claim, uses the word "unsure" leaves
+  open whether the statement is a claim, wherever the word stands. Every
   record is checked before anything is written, so one such record stops the whole site. Report it
   and let the checker settle it in `claims.json`. Do not edit the reason yourself to get the build
   through.
 - A record that fails `cea_claims.py validate` is not published. Run the validator first.
-- Do not write into the output directory by hand. It is rebuilt from the records every time.
+- Do not write into the output directory by hand. Each build writes the records it is given over what is there. A paper dropped from the list keeps its old directory, which the new index no longer lists, so remove the output directory to start clean.
 
 ## The command
 
-The scripts are in `scripts/` at the root of the plugin, beside this skill's directory, shared with
+The scripts are in `scripts/` at the root of the plugin, beside the `skills/` directory that holds this skill, shared with
 `extract-claims`.
 
 ```sh
@@ -39,8 +40,8 @@ python3 <plugin root>/scripts/cea_claims.py site <paper directory> [<paper direc
     --out <site directory> [--framework <framework.md>]
 ```
 
-Run `validate` and `render` for each paper first: `render` rewrites `claims.md`, and a site built
-from a record whose Markdown is stale publishes two versions of the same record.
+Run `validate` for each paper first. The build runs it too and refuses the record, but it prints
+only the first three problems per paper, while `validate` prints them all with their warnings.
 
 `site` writes:
 
@@ -54,13 +55,19 @@ from a record whose Markdown is stale publishes two versions of the same record.
 The record sits beside its page so that the page's links to it work wherever the folder is served,
 and so that a zip of one paper's folder is complete on its own.
 
-The first output line starts with `CEA_SITE` on success, and with `CEA_UNRESOLVED` or `CEA_FAILED`
-otherwise. Nothing is written unless every record passes.
+A successful build prints `CEA_SITE`, preceded by a `CEA_WARNING` line for each paper whose PDF is
+missing, for each main result that no narrow claim serves, and for each paper directory left in the
+output by an earlier build that this one no longer lists. A record that fails the checks prints `CEA_INVALID` or `CEA_UNRESOLVED`, then `CEA_FAILED`.
+Nothing is written unless every record holds the fields the pages need, passes `validate`, and
+leaves no decision open. The build runs `validate` itself, so a record whose quote is not on its
+page stops it. Each record therefore needs its `text.txt` beside its `claims.json`.
 
 ## The framework page
 
-The pages use the framework's terms: main result, narrow claim, rejected candidate, checker,
-mapping level. `--framework <file.md>` publishes the framework text as a page of the site and links
+The pages use the framework's terms: main result, broad statement, narrow claim, rejected
+candidate, checker, and mapping level. Every claim card carries an `M1` badge over six dots, so
+the document has to define the mapping levels and name the six links of the chain the badge shows:
+interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `--framework <file.md>` publishes the framework text as a page of the site and links
 it from every footer, so a reader has the definitions at hand. Point it at the project's own
 framework document. Do not write a summary of the framework instead: a second, shorter account of
 the rules is the thing most likely to contradict them.

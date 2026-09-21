@@ -19,7 +19,12 @@ The page template is `cea_page.py` and the site assembly is `cea_site.py`. Both 
 line of their own; `cea_claims.py` is the only entry point. `cea_page.py` reuses the ordering
 functions of `cea_claims.py`, so the page and `claims.md` cannot disagree about which claims stand under which
 main result. Changing the page design means editing `cea_page.py`; changing what a record holds means editing
-`SKILL.md`, the reference, the validator, and the existing records together.
+`FIELDS` and `PROPERTIES` in `cea_claims.py`, raising `FORMAT` and adding what changed to
+`_FORMAT_CHANGES` when a field changes meaning, `references/record-format.md`, `claims.schema.json` (regenerate it with
+`cea_claims.py schema --out claims.schema.json`), and the existing records together. The tests fail when the
+committed schema is stale, when a field in `FIELDS` has no constraint in `PROPERTIES`, and when the
+reference documents a field that the record does not hold. They do not check that the reference
+documents every field, and some fields carry no bullet of their own there.
 
 ## The published site
 
@@ -27,18 +32,64 @@ main result. Changing the page design means editing `cea_page.py`; changing what
 with this skill, pinned to a tag in its `.skill-version`. A change here reaches the site only when that file
 names a tag that contains the change, so release a tag and bump it there.
 
+Before moving that tag, run the release gate the way a release runs it:
+
+```sh
+CEA_REQUIRE_PAPERS=1 sh scripts/check.sh
+```
+
+which needs the PDFs in `evals/papers/`, and check that the site's records still validate under the new
+build. A record the site already holds carries no `format` stamp, which this build reads as format 1, so
+they do not need migrating. Raising `FORMAT` in a later release does break them: add the entry to
+`_FORMAT_CHANGES` saying what changed, and stamp the site's records before the tag moves.
+
 ## Rules that the code enforces
 
-- A record whose `reason` starts with "Unsure" leaves the claim-or-not decision open. `render` writes
+- An entry whose `reason`, or whose `selection_reason` on a claim, uses the word "unsure" leaves
+  the claim-or-not decision open. The word counts wherever it stands, quoted or not. `render` writes
   `claims.md` but no page, and `site` writes nothing at all, both exiting 1. The checker settles it in
   `claims.json`.
+- The page mines a `reason` for the `B\d+` it names and turns each into a tag and a link, but only for the statements the record holds. A paper about vitamin B12 writes that in a reason, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
+- `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
+- A record carries a top-level `format`. `validate` refuses one written in a format this build does
+  not read, and reads a record without the stamp as format 1, because every record that can lack it
+  was written before it existed. The stamp is what stops a record written against an older format
+  from passing every check and publishing a number that means something else. Raise `FORMAT` only
+  together with the field whose meaning changed, and say what changed in `_FORMAT_CHANGES`.
+- `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
+  the name to write.
 - Ids (`B1`, `C3`, `R40`) are the anchors of the published pages. Do not renumber them when a record changes.
 
 ## Tests
+
+```sh
+sh scripts/gates.sh
+```
+
+Nothing is green until that says so. It runs `check.sh` twice, in the two environments that differ:
+a fresh clone holding only what a commit carries, where everything gitignored is absent, and this
+tree in release mode (`CEA_REQUIRE_PAPERS=1`), where the papers are present and no skipped test is
+tolerated. `check.sh` on its own passes on a machine that happens to hold the papers and poppler,
+which is how a test that needed a paper and did not say so reached a green run.
+
+For a single quick pass while working:
 
 ```sh
 python3 -m unittest discover scripts/tests
 ```
 
 The tests that read real papers use the PDFs in `evals/papers/`, which are not committed, and are skipped when
-those are missing.
+those are missing. `pdftotext` has to be on `PATH` for them to run at all: without it they skip and the suite
+still says OK, which is what `CEA_REQUIRE_PAPERS=1` turns into a failure.
+
+`scripts/tests/text_digests.json` pins what `extract` produces for each paper in `evals/papers/`, page by page.
+`text.txt` is what every quote is checked against, so a layout change moves what the validator accepts;
+without the pin, twelve mutations of `pdf_text.py` changed a real paper's text with the whole suite green.
+Regenerate it only when a layout change is intended, and say in the commit what moved:
+
+```sh
+python3 scripts/text_digests.py --out scripts/tests/text_digests.json
+```
+
+The file records the `pdftotext` version it was made with, and the test skips rather than fails under another
+one, because `pdftotext -layout` lays out to its own version.
