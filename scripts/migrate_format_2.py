@@ -41,10 +41,10 @@ TERMS = (("broad statements", "main results"), ("Broad statements", "Main result
          ("broad statement", "main result"), ("Broad statement", "Main result"),
          ("narrow claims", "claims"), ("Narrow claims", "Claims"),
          ("narrow claim", "claim"), ("Narrow claim", "Claim"),
-         ("rejected candidates", "excluded candidates"),
-         ("Rejected candidates", "Excluded candidates"),
-         ("rejected candidate", "excluded candidate"),
-         ("Rejected candidate", "Excluded candidate"))
+         ("rejected candidates", "excluded claim candidates"),
+         ("Rejected candidates", "Excluded claim candidates"),
+         ("rejected candidate", "excluded claim candidate"),
+         ("Rejected candidate", "Excluded claim candidate"))
 
 
 def rewrite(text: str, ids: dict[str, str]) -> str:

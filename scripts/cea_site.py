@@ -356,7 +356,7 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
     <section id="papers">
       <h2>Papers</h2>
       <table class="idx"><thead><tr><th>Paper</th><th>Main results</th><th>Claims</th>
-      <th>Excluded candidates</th><th>Sentences the record marks as stating the main results</th><th>Pages</th></tr></thead>
+      <th>Excluded claim candidates</th><th>Sentences the record marks as stating the main results</th><th>Pages</th></tr></thead>
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>

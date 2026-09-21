@@ -70,12 +70,12 @@ MAX_GAP = 4000
 #      before the split counts too many places and publishes a headline that is too high.
 FORMAT = 2
 _FORMAT_CHANGES = {
-    1: "`breaks_down` split off from `duplicate_of`: an excluded candidate that divides a result "
+    1: "`breaks_down` split off from `duplicate_of`: an excluded claim candidate that divides a result "
        "into parts now names the statements in `breaks_down`, and `duplicate_of` names only the "
        "places that state the result. Check every `duplicate_of` in the record before stamping it.",
     2: "the terms and the ids changed. `broad_statements` became `main_results` and `rejected` "
        "became `excluded`. What was called a broad statement is a main result, a narrow claim "
-       "is a claim, and a rejected candidate is an excluded candidate. Ids moved with them: a "
+       "is a claim, and a rejected candidate is an excluded claim candidate. Ids moved with them: a "
        "former `B` id is now `R`, and a former `R` id is now `E`, in `id`, in `serves`, "
        "`duplicate_of`, `breaks_down` and `split_from`, and wherever a `reason`, `note` or "
        "`selection_reason` names one. The mapping levels are L1 to L4 rather than M1 to M4. "
@@ -1098,13 +1098,13 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                 prefix = {"main_results": "R", "claims": "C", "excluded": "E"}[key]
                 if not re.fullmatch(rf"{prefix}\d{{1,6}}", e["id"]):
                     problems.append(f"{label}.id: must be {prefix} and a number, as in {prefix}1; ids of "
-                                    "main results start with B, claims with C, excluded candidates with R")
+                                    "main results start with B, claims with C, excluded claim candidates with R")
     result_ids = {e["id"] for _, e in lists["main_results"] if _nonempty(e.get("id"))}
     broad_quotes = {_key(e["quote"]): e["id"] for _, e in lists["main_results"]
                     if _nonempty(e.get("quote")) and _nonempty(e.get("id"))}
     served: set[str] = set()
     broad_pages: dict[str, list[str]] = {}
-    # A main result's quote with every page that its record covers, so that an excluded candidate
+    # A main result's quote with every page that its record covers, so that an excluded claim candidate
     # on one of those pages is caught even when the main result gives a page range.
     broad_quoted: dict[str, set[int]] = {}
     excluded_quotes: dict[tuple[str, int], str] = {}
@@ -1231,7 +1231,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                     refs = e["duplicate_of"]
                     if not isinstance(refs, list) or not refs or not all(_nonempty(r) for r in refs):
                         problems.append(f"{label}.duplicate_of: must be a list of the ids of the "
-                                        "claims, excluded candidates, or main results that the "
+                                        "claims, excluded claim candidates, or main results that the "
                                         "statement repeats")
                         refs = [r for r in refs if _nonempty(r)] if isinstance(refs, list) else []
                     for n, ref in enumerate(refs):
@@ -1241,7 +1241,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                             problems.append(f"{label}.duplicate_of: an entry cannot repeat itself")
                         elif ref not in owners:
                             problems.append(f"{label}.duplicate_of: '{ref}' is not the id of a claim, "
-                                            "excluded candidate, or main result")
+                                            "excluded claim candidate, or main result")
                 if "breaks_down" in e:
                     refs = e["breaks_down"]
                     if not isinstance(refs, list) or not refs or not all(_nonempty(r) for r in refs):
@@ -1270,7 +1270,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
         same = [b for b, e in broad_quoted.items() if b == quote_key and page in e]
         if same:
             problems.append(f"{label}.quote: {broad_pages[quote_key][0]} quotes the same sentence on the "
-                            "same page; a main result is not also an excluded candidate")
+                            "same page; a main result is not also an excluded claim candidate")
     for labels in broad_pages.values():
         if len(labels) > 1:
             problems.append(f"{labels[1]}.quote: {labels[0]} already quotes the same sentence; one "
@@ -1589,7 +1589,7 @@ _VERDICT_WORDS = 8
 _EMPTY_REASON = re.compile(
     r"^\W*(?:this\s+is\s+|it\s+is\s+)?(?:not\s+)?(?:an?\s+|the\s+)?"
     r"(?:important|significant|relevant|interesting|major|minor|key|main|central|notable)\b"
-    # Not anchored at the end: "Not a claim." was caught and "Not a claim, B1." was not, though
+    # Not anchored at the end: "Not a claim." was caught and "Not a claim, R1." was not, though
     # neither says why. What follows a verdict has to be a ground, which `_A_GROUND` looks for.
     r"|^\W*(?:not\s+a\s+claim|no|n/?a|none)\b"
     r"|^\W*(?:it\s+)?(?:does\s+not\s+qualify|fails\s+the\s+test|nothing\s+rests\s+on\s+it"
@@ -1644,7 +1644,7 @@ def _sentence_warnings(label: str, quote: str, page_text: str, is_claim: bool = 
     # sentence-boundary checks below say nothing either. The quote's own text on the page still
     # carries the run of wide gaps that a row is laid out with, even though the quote field itself
     # is written with single spaces.
-    # Only for a claim. An excluded candidate that quotes a table row or a figure caption is the
+    # Only for a claim. An excluded claim candidate that quotes a table row or a figure caption is the
     # rule being followed, not broken: the row was considered and set aside, and its entry says so.
     # `text`, not `page_text`: `start` and `end` are positions in the folded text, and folding
     # expands a ligature and drops a soft hyphen, so the raw string is a different length. Sliced
@@ -1846,7 +1846,7 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
     seen: set[tuple[str, str]] = set()
     # The skill asks a reason to name the statement that would still stand, and the page shows
     # the ones it recognises. A name the record does not hold is ordinary prose as far as the
-    # page is concerned, which is right for vitamin B12 and wrong for a typo, so it is asked
+    # page is concerned, which is right for a token that only looks like an id and wrong for a typo, so it is asked
     # about rather than refused.
     results = {b["id"] for b in data["main_results"] if isinstance(b.get("id"), str)}
     named = _str(data.get("paper", {}).get("pdf")) if isinstance(data.get("paper"), dict) else ""
@@ -1910,7 +1910,7 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "the statement out of scope")
     # A claim serves a main result, so a sentence repeating a claim repeats that statement's
     # main result. Naming the claim alone leaves the repetition out of the count of the places where
-    # the paper states the result. A sentence repeating an excluded candidate names no statement,
+    # the paper states the result. A sentence repeating an excluded claim candidate names no statement,
     # which is why only a claim counts here.
     statements = {b["id"] for b in data["main_results"]}
     claims = {c["id"] for c in data["claims"]}
@@ -1952,7 +1952,7 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         if len(group) > 1 and not set(group) & breakdowns:
             out.append(f"main_results {', '.join(group)}: the same claims serve all of them, so "
                        "they read as one main result stated several times; record it once and keep "
-                       "the others as excluded candidates with duplicate_of naming it")
+                       "the others as excluded claim candidates with duplicate_of naming it")
     # Statements that share much of their support without sharing all of it are a question for the
     # checker, not a verdict. Each pair is asked about once, whichever order the record lists it in,
     # and a pair that the breakdown warning covers is left to that warning.
@@ -1968,7 +1968,7 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
             if len(first & second) / len(first | second) >= _SAME_RESULT:
                 out.append(f"main_results {one[0]} and {two[0]}: most of the claims that "
                            "serve one serve the other as well; where they state one main result, "
-                           "record it once and keep the other sentence as an excluded candidate with "
+                           "record it once and keep the other sentence as an excluded claim candidate with "
                            "duplicate_of naming it")
     for i, b in enumerate(data["main_results"]):
         if _BOXED_SECTION.search(b.get("section", "")) and b.get("source") != "rq_answer":
@@ -2197,8 +2197,7 @@ def _stated_in(data: dict, group: list[str] | None = None) -> int:
     A breakdown of a result is not a sentence stating it, and names `breaks_down` rather than
     `duplicate_of`, so it is not counted here.
 
-    The sentences are counted, not the links to them. Where one result stands as four results
-    statements, a sentence repeating it names several of the four, and counting each statement's
+    The sentences are counted, not the links to them. Where one result stands as four main results, a sentence repeating it names several of the four, and counting each statement's
     repetitions on its own would count that sentence several times over.
 
     A split group is one sentence too, for the same reason: its parts are pieces of one sentence
@@ -2238,7 +2237,7 @@ def _shared_with_other_results(data: dict, group: list[str]) -> int:
 
 
 def _id_order(entry_id: str) -> tuple[str, int, str]:
-    """Sort B2 before B10, as the page does, rather than as strings.
+    """Sort R2 before R10, as the page does, rather than as strings.
 
     The digit count is bounded because Python refuses to convert an integer past 4300 digits.
     """
@@ -2273,7 +2272,7 @@ def render(data: dict) -> str:
         "",
         f"Paper `{paper['id']}` ({paper['pages']} pages, `{paper['pdf']}`): "
         f"{len(results)} main results, {len(claims)} claims, "
-        f"{len(excluded)} excluded candidates.",
+        f"{len(excluded)} excluded claim candidates.",
         "",
         "Generated from `claims.json` by `cea_claims.py render`. To change the record, edit "
         "`claims.json` and render again.",
@@ -2340,7 +2339,7 @@ def render(data: dict) -> str:
             out.append(f"- Note: {_flat(c['note'])}")
         out.append("")
 
-    out += ["## Excluded candidates", ""]
+    out += ["## Excluded claim candidates", ""]
     if not excluded:
         out += ["None recorded.", ""]
     for r in sorted(excluded, key=_first_page):
@@ -2572,7 +2571,7 @@ def unsettled(data: dict) -> list[str]:
     that no claim serves and no note explains, is already a problem for the validator, so a record
     that reaches here has a note on every such statement and the page shows it as a finding.
     """
-    # A claim states its reason in selection_reason. Only an excluded candidate has reason, so
+    # A claim states its reason in selection_reason. Only an excluded claim candidate has reason, so
     # reading one field alone leaves an unsettled claim on the page. The word counts wherever it
     # stands, quoted or not: every attempt to read the quoting has been wrong in the direction
     # that publishes an open question, and a reason that merely quotes the word can be reworded.
@@ -2591,7 +2590,7 @@ def cmd_validate(args) -> int:
             print(f"- {p}")
         return 1
     print(f"CEA_VALID: {len(data['main_results'])} main results, {len(data['claims'])} "
-          f"claims, {len(data['excluded'])} excluded candidates; every quote found on its page")
+          f"claims, {len(data['excluded'])} excluded claim candidates; every quote found on its page")
     for warning in advisories(paper_dir, data):
         print(f"warning: {warning}")
     return 0

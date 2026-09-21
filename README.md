@@ -4,7 +4,7 @@ Claude Code skills for Claim-Evidence Alignment (CEA). CEA reconstructs the chai
 
 | Skill | What it does |
 |---|---|
-| `extract-claims` | Extracts the claims, the main results that they serve, and the excluded candidates from a paper PDF, with every quote checked against the page text, and renders the record as Markdown and as a page |
+| `extract-claims` | Extracts the claims, the main results that they serve, and the excluded claim candidates from a paper PDF, with every quote checked against the page text, and renders the record as Markdown and as a page |
 | `site` | Builds a site from the records of several papers: a page each, an index, and the framework text the pages' terms come from |
 
 ## Installation

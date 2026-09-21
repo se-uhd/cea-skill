@@ -64,8 +64,8 @@ page stops it. Each record therefore needs its `text.txt` beside its `claims.jso
 
 ## The framework page
 
-The pages use the framework's terms: main result, main result, claim, rejected
-candidate, checker, and mapping level. Every claim card carries an `L1` badge over six dots, so
+The pages use the framework's terms: main result, claim, excluded claim candidate, checker, and
+mapping level. Every claim card carries an `L1` badge over six dots, so
 the document has to define the mapping levels and name the six links of the chain the badge shows:
 interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `site` always publishes the framework as a page and links it from every footer, so a reader has
 the definitions at hand. It publishes the plugin's own

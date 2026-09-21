@@ -40,16 +40,16 @@ ANCHOR = ('<a class="section-anchor" href="#{id}" onclick="navigator.clipboard.w
 LINKS = ["interpretation", "operationalization", "measurement", "unit bridge", "analysis", "reasoning"]
 
 # What a reason says when it weighs a candidate against a main result and the result survives.
-# The reference asks for "B2 would still stand, because ...", so the words are the reason's own.
+# The reference asks for "R2 would still stand, because ...", so the words are the reason's own.
 # A clause that asks whether a result stands is not saying that it does, and one that says it
 # stands only under some reading is stating a condition, not a verdict. The page prints this
 # as "Leaves its main result standing", over a reason that declines to say so.
 _ASKS = re.compile(r"\b(?:whether|unclear|uncertain|depends|debatable|arguable)\b", re.I)
 _ONLY_IF = re.compile(r"\bstands?\s+only\b", re.I)
 _STANDS = re.compile(r"\b(?:would|does|still)\b([^.]{0,40}?)\bstands?\b", re.I)
-# "without" is not one of these: "B1 still stands without this sentence" is the affirmative case,
+# "without" is not one of these: "R1 still stands without this sentence" is the affirmative case,
 # and it is how the reference's own template reads.
-# "nothing" is its own word: `\bno\b` does not reach inside it, so "Nothing in B1 would still
+# "nothing" is its own word: `\bno\b` does not reach inside it, so "Nothing in R1 would still
 # stand" read as the affirmative and the page said the result stands.
 _NOT = re.compile(r"\b(?:not|never|no|none|nothing|neither|nor|cannot|hardly|barely|n't)\b",
                   re.I)
@@ -66,9 +66,9 @@ def still_stands(reason: str) -> bool:
 
 
 # What a fragment may hold besides the ids it carries into the next clause. Anything else is a
-# clause of its own: "Repeats B4" and "B3 names no property" say something about a statement, and
-# welding them to the verdict that follows published "leaves standing B4" over a reason saying the
-# candidate repeats B4, and lost B3 the credit its own reason gives it.
+# clause of its own: "Repeats R4" and "R3 names no property" say something about a statement, and
+# welding them to the verdict that follows published "leaves standing R4" over a reason saying the
+# candidate repeats R4, and lost R3 the credit its own reason gives it.
 _CARRIES = frozenset(("", "so", "and", "or", "both", "also", "then", "thus",
                       "together", "along", "with", "plus", "as", "well"))
 
@@ -76,19 +76,19 @@ _CARRIES = frozenset(("", "so", "and", "or", "both", "also", "then", "thus",
 def _clauses(reason: str) -> list[str]:
     """A reason split into the clauses that are read one at a time.
 
-    The colon splits too. "B3 would still stand: this changed nothing" is two clauses, and
+    The colon splits too. "R3 would still stand: this changed nothing" is two clauses, and
     without the split the second clause's "nothing" would deny the first, which is a real reason
     in a real record.
     """
     parts = re.split(r"[,;.:]| and | but ", reason)
-    # A list of results shares one verb: "B3 and B5 would both still stand" is cut at the "and",
-    # which left B3 in a clause of its own with nothing to affirm it, and two real records lost a
+    # A list of results shares one verb: "R3 and R5 would both still stand" is cut at the "and",
+    # which left R3 in a clause of its own with nothing to affirm it, and two real records lost a
     # result they are credited with. A short piece naming a result and holding no verb of its own
     # belongs to the clause that follows it.
     out: list[str] = []
     carried = ""
     for part in parts:
-        # A part with no words at all is what "B3, B5, and B7" leaves between the comma and the
+        # A part with no words at all is what "R3, R5, and R7" leaves between the comma and the
         # " and ". Keeping it flushed the carried ids into a clause of their own, so an Oxford
         # comma cost a reason every result but the last.
         if not part.strip():
@@ -110,7 +110,7 @@ def _affirms(clause: str) -> bool:
     return bool(_STANDS.search(clause) and not _NOT.search(clause)
                 and not _ASKS.search(clause) and not _ONLY_IF.search(clause))
 
-# The heading over each group of excluded candidates. The first four are read off the record: a
+# The heading over each group of excluded claim candidates. The first four are read off the record: a
 # candidate names what it repeats, what it breaks down, the split it is part of, or the statement
 # it leaves standing. The last is everything else, so its heading says only that, and does not
 # assert a ground: a candidate held open for the checker, or excluded for a reason the record
@@ -163,20 +163,20 @@ def refs(entry: dict, field: str) -> list[str]:
 
 
 def weighed_against(r: dict, known: set[str] | None = None) -> set[str]:
-    """The main results that an excluded candidate refers to.
+    """The main results that an excluded claim candidate refers to.
 
     `duplicate_of` and `breaks_down` name them as data. A reason names one in its text, because the
-    skill requires "B2 would still stand, because ...". Prose is not data, though: a paper about
-    vitamin B12 puts that in a reason too, so a name the record does not hold is not a reference.
+    skill requires "R2 would still stand, because ...". Prose is not data, though: a paper about
+    vitamin R12 puts that in a reason too, so a name the record does not hold is not a reference.
 
     Nor is every mention a weighing. A reason may name a statement to say what it is about, or to
     say that no statement states the result the candidate would serve, and calling that "leaves
-    B3 standing" tells the reader the opposite of what the record says.
+    R3 standing" tells the reader the opposite of what the record says.
     """
     # Per clause, not over the whole reason. `still_stands` was made to read a reason clause by
     # clause, and this then took every id in the string as soon as any clause affirmed -- so a
     # reason weighing two results, one surviving and one not, tagged the candidate with both and
-    # the page printed "leaves standing B5" directly above a reason saying B5 does not stand.
+    # the page printed "leaves standing R5" directly above a reason saying R5 does not stand.
     named = {b for clause in _clauses(r.get("reason", ""))
              if _affirms(clause) for b in RID.findall(clause)}
     if known is not None:
@@ -411,7 +411,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             # the section open and the others listed here, rather than one card of the ten.
             nodes += (f'<button class="node candidates" data-reveal="{E(rej[0])}" '
                       f'title="{E(", ".join(rej))}">'
-                      f'{len(rej)} excluded candidate{"s" if len(rej) != 1 else ""}: '
+                      f'{len(rej)} excluded claim candidate{"s" if len(rej) != 1 else ""}: '
                       f'{E(", ".join(rej[:6]))}{" and more" if len(rej) > 6 else ""} '
                       f'&rarr;</button>')
         # A sentence that repeats this result and another one is counted under both, so these
@@ -439,9 +439,9 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             field("states", para(b["states"]))
             if b.get("states") and _key(b["states"]) != _key(b["quote"]) else "",
             field("claims that serve it", badges(serving[lead]) or '<p class="dim">none</p>'),
-            field("excluded candidates that repeat it", badges(repeats.get(lead, []))),
-            field("excluded candidates that break it into parts", badges(breakdowns.get(lead, []))),
-            field("excluded candidates that leave it standing",
+            field("excluded claim candidates that repeat it", badges(repeats.get(lead, []))),
+            field("excluded claim candidates that break it into parts", badges(breakdowns.get(lead, []))),
+            field("excluded claim candidates that leave it standing",
                   badges([r for r in considered[lead]
                           if r not in repeats.get(lead, []) and r not in breakdowns.get(lead, [])])),
             field("note", para(b["note"]) if b.get("note") else ""),
@@ -495,7 +495,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             E(_flat(c["states"])), tags, body))
         ticks.append((_first_page(c), "claim", c["id"], _flat(c["section"])))
 
-    # the excluded candidates, folded
+    # the excluded claim candidates, folded
     buckets: dict[str, list[dict]] = {k: [] for k, _ in REJ_GROUPS}
     for r in sorted(excluded, key=_first_page):
         buckets[kind_of(r, known)].append(r)
@@ -554,7 +554,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
         counts = {k: sum(1 for _, kk, _ in items if kk == k) for k in rank}
         tally = ", ".join(f"{n} {name}{'s' if n > 1 else ''}" for name, n in
                           (("main result", counts["result"]), ("claim", counts["claim"]),
-                           ("excluded candidate", counts["candidate"])) if n)
+                           ("excluded claim candidate", counts["candidate"])) if n)
         rows_sec.append(f'<tr><td class="sec">{E(sec)}</td><td class="pp">{span}</td>'
                         f'<td class="mm" title="{E(tally)}"><div class="marks">{marks}</div></td></tr>')
     strip = ('<table class="sectable"><thead><tr><th>Section, as the record gives it</th><th>Page</th>'
@@ -566,7 +566,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
     # "main results", not "main results": several statements can state one result, which the
     # map merges into one row, and one statement can state two. claims.md has always said this.
     stats = [(len(results), "main results"), (len(claims), "claims"),
-             (len(excluded), "excluded candidates"), (places, "sentences the record marks as stating the main results")]
+             (len(excluded), "excluded claim candidates"), (places, "sentences the record marks as stating the main results")]
     stat_html = "".join(f'<div class="stat-card"><div class="stat-value">{v}</div>'
                         f'<div class="stat-label">{E(l)}</div></div>' for v, l in stats)
 
@@ -600,7 +600,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
         links += [("map", "Claim Map"), ("results", "Main Results")]
     if claims:
         links.append(("claims", "Claims"))
-    links.append(("candidates", "Excluded Candidates"))
+    links.append(("candidates", "Excluded Claim Candidates"))
     active = ' class="active"'
     nav_links = "\n    ".join(
         f'<a href="#{i}"{active if n == 0 else ""}>{E(label)}</a>'
@@ -834,7 +834,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <noscript>
     <style>
       /* Only the page's own script opens a body, so without scripting the page holds back four
-         fifths of the record: every selection reason, every note, and every excluded candidate
+         fifths of the record: every selection reason, every note, and every excluded claim candidate
          with the reason it was excluded. None of that is decoration. It is shown open instead,
          and the controls that would now do nothing are taken away. */
       .entry-body { display: block; }
@@ -864,12 +864,11 @@ TEMPLATE = r"""<!DOCTYPE html>
       @@WATCH@@
       <div class="panel">
         <h3>By section of the paper</h3>
-        <p class="panel-desc">One row per section heading, in page order. Each mark is one main result, narrow
-        claim, or excluded candidate recorded in that section. Click a mark to open its card.</p>
+        <p class="panel-desc">One row per section heading, in page order. Each mark is one main result, claim, or excluded claim candidate recorded in that section. Click a mark to open its card.</p>
         <div class="legend in-panel">
           <span class="legend-item"><i class="legend-dot result"></i>main result (B)</span>
           <span class="legend-item"><i class="legend-dot claim"></i>claim (C)</span>
-          <span class="legend-item"><i class="legend-dot candidate"></i>excluded candidate (R)</span>
+          <span class="legend-item"><i class="legend-dot candidate"></i>excluded claim candidate (R)</span>
         </div>
         <div class="strip">@@STRIP@@</div>
       </div>
@@ -877,12 +876,12 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 @@SEC_MAP@@@@SEC_RESULTS@@@@SEC_CLAIMS@@
     <section id="candidates">
-      <h2>Excluded Candidates@@ANCHOR_CANDIDATES@@</h2>
-      <button class="reveal" id="reveal-candidates" aria-expanded="false">Show @@N_CANDIDATES@@ excluded candidates</button>
+      <h2>Excluded Claim Candidates@@ANCHOR_CANDIDATES@@</h2>
+      <button class="reveal" id="reveal-candidates" aria-expanded="false">Show @@N_CANDIDATES@@ excluded claim candidates</button>
       <div id="candidates-body">
         <div class="filter-bar">
           <input id="cand-search" type="search" placeholder="Filter by quote, section or reason"
-                 aria-label="Filter excluded candidates">
+                 aria-label="Filter excluded claim candidates">
           <button class="chip" data-flag="note">Has a note</button>
           <button class="chip" data-flag="table">Checked against a table or figure</button>
           <span class="filter-count" id="cand-count"></span>
@@ -928,7 +927,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     if (candidates.classList.contains('shown')) {
       candidates.classList.remove('shown');
       revealBtn.setAttribute('aria-expanded', 'false');
-      revealBtn.textContent = 'Show ' + DATA.excluded.length + ' excluded candidates';
+      revealBtn.textContent = 'Show ' + DATA.excluded.length + ' excluded claim candidates';
     } else {
       revealCandidates();
     }

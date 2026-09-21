@@ -1906,7 +1906,7 @@ def unused_hooks(html, anchors=frozenset()):
 
 
 def _a_candidate_weighed_against_a_result(d):
-    """An excluded candidate that names a main result hangs off that result in the map."""
+    """An excluded claim candidate that names a main result hangs off that result in the map."""
     d["excluded"][0]["duplicate_of"] = "R1"
     d["excluded"][0]["reason"] = "R1 would still stand, because it repeats R1."
 
@@ -1977,7 +1977,7 @@ class Validate(unittest.TestCase):
                          f"results must order numerically, got {order}")
 
     def test_a_rejected_part_without_its_words_is_refused_not_a_crash(self):
-        """`states` is optional on an excluded candidate, so the gate passed it to a KeyError."""
+        """`states` is optional on an excluded claim candidate, so the gate passed it to a KeyError."""
         import cea_site
         data = valid_claims()
         data["excluded"][0]["split_from"] = "S1"
@@ -2397,7 +2397,7 @@ class Validate(unittest.TestCase):
     def test_duplicate_of_unknown_id(self):
         data = valid_claims()
         data["excluded"][0]["duplicate_of"] = ["C9"]
-        self.assertIn("'C9' is not the id of a claim, excluded candidate, or main result", self.check(data))
+        self.assertIn("'C9' is not the id of a claim, excluded claim candidate, or main result", self.check(data))
 
     def test_duplicate_of_accepts_a_broad_statement_id(self):
         data = valid_claims()
@@ -2600,7 +2600,7 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["excluded"].append({"id": "E2", "quote": "Caching halves median build time.", "page": 1,
                                  "section": "Abstract", "reason": "Repeats R1."})
-        self.assertIn("a main result is not also an excluded candidate", self.check(data))
+        self.assertIn("a main result is not also an excluded claim candidate", self.check(data))
 
     def test_split_statement_and_unsplit_entry_with_the_same_quote(self):
         data = valid_claims()
@@ -2790,7 +2790,7 @@ class PageScript(unittest.TestCase):
 
     Nothing else in the suite executes it: the other tests read `cea_page.TEMPLATE` as text. That
     is how a page with no claims came to throw before it installed the candidate filter and
-    the navigation, on the one kind of paper where the excluded candidates are the whole content.
+    the navigation, on the one kind of paper where the excluded claim candidates are the whole content.
     """
 
     SHIM = r"""// A DOM small enough to read, big enough that the page script's loops actually run.
@@ -3194,7 +3194,7 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
             "a full record": lambda d: None,
             "no results and no claims": lambda d: d.update(main_results=[], claims=[]),
             "a result no claim serves": lambda d: d.update(claims=[]),
-            "no excluded candidates": lambda d: d.update(excluded=[]),
+            "no excluded claim candidates": lambda d: d.update(excluded=[]),
             "two statements of one result": _two_statements_of_one_result,
             "a candidate weighed against a result": _a_candidate_weighed_against_a_result,
             "a result with a note": _a_result_with_a_note,
@@ -3241,7 +3241,7 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
             "no results and no claims": lambda d: d.update(main_results=[], claims=[]),
             "a result no claim serves": lambda d: (d.update(claims=[]),
                                                    d["main_results"][0].update(note="why")),
-            "no excluded candidates": lambda d: d.update(excluded=[]),
+            "no excluded claim candidates": lambda d: d.update(excluded=[]),
             "one claim, one result": lambda d: d.update(claims=d["claims"][:1], excluded=[]),
             "a candidate weighed against a result": _a_candidate_weighed_against_a_result,
             "a result with a note": _a_result_with_a_note,
@@ -3997,8 +3997,51 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
         cls.text = cls.FRAMEWORK.read_text(encoding="utf-8")
         cls.folded = " ".join(cls.text.lower().split())
 
+    def glossary(self):
+        """The rows of the framework's Glossary, as {term: meaning}."""
+        block = self.text.split("## Glossary", 1)[1].split("\n## ", 1)[0]
+        rows = {}
+        for line in block.splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) == 3 and cells[0] and not set(cells[0]) <= set("- "):
+                rows[cells[0]] = cells[2]
+        rows.pop("Term", None)
+        return rows
+
+    def test_the_glossary_defines_the_record_and_page_vocabulary(self):
+        """One place holds the definitions, so the process sections can use the terms without
+        defining them again and two accounts cannot drift apart."""
+        rows = self.glossary()
+        self.assertGreater(len(rows), 15, f"the Glossary has only {len(rows)} row(s)")
+        for term in ("Main result", "Claim", "Excluded claim candidate", "Claim candidate",
+                     "Mapping level", "Checker", "Research artifact", "Chain", "Link",
+                     "Link quality", "Unit of analysis", "Unit of observation"):
+            with self.subTest(term=term):
+                self.assertIn(term, rows, "the Glossary does not define it")
+                self.assertGreater(len(rows[term].split()), 4, f"{term} has no real definition")
+
+    def test_the_glossary_carries_the_id_letter_of_every_entry_kind(self):
+        rows = {t: m for t, m in self.glossary().items()}
+        block = self.text.split("## Glossary", 1)[1].split("\n## ", 1)[0]
+        for term, letter in (("Main result", "R"), ("Claim", "C"),
+                             ("Excluded claim candidate", "E"), ("Mapping level", "L")):
+            with self.subTest(term=term):
+                row = next(l for l in block.splitlines() if l.startswith(f"| {term} |"))
+                self.assertIn(f"`{letter}`", row,
+                              f"the Glossary row for {term} does not carry its id letter")
+
+    def test_no_term_is_defined_twice(self):
+        """A second, shorter account of a term is what contradicts the first."""
+        after = self.text.split("## 1. Claim selection", 1)[1]
+        for term in ("summary sentence", "boxed answer", "item", "detail", "research artifact",
+                     "unit of observation", "unit of analysis", "claim candidate"):
+            with self.subTest(term=term):
+                for opener in (f"A {term} is", f"An {term} is", f"The {term} is"):
+                    self.assertNotIn(opener, after,
+                                     f"{term} is defined again outside the Glossary")
+
     def test_it_defines_every_term_the_pages_use(self):
-        for term in ("main result", "main result", "claim", "excluded candidate",
+        for term in ("main result", "main result", "claim", "excluded claim candidate",
                      "checker", "mapping level"):
             with self.subTest(term=term):
                 self.assertIn(term, self.folded,
@@ -8170,7 +8213,7 @@ class SiteGate(unittest.TestCase):
         self.assertIn(cea_claims._flat(claim["selection_reason"])[:40], body)
         excluded = data["excluded"][0]
         rcard = re.search(rf'<article[^>]*\sid="{excluded["id"]}".*?</article>', html, re.S)
-        self.assertIsNotNone(rcard, "every excluded candidate must have a card")
+        self.assertIsNotNone(rcard, "every excluded claim candidate must have a card")
         self.assertIn(cea_claims._flat(excluded["reason"])[:30], rcard.group(0))
         self.assertIn(f'p. {excluded["page"]}', rcard.group(0),
                       "the card must state the candidate's page")
