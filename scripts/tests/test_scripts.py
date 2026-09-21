@@ -541,15 +541,6 @@ class NamedPaths(unittest.TestCase):
                 self.assertEqual(caught.exception.code, 2)
                 self.assertIn("name a path", err.getvalue())
 
-    def test_an_empty_framework_is_refused(self):
-        """It was falsy, so the site built with no framework page and no link to one, at exit 0."""
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            with self.assertRaises(SystemExit) as caught:
-                cea_claims.main(["site", "rec", "--out", "s", "--framework", ""])
-        self.assertEqual(caught.exception.code, 2)
-        self.assertIn("name a path", err.getvalue())
-
-
 class DeepJson(unittest.TestCase):
     """Thousands of nested arrays exhaust the stack before json.loads gives up."""
 
@@ -835,10 +826,8 @@ class TheGate(unittest.TestCase):
             raise unittest.SkipTest("this is the run the gate started")
         cls.tree = Path(tempfile.mkdtemp())
         root = Path(__file__).resolve().parent.parent.parent
-        # framework.md belongs here as much as the scripts do: both skills name it, so a tree
-        # without it is not a tree the gate can judge.
-        for name in ("scripts", "skills", "evals", "claims.schema.json", "framework.md",
-                     ".claude-plugin"):
+        # framework.md travels inside skills/, where the spec has a skill keep the files it names.
+        for name in ("scripts", "skills", "evals", "claims.schema.json", ".claude-plugin"):
             src = root / name
             if not src.exists():
                 continue
@@ -1117,9 +1106,11 @@ class MessagesThatCanBeActedOn(unittest.TestCase):
             # page a reader gets is blank
             for content in ("   \n", "<!--\nan internal note the reader must not see\n-->\n"):
                 empty.write_text(content, encoding="utf-8")
-                with contextlib.redirect_stdout(io.StringIO()) as said:
-                    code = cea_claims.main(["site", str(rec), "--out", str(Path(tmp) / "_site"),
-                                            "--framework", str(empty)])
+                # The framework is the plugin's own document, so the check is reached by standing
+                # a broken one in its place rather than by naming one on the command line.
+                with contextlib.redirect_stdout(io.StringIO()) as said, \
+                        unittest.mock.patch.object(cea_claims, "FRAMEWORK", empty):
+                    code = cea_claims.main(["site", str(rec), "--out", str(Path(tmp) / "_site")])
                 with self.subTest(document=content.split("\n")[0]):
                     self.assertEqual(code, 2)
                     self.assertIn("renders to an empty page", said.getvalue())
@@ -3994,7 +3985,7 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
     read the selection rules. The framework is one document in this repository now, so the terms
     the pages show and the terms it defines can be held together."""
 
-    FRAMEWORK = SCRIPTS.parent / "framework.md"
+    FRAMEWORK = cea_claims.FRAMEWORK
 
     @classmethod
     def setUpClass(cls):
@@ -4031,7 +4022,8 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
                          "the selection question has to stand exactly once")
         skill = (SCRIPTS.parent / "skills" / "extract-claims" / "SKILL.md").read_text(encoding="utf-8")
         self.assertNotIn(question, skill, "the skill restates the question instead of naming it")
-        self.assertIn("framework.md", skill, "the skill has to name the framework")
+        self.assertIn("references/framework.md", skill,
+                      "the skill has to name the framework by its relative path")
 
     def test_the_framework_still_renders_as_a_page(self):
         """It carries tables, a fenced diagram, and a block quote, and the site's renderer covers
@@ -7882,9 +7874,9 @@ class SiteGate(unittest.TestCase):
             doc = Path(tmp) / "framework.md"
             doc.write_bytes("# Übersicht\n".encode("utf-16"))
             out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                code = cea_claims.main(["site", str(rec), "--out", str(Path(tmp) / "_site"),
-                                        "--framework", str(doc)])
+            with contextlib.redirect_stdout(out), \
+                    unittest.mock.patch.object(cea_claims, "FRAMEWORK", doc):
+                code = cea_claims.main(["site", str(rec), "--out", str(Path(tmp) / "_site")])
             printed = out.getvalue()
         self.assertEqual(code, 2)
         self.assertIn("framework document", printed)

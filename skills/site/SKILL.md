@@ -37,7 +37,7 @@ The scripts are in `scripts/` at the root of the plugin, beside the `skills/` di
 python3 <plugin root>/scripts/cea_claims.py validate <paper directory>
 python3 <plugin root>/scripts/cea_claims.py render <paper directory>
 python3 <plugin root>/scripts/cea_claims.py site <paper directory> [<paper directory> ...] \
-    --out <site directory> [--framework <framework.md>]
+    --out <site directory>
 ```
 
 Run `validate` for each paper first. The build runs it too and refuses the record, but it prints
@@ -50,7 +50,7 @@ only the first three problems per paper, while `validate` prints them all with t
 | `<site>/index.html` | every paper, with its counts and a link to its page |
 | `<site>/papers/<paper_id>/index.html` | the paper's page |
 | `<site>/papers/<paper_id>/claims.json`, `claims.md`, `text.txt`, the PDF | the record the page was built from, beside it |
-| `<site>/framework/index.html` | the framework text, when `--framework` names a Markdown file |
+| `<site>/framework/index.html` | the framework text, always |
 
 The record sits beside its page so that the page's links to it work wherever the folder is served,
 and so that a zip of one paper's folder is complete on its own.
@@ -67,12 +67,14 @@ page stops it. Each record therefore needs its `text.txt` beside its `claims.jso
 The pages use the framework's terms: main result, broad statement, narrow claim, rejected
 candidate, checker, and mapping level. Every claim card carries an `M1` badge over six dots, so
 the document has to define the mapping levels and name the six links of the chain the badge shows:
-interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `--framework <file.md>` publishes the framework text as a page of the site and links
-it from every footer, so a reader has the definitions at hand. Point it at
-`<plugin root>/framework.md`, which is the framework this plugin builds records against and holds
-every term the pages use. Do not write a summary of the framework instead: a second, shorter
-account of the rules is the thing most likely to contradict them, and it is the reason the
-framework and the selection rules are one document rather than two.
+interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `site` always publishes the framework as a page and links it from every footer, so a reader has
+the definitions at hand. It publishes the plugin's own
+`skills/extract-claims/references/framework.md`, which is the framework the records are built
+against and holds every term the pages use, and there is nothing to pass: a document handed in
+could be the wrong one or a stale copy, and a site built without one showed every claim's mapping
+level with no page anywhere defining it. The framework and the selection rules are one document
+for the same reason: a second, shorter account of the rules is the thing most likely to
+contradict them.
 
 ## Publishing
 

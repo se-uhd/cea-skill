@@ -26,7 +26,7 @@ The checker must be able to verify the record. Each statement is quoted exactly 
 - If `check-env` or `extract` fails, stop and report its output. Do not read the PDF yourself instead, because the validator can check quotes only against `text.txt`.
 - Do not edit `text.txt`.
 - A paper may have no narrow claims. A qualitative study, for example, may give counts that describe its data but report no quantitative result. Say that the paper has no narrow claims, record the rejected candidates, and do not turn a qualitative finding into a claim.
-- A paper may also have no broad statements, when every main result it states is qualitative. Record the rejected candidates, say that the paper has no broad statements and no claims, and do not turn a qualitative main result into a broad statement. No broad statement id then exists for a reason to name, so every reason names the ground that excludes its candidate, as "Selection question" in `<plugin root>/framework.md` describes.
+- A paper may also have no broad statements, when every main result it states is qualitative. Record the rejected candidates, say that the paper has no broad statements and no claims, and do not turn a qualitative main result into a broad statement. No broad statement id then exists for a reason to name, so every reason names the ground that excludes its candidate, as "Selection question" in `references/framework.md` describes.
 
 ## Scripts
 
@@ -55,7 +55,7 @@ The lines of two columns can be mixed on any page, whatever `extract` lists, so 
 
 ### 2. Read the definitions
 
-Read `<plugin root>/framework.md`: its "Scope" and all of "1. Claim selection", the part this skill applies. It defines main results, broad statements, narrow claims, and rejected candidates. The steps below name its subsections in quotation marks, as in "Splitting".
+Read `references/framework.md`: its "Scope" and all of "1. Claim selection", the part this skill applies. It defines main results, broad statements, narrow claims, and rejected candidates. The steps below name its subsections in quotation marks, as in "Splitting".
 
 ### 3. Read the whole paper
 

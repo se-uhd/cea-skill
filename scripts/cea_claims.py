@@ -5,7 +5,7 @@
   extract PDF [--out DIR] [--id ID]  write DIR/<paper_id>/text.txt, the paper's text with page markers
   validate PAPER_DIR                 check PAPER_DIR/claims.json against PAPER_DIR/text.txt
   render PAPER_DIR                   check claims.json, then write claims.md and claims.html
-  site PAPER_DIR... [--out DIR] [--framework DOC]
+  site PAPER_DIR... [--out DIR]
                                      build a static site from several papers' records
   schema [--out FILE]                the JSON Schema of claims.json, printed or written to FILE
 
@@ -41,6 +41,11 @@ PAGE_MARKER = re.compile(r"^=== page (\d{1,6}) ===$")
 # its bytes. Without it nothing tied text.txt to a paper: a record could keep one paper's
 # text, name another paper's title and PDF, and publish a page whose every quote came from
 # a document the footer told the reader to check against.
+# The framework this plugin builds records against, and the definitions page the site
+# publishes. One document, so the rules and the terms the pages show cannot drift apart.
+FRAMEWORK = Path(__file__).resolve().parent.parent / "skills" / "extract-claims" \
+    / "references" / "framework.md"
+
 SOURCE_MARKER = re.compile(r"^=== paper (.+) sha256:([0-9a-f]{64}) ===$")
 # The files the site writes into a paper's directory, and claims.html, which render writes beside
 # a record. A paper.pdf named after one of them would be copied over it. Compared case-folded,
@@ -2386,7 +2391,6 @@ def _named_path(value: str) -> str:
 
     An empty one is `.` to pathlib and falsy to an `if`, so `--out "$SITE_DIR"` with the variable
     unset would scatter the site through whatever directory the command ran in, and
-    `--framework "$DOC"` would quietly publish a site with no framework page and no link to one.
     Both reported success.
     """
     if not value.strip():
@@ -2673,24 +2677,26 @@ def cmd_site(args) -> int:
     if missing:
         print(f"CEA_FAILED: no claims.json in {', '.join(missing)}")
         return 2
-    framework = Path(args.framework) if args.framework else None
-    if framework and not framework.is_file():
-        print(f"CEA_FAILED: no framework document at {framework}")
+    # The framework is this plugin's own document, not a path the caller hands in. Every claim
+    # card stamps a mapping level and every footer links the page that defines it, so a site
+    # without that page shows a level that nothing anywhere explains. It was optional before,
+    # which built exactly that site and reported success.
+    framework = FRAMEWORK
+    if not framework.is_file():
+        print(f"CEA_FAILED: the framework document is missing from the plugin at {framework}")
         return 2
-    if framework:
-        try:
-            text = framework.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError) as e:
-            print(f"CEA_FAILED: cannot read the framework document {framework}: {e}")
-            return 2
-        # Every paper's footer links this page as the one that defines the terms it uses, so an
-        # empty one is a promise the site does not keep. What matters is what a reader sees, so
-        # the rendered page is what is measured: a document of nothing but HTML comments has text
-        # in it and renders to nothing, because the comments are dropped.
-        if not re.sub(r"<[^>]+>", "", cea_site.md_to_html(text)).strip():
-            print(f"CEA_FAILED: the framework document {framework} renders to an empty page, and "
-                  "every paper would link it as the page that defines the terms they use")
-            return 2
+    try:
+        text = framework.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"CEA_FAILED: cannot read the framework document {framework}: {e}")
+        return 2
+    # What matters is what a reader sees, so the rendered page is what is measured: a document of
+    # nothing but HTML comments has text in it and renders to nothing, because the comments are
+    # dropped.
+    if not re.sub(r"<[^>]+>", "", cea_site.md_to_html(text)).strip():
+        print(f"CEA_FAILED: the framework document {framework} renders to an empty page, and "
+              "every paper would link it as the page that defines the terms they use")
+        return 2
     written, messages = cea_site.build_site(records, Path(args.out), framework)
     for message in messages:
         print(message)
@@ -2723,8 +2729,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("paper_dirs", nargs="+")
     p.add_argument("--out", default="_site", type=_out_dir,
                    help="output directory (default: _site)")
-    p.add_argument("--framework", type=_named_path,
-                   help="a Markdown document to publish as the framework page")
     p.set_defaults(func=cmd_site)
     args = parser.parse_args(argv)
     return args.func(args)

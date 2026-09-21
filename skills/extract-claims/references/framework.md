@@ -38,7 +38,7 @@ Recording what was set aside, and why, is what makes the selection reviewable: a
 
 A main result that the paper states as a qualitative finding is out of scope, so the record holds no claim for it. A main result that no narrow claim serves stays in the record as a finding, with the reason the paper's own evidence does not reach it.
 
-The subsections below give the rules that decide each of the three, and `<plugin root>/skills/extract-claims/references/record-format.md` gives the fields that hold them.
+The subsections below give the rules that decide each of the three, and `record-format.md`, beside this file, gives the fields that hold them. Sections 2 to 7 speak of main results and claims rather than of the entries that hold them, because a chain is reconstructed for a claim and weighed against the main result it serves, whatever the record calls the entry.
 
 ### Main results
 
@@ -143,7 +143,7 @@ A number that a participant states, such as "30 PRs per day" in a quoted post, a
 
 ### What claim selection does not decide
 
-The next step interprets each claim: the constructs and their relation, the unit of analysis, the scope, and the claim kind, which is descriptive, associational, predictive, or causal. Sections 2 to 5 reconstruct the chain to the evidence and assess whether the evidence supports the claim. None of those interpretations and assessments belongs in the claim record. Every claim in a record that claim selection has written stands at mapping level M1, which Section 4 defines: the claim, with its exact wording, location, and selection reason, and no link of the chain reconstructed.
+The next step interprets each claim, which means establishing the claim content that Section 2 defines. Sections 2 to 5 reconstruct the chain to the evidence and assess whether the evidence supports the claim. None of those interpretations and assessments belongs in the claim record. Every claim in a record that claim selection has written stands at mapping level M1, which Section 4 defines: the claim, with its exact wording, location, and selection reason, and no link of the chain reconstructed.
 
 ## 2. The chain
 
@@ -168,7 +168,7 @@ flowchart LR
 | Measures | What represents each construct in a form that can be observed. |
 | Observations | The recorded data, which describes entities at the unit of observation. |
 | Unit-level data | Observations brought to the unit of analysis. |
-| Result | What the analysis of the unit-level data shows. |
+| Result | What the analysis of the unit-level data shows. This is not the paper's **main result** in the sense of Section 1: a main result is what the paper puts forward as its finding, and a result here is one outcome of one analysis that a claim rests on. |
 
 A construct is a concept that the claim asserts something about, such as seniority, coding time, or throughput. Some measures represent their construct directly, and others only indirectly. The less directly a measure represents its construct, the more justification the reasoning link needs.
 
@@ -185,7 +185,7 @@ A construct is a concept that the claim asserts something about, such as seniori
 
 The unit bridge is a separate link because a claim and its data can concern different units. A claim about developers that rests on data about commits needs this bridge, and aggregating commits to developers can change the relation that a result shows [8]. When the observations already describe the unit of analysis, the unit bridge needs no further step.
 
-A narrow claim can rest on several results, each with its own chain. When the claim needs the results jointly, every chain is reconstructed. When one result alone supports the claim, reconstructing its chain is enough, and the record for the claim, described in Section 7, states why.
+A narrow claim can rest on several results in this sense, each with its own chain. When the claim needs the results jointly, every chain is reconstructed. When one result alone supports the claim, reconstructing its chain is enough, and the record for the claim, described in Section 7, states why.
 
 ## 3. Link quality
 
@@ -213,16 +213,18 @@ The reasoning link is clear only when the authors made the argument, in the pape
 
 ## 4. Mapping level
 
-The mapping level is the highest level that a chain reaches, and it records how far the chain could be reconstructed. Gaps and speculative links earlier in the chain do not lower the level. They are reported with it, so that the level and its gaps together describe what the reconstructed chain covers and where it is incomplete.
+The mapping level is how far along the chain the reconstruction got before it stopped. The chain runs in the order its links are numbered, so each level requires every link below it: a chain reaches an element only when every link from the claim to that element is clear. One gap or speculative link therefore holds the level at the element before it, however many links beyond it are clear.
 
-| Level | The reconstructed chain reaches |
-|---|---|
-| M1 | The claim, with its exact wording, location, and selection reason. |
-| M2 | The claim content, because link 1 is clear. |
-| M3 | The result, because link 5 is clear. |
-| M4 | The reasoning, because link 6 is clear. |
+| Level | The reconstructed chain reaches | Requires |
+|---|---|---|
+| M1 | The claim alone. | Nothing. Link 1 is not clear. |
+| M2 | The claim content. | Link 1. |
+| M3 | The result. | Links 1 to 5. |
+| M4 | The reasoning. | Links 1 to 6. |
 
-Report the level for each reconstructed chain together with the links that are not clear, as in "M4, gap at the unit bridge". A high level does not indicate strong support.
+Report the level for each reconstructed chain together with the first link that is not clear, as in "M2, speculative at the operationalization", and with any further link that is not clear. The first such link is what holds the level, so naming it says what the reconstruction would need next. A high level does not indicate strong support: M4 says every link is clear, not that the evidence bears out the claim, which is what Section 5 decides.
+
+Links 2, 3, and 4 give no level of their own. A chain that establishes the measures but not the observations stops at M2, as does one that establishes neither, so the level alone does not say how far into the middle of the chain the reconstruction got. The links and their qualities in the record say that, and the level is the summary.
 
 ## 5. Alignment assessment
 
@@ -246,6 +248,8 @@ The assessment ends in one verdict:
 | Conflicting evidence | The result contradicts the claim. |
 | Not assessable | Material needed for the comparison is not accessible. |
 
+Each verdict is about one claim. Section 1 selected the claim because a main result would fail or need substantial revision without it, and recorded which main results it serves and how each of them would fail, so the assessment ends by saying what the verdict leaves of each one. A claim that supports only a narrower wording carries its main result no further than that wording reaches. A main result whose claims are all insufficiently supported stands on nothing the chain shows, which is itself the finding.
+
 A verdict rests on the reconstructed chain, and the authors' statement that their evidence supports the claim is not enough on its own. Missing access does not show that the evidence contradicts the claim. A successful run of the analysis does not show that a measure represents the intended construct.
 
 ## 6. Example
@@ -261,21 +265,29 @@ The example uses a hypothetical narrow claim, "In the studied projects, senior d
 | 5 Analysis | Commit counts are compared between senior and junior developers. | Clear, stated in the paper |
 | 6 Reasoning | Neither the paper nor the artifact argues that commit counts reflect coding time. | Gap, argument absent |
 
-If the artifact did not show how commits are attributed to developers, the unit bridge would be speculative. Its basis would name the assumption that each developer commits under a single identity.
+If the artifact did not show how commits are attributed to developers, the unit bridge would be speculative, and its basis would name the assumption that each developer commits under a single identity.
 
-The mapping level is "M3, gap at the reasoning link", because the chain reaches the result but not the reasoning. A justification proposed by the checker would be speculative and would leave the level at M3.
+The mapping level is "M3, gap at the reasoning", because links 1 to 5 are clear and link 6 is not. A justification proposed by the checker would be speculative rather than clear, so it would leave the level at M3.
+
+Had the artifact not shown how commits are attributed to developers, the speculative unit bridge would hold the level at M2 even though the analysis link beyond it is clear, and the report would read "M2, speculative at the unit bridge".
 
 The alignment assessment finds two construct mismatches. Commit counts do not represent coding time, and project tenure does not represent seniority in general. The verdict is "supports a narrower claim", with the narrower wording "In the studied projects, developers with longer project tenure made fewer commits than developers with shorter tenure."
 
 ## 7. Record for each claim
 
-The record for each narrow claim contains the following items:
+The selection record of Section 1 already holds each claim with its location, the main results
+it serves, and how each of them would fail if the claim were false. The chain steps add to it, per
+claim:
 
-- the claim, its location, and the reason for selecting it
 - each link of the chain with its quality, its basis, and the outcome of the check
 - the reason for stopping when chains are reconstructed for only some of the claim's results
 - the mapping level of each reconstructed chain, with its gaps
 - the mismatches and the verdict, with reasons
+- what the verdict leaves of each main result the claim serves, as Section 5 describes
+
+The two are one record. Section 1's part is written before any evidence is read and is not revised
+by the later steps: a claim that turns out to be unsupported was still correctly selected, and the
+verdict is what changes, not the selection.
 
 ## 8. Foundations
 

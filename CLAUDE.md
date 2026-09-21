@@ -5,16 +5,19 @@ plugin. Two skills share one set of scripts:
 
 | Skill | What it is for |
 |---|---|
-| `skills/extract-claims` | one paper: extract its text, select its claims, validate, and render `claims.md` and `claims.html`. The rules it applies are Section 1 of `framework.md`. |
+| `skills/extract-claims` | one paper: extract its text, select its claims, validate, and render `claims.md` and `claims.html`. The rules it applies are Section 1 of its `references/framework.md`. |
 | `skills/site` | several papers: assemble their pages, an index, and the framework page into a site |
 
 ## Where the outputs go
 
-`framework.md`, at the root of the plugin, is the framework itself and the source of truth for
-every term the skills and the published pages use. Section 1 holds the claim-selection rules that
-`extract-claims` applies, and Sections 2 to 8 the later steps, so that the rules and the framework
-they serve cannot drift apart. `site --framework framework.md` publishes it as the definitions page
-of the site. Keep it the only account of the terms: a shorter second copy is what contradicts it.
+`skills/extract-claims/references/framework.md` is the framework itself and the source of truth
+for every term the skills and the published pages use. Section 1 holds the claim-selection rules
+that `extract-claims` applies, and Sections 2 to 8 the later steps, so that the rules and the
+framework they serve cannot drift apart. It sits in that skill's `references/` because the Agent
+Skills spec has a skill name its files by a relative path one level down, and that is the skill
+that reads it; `site` resolves it through `FRAMEWORK` in `cea_claims.py` and always publishes it as
+the definitions page. Keep it the only account of the terms: a shorter second copy is what
+contradicts it.
 
 `scripts/cea_claims.py`, at the root of the plugin, has the commands for both skills. `extract` writes `text.txt`, the agent
 writes `claims.json`, `validate` checks every quote against the page text, and `render` writes `claims.md` and
