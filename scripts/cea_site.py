@@ -173,7 +173,7 @@ def md_to_html(text: str) -> str:
         elif re.match(r"^#{1,6} ", line):
             level = len(line) - len(line.lstrip("#"))
             title = line[level:].strip()
-            # Two headings can slug to one name ("Claim" and "Narrow Claim"), and a
+            # Two headings can slug to one name ("The chain" and "The Chain"), and a
             # heading with no letters or digits slugs to nothing. Both leave a link pointing at
             # whichever of them the browser happens to find first, so each slug is made unique.
             # The fallback is derived from the title, not from the heading's position: a counter

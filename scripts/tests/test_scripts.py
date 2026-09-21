@@ -4030,6 +4030,69 @@ class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
         self.assertIn("main_results", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
 
 
+class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
+    """The terms retired at format 2 kept turning up after the rename: in the site skill's own list
+    of the terms the pages use, in the validator's messages, and in `evals/`, where the graders are
+    generated from `evals.json` and a regeneration put the old words back over the fix. Reading only
+    the scripts was not enough, so this reads everything a commit carries."""
+
+    # Built from fragments, so this file does not match its own search.
+    RETIRED = ("broad" + " statement", "narrow" + " claim", "rejected" + " candidate",
+               "broad" + "_statements")
+    # The change note has to name them, since it says what changed.
+    ALLOWED = ("scripts/cea_claims.py",)
+
+    def files(self):
+        # The gate runs this suite over a copied tree that carries no .git, where a listing is
+        # empty and says nothing about the repository. That is a skip, not a failure.
+        inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=SCRIPTS.parent,
+                                capture_output=True, text=True, timeout=120)
+        if inside.returncode != 0:
+            raise unittest.SkipTest("not a git work tree, so there is no list of tracked files")
+        out = subprocess.run(["git", "ls-files", "-z"], cwd=SCRIPTS.parent,
+                             capture_output=True, text=True, timeout=120)
+        if not out.stdout.strip("\0").strip():
+            raise unittest.SkipTest("the tracked-file listing is empty")
+        for name in out.stdout.split("\0"):
+            if not name or name in self.ALLOWED:
+                continue
+            if Path(name).name == Path(__file__).name:
+                continue
+            if Path(name).suffix.lower() not in (".md", ".json", ".yaml", ".yml", ".py", ".sh",
+                                                 ".txt", ".html"):
+                continue
+            path = SCRIPTS.parent / name
+            if path.is_file():
+                yield name, path
+
+    def test_no_tracked_file_uses_a_term_the_record_retired(self):
+        seen = 0
+        for name, path in self.files():
+            seen += 1
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for term in self.RETIRED:
+                with self.subTest(file=name, term=term):
+                    self.assertNotIn(term, text.lower(),
+                                     f"{name} still uses {term!r}, which format 2 retired")
+        self.assertGreater(seen, 20, f"only {seen} file(s) were read; the listing failed")
+
+    def test_the_one_allowed_file_is_allowed_for_a_reason(self):
+        text = (SCRIPTS / "cea_claims.py").read_text(encoding="utf-8")
+        note = cea_claims._FORMAT_CHANGES[cea_claims.FORMAT]
+        for term in self.RETIRED:
+            with self.subTest(term=term):
+                self.assertIn(term, note,
+                              "the change note is exempt because it names the retired terms")
+        outside = text.replace(note, "")
+        # the note is one string in the source, split over lines, so compare on the words
+        for term in self.RETIRED:
+            for word in term.split():
+                self.assertIn(word, text)
+
+
 class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
     """The published pages stamp `L1` on every claim card and link to the framework page for what
     it means, and the record's own vocabulary is the framework's. Nothing tied them: `--framework`
