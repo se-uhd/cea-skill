@@ -28,7 +28,7 @@ from cea_claims import (_by_weight, _first_page, _flat, _id_order, _key,  # noqa
                         _one_result, _shared_with_other_results, _stated_in)
 
 E = html.escape
-BID = re.compile(r"\bB\d+\b")
+RID = re.compile(r"\bR\d+\b")
 
 ANCHOR = ('<a class="section-anchor" href="#{id}" onclick="navigator.clipboard.writeText(this.href)" '
           'title="Copy link to section"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" '
@@ -93,8 +93,8 @@ def _clauses(reason: str) -> list[str]:
         # comma cost a reason every result but the last.
         if not part.strip():
             continue
-        bare = [w.strip(".,;:()").casefold() for w in BID.sub(" ", part).split()]
-        if (BID.search(part) and not _STANDS.search(part) and len(part.split()) <= 4
+        bare = [w.strip(".,;:()").casefold() for w in RID.sub(" ", part).split()]
+        if (RID.search(part) and not _STANDS.search(part) and len(part.split()) <= 4
                 and all(w in _CARRIES for w in bare)):
             carried += part + " and "
             continue
@@ -110,7 +110,7 @@ def _affirms(clause: str) -> bool:
     return bool(_STANDS.search(clause) and not _NOT.search(clause)
                 and not _ASKS.search(clause) and not _ONLY_IF.search(clause))
 
-# The heading over each group of rejected candidates. The first four are read off the record: a
+# The heading over each group of excluded candidates. The first four are read off the record: a
 # candidate names what it repeats, what it breaks down, the split it is part of, or the statement
 # it leaves standing. The last is everything else, so its heading says only that, and does not
 # assert a ground: a candidate held open for the checker, or excluded for a reason the record
@@ -131,7 +131,7 @@ SECTION_MAP = """    <section id="map">
       <div class="map" id="claim-map">
         <svg class="map-edges" id="map-edges" aria-hidden="true"></svg>
         <div class="map-head">Main results</div>
-        <div class="map-head">Narrow claims</div>
+        <div class="map-head">Claims</div>
         @@MAP@@
       </div>
     </section>
@@ -144,10 +144,10 @@ SECTION_RESULTS = """    <section id="results">
 """
 
 SECTION_CLAIMS = """    <section id="claims">
-      <h2>Narrow Claims@@ANCHOR_CLAIMS@@</h2>
+      <h2>Claims@@ANCHOR_CLAIMS@@</h2>
       <div class="filter-bar">
         <input id="claim-search" type="search" placeholder="Filter by quote, section or reason"
-               aria-label="Filter narrow claims">
+               aria-label="Filter claims">
         <button class="chip" data-flag="note">Has a note</button>
         <button class="chip" data-flag="table">Checked against a table or figure</button>
         <span class="filter-count" id="claim-count"></span>
@@ -163,7 +163,7 @@ def refs(entry: dict, field: str) -> list[str]:
 
 
 def weighed_against(r: dict, known: set[str] | None = None) -> set[str]:
-    """The broad statements that a rejected candidate refers to.
+    """The main results that an excluded candidate refers to.
 
     `duplicate_of` and `breaks_down` name them as data. A reason names one in its text, because the
     skill requires "B2 would still stand, because ...". Prose is not data, though: a paper about
@@ -178,7 +178,7 @@ def weighed_against(r: dict, known: set[str] | None = None) -> set[str]:
     # reason weighing two results, one surviving and one not, tagged the candidate with both and
     # the page printed "leaves standing B5" directly above a reason saying B5 does not stand.
     named = {b for clause in _clauses(r.get("reason", ""))
-             if _affirms(clause) for b in BID.findall(clause)}
+             if _affirms(clause) for b in RID.findall(clause)}
     if known is not None:
         named &= known
     return set(refs(r, "duplicate_of")) | set(refs(r, "breaks_down")) | named
@@ -248,9 +248,9 @@ def plugin_version() -> str:
 
 
 def chain_track() -> str:
-    """The mapping level of every claim on the page, which is M1 for all of them.
+    """The mapping level of every claim on the page, which is L1 for all of them.
 
-    M1 means the chain from the paper's words down to what was measured has not been reconstructed,
+    L1 means the chain from the paper's words down to what was measured has not been reconstructed,
     which is what this skill does and does not do: it records the claim and its evidence, and
     leaves the chain to a later step. The gloss says so of each of the six links, because reading
     it as a list ending in "not reconstructed" made it sound like a remark about the last one.
@@ -259,13 +259,13 @@ def chain_track() -> str:
                    for i, t in enumerate(LINKS, 1))
     # The gloss is written out, not left in the title attribute. A title shows on hover and
     # nowhere else: not in print, not on a touch screen, not to a reader using a screen reader,
-    # and not in the text of a saved page. Six empty circles and the letters M1 mean nothing
+    # and not in the text of a saved page. Six empty circles and the letters L1 mean nothing
     # without it.
-    return ('<div class="chain" title="mapping level M1: none of the six links of the chain ('
-            + ", ".join(LINKS) + ') is reconstructed here, which is what M1 means">'
-            '<span class="lvl">M1</span>' + dots
+    return ('<div class="chain" title="mapping level L1: none of the six links of the chain ('
+            + ", ".join(LINKS) + ') is reconstructed here, which is what L1 means">'
+            '<span class="lvl">L1</span>' + dots
             + '<span class="chain-note">none of the six links is reconstructed here, '
-              'which is what M1 means</span></div>')
+              'which is what L1 means</span></div>')
 
 
 def near(name: str, source: Path, out: Path) -> str:
@@ -349,21 +349,21 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
     rather than the reader's, while the page embeds the whole record."""
     data = {k: v for k, v in data.items() if k != "$schema"}
     paper = data["paper"]
-    broad, claims, rejected = data["broad_statements"], data["claims"], data["rejected"]
-    by_id = {b["id"]: b for b in broad}
+    results, claims, excluded = data["main_results"], data["claims"], data["excluded"]
+    by_id = {b["id"]: b for b in results}
     order = {b["id"]: n for n, b in enumerate(_by_weight(data))}
     groups = sorted(_one_result(data), key=lambda g: min(order[b] for b in g))
-    serving = {b["id"]: [c["id"] for c in claims if b["id"] in c["serves"]] for b in broad}
-    known = {b["id"] for b in broad}
-    considered = {b["id"]: [r["id"] for r in rejected if b["id"] in weighed_against(r, known)]
-                  for b in broad}
+    serving = {b["id"]: [c["id"] for c in claims if b["id"] in c["serves"]] for b in results}
+    known = {b["id"] for b in results}
+    considered = {b["id"]: [r["id"] for r in excluded if b["id"] in weighed_against(r, known)]
+                  for b in results}
     splits: dict[str, list[str]] = {}
-    for x in claims + rejected:
+    for x in claims + excluded:
         if x.get("split_from"):
             splits.setdefault(x["split_from"], []).append(x["id"])
     repeats: dict[str, list[str]] = {}
     breakdowns: dict[str, list[str]] = {}
-    for r in rejected:
+    for r in excluded:
         for t in refs(r, "duplicate_of"):
             repeats.setdefault(t, []).append(r["id"])
         for t in refs(r, "breaks_down"):
@@ -400,7 +400,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             nodes = ('<p class="node-empty">'
                      + (f'Served by {", ".join(E(i) for i in elsewhere)}, shown under the result '
                         'each claim was filed with above. ' if elsewhere else
-                        'No narrow claim serves this result. ')
+                        'No claim serves this result. ')
                      + f'{E(_flat(b.get("note") or ""))}</p>')
         elif elsewhere:
             nodes += ('<p class="node-empty">Also served by '
@@ -411,7 +411,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             # the section open and the others listed here, rather than one card of the ten.
             nodes += (f'<button class="node candidates" data-reveal="{E(rej[0])}" '
                       f'title="{E(", ".join(rej))}">'
-                      f'{len(rej)} rejected candidate{"s" if len(rej) != 1 else ""}: '
+                      f'{len(rej)} excluded candidate{"s" if len(rej) != 1 else ""}: '
                       f'{E(", ".join(rej[:6]))}{" and more" if len(rej) > 6 else ""} '
                       f'&rarr;</button>')
         # A sentence that repeats this result and another one is counted under both, so these
@@ -439,9 +439,9 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             field("states", para(b["states"]))
             if b.get("states") and _key(b["states"]) != _key(b["quote"]) else "",
             field("claims that serve it", badges(serving[lead]) or '<p class="dim">none</p>'),
-            field("rejected candidates that repeat it", badges(repeats.get(lead, []))),
-            field("rejected candidates that break it into parts", badges(breakdowns.get(lead, []))),
-            field("rejected candidates that leave it standing",
+            field("excluded candidates that repeat it", badges(repeats.get(lead, []))),
+            field("excluded candidates that break it into parts", badges(breakdowns.get(lead, []))),
+            field("excluded candidates that leave it standing",
                   badges([r for r in considered[lead]
                           if r not in repeats.get(lead, []) and r not in breakdowns.get(lead, [])])),
             field("note", para(b["note"]) if b.get("note") else ""),
@@ -495,9 +495,9 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             E(_flat(c["states"])), tags, body))
         ticks.append((_first_page(c), "claim", c["id"], _flat(c["section"])))
 
-    # the rejected candidates, folded
+    # the excluded candidates, folded
     buckets: dict[str, list[dict]] = {k: [] for k, _ in REJ_GROUPS}
-    for r in sorted(rejected, key=_first_page):
+    for r in sorted(excluded, key=_first_page):
         buckets[kind_of(r, known)].append(r)
         ticks.append((_first_page(r), "candidate", r["id"], _flat(r["section"])))
     cand_html = []
@@ -553,8 +553,8 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
                                                key=lambda m: (m[0], rank[m[1]], _id_order(m[2]))))
         counts = {k: sum(1 for _, kk, _ in items if kk == k) for k in rank}
         tally = ", ".join(f"{n} {name}{'s' if n > 1 else ''}" for name, n in
-                          (("broad statement", counts["result"]), ("claim", counts["claim"]),
-                           ("candidate", counts["candidate"])) if n)
+                          (("main result", counts["result"]), ("claim", counts["claim"]),
+                           ("excluded candidate", counts["candidate"])) if n)
         rows_sec.append(f'<tr><td class="sec">{E(sec)}</td><td class="pp">{span}</td>'
                         f'<td class="mm" title="{E(tally)}"><div class="marks">{marks}</div></td></tr>')
     strip = ('<table class="sectable"><thead><tr><th>Section, as the record gives it</th><th>Page</th>'
@@ -562,15 +562,15 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
              + "".join(rows_sec) + "</tbody></table>")
 
     # the overview
-    places = _stated_in(data) if broad else 0
-    # "broad statements", not "main results": several statements can state one result, which the
+    places = _stated_in(data) if results else 0
+    # "main results", not "main results": several statements can state one result, which the
     # map merges into one row, and one statement can state two. claims.md has always said this.
-    stats = [(len(broad), "broad statements"), (len(claims), "narrow claims"),
-             (len(rejected), "rejected candidates"), (places, "sentences the record marks as stating the main results")]
+    stats = [(len(results), "main results"), (len(claims), "claims"),
+             (len(excluded), "excluded candidates"), (places, "sentences the record marks as stating the main results")]
     stat_html = "".join(f'<div class="stat-card"><div class="stat-value">{v}</div>'
                         f'<div class="stat-label">{E(l)}</div></div>' for v, l in stats)
 
-    unserved = [b for b in broad if not serving[b["id"]]]
+    unserved = [b for b in results if not serving[b["id"]]]
     watch_html = ""
     if unserved:
         items = "".join(
@@ -581,33 +581,33 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
             f'<li>{badge(b["id"])} <span class="question">{E(_flat(b["quote"]))}</span>'
             f'<p class="side">{E(_flat(b.get("note") or ""))}</p></li>' for b in unserved)
         watch_html = (f'<div class="note-card"><h3>Main result{"s" if len(unserved) != 1 else ""} that no '
-                      f'narrow claim serves</h3><ul>{items}</ul></div>')
-    if not broad:
+                      f'claim serves</h3><ul>{items}</ul></div>')
+    if not results:
         # What the record says, not what the paper does. The record marks no sentence as a main
         # result; it does not say the paper has none, and the page cannot tell the difference. A
-        # record whose broad statements were all demoted to candidates made the page assert, in
+        # record whose main results were all demoted to candidates made the page assert, in
         # its own voice, that a paper with a quantitative abstract states no quantitative result,
         # above cards quoting that paper's numbers.
         watch_html = ('<div class="note-card scope"><h3>Scope</h3><p>This record marks no sentence '
                       'of this paper as stating a quantitative main result, so it records no main '
-                      'result and no narrow claim. Claim-Evidence Alignment covers quantitative '
+                      'result and no claim. Claim-Evidence Alignment covers quantitative '
                       'empirical claims, and a qualitative finding is out of its scope, not absent '
                       'from the paper. The candidates considered are below, each with the reason '
-                      'it is not a narrow claim.</p></div>') + watch_html
+                      'it is not a claim.</p></div>') + watch_html
 
     links = [("overview", "Overview")]
-    if broad:
+    if results:
         links += [("map", "Claim Map"), ("results", "Main Results")]
     if claims:
-        links.append(("claims", "Narrow Claims"))
-    links.append(("candidates", "Rejected Candidates"))
+        links.append(("claims", "Claims"))
+    links.append(("candidates", "Excluded Candidates"))
     active = ' class="active"'
     nav_links = "\n    ".join(
         f'<a href="#{i}"{active if n == 0 else ""}>{E(label)}</a>'
         for n, (i, label) in enumerate(links))
     template = (TEMPLATE
-                .replace("@@SEC_MAP@@", SECTION_MAP if broad else "")
-                .replace("@@SEC_RESULTS@@", SECTION_RESULTS if broad else "")
+                .replace("@@SEC_MAP@@", SECTION_MAP if results else "")
+                .replace("@@SEC_RESULTS@@", SECTION_RESULTS if results else "")
                 .replace("@@SEC_CLAIMS@@", SECTION_CLAIMS if claims else ""))
 
     fields = {
@@ -631,7 +631,7 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
         "WATCH": watch_html,
         "STRIP": strip,
         "CANDIDATES": "".join(cand_html) or '<p class="node-empty">No candidate was recorded.</p>',
-        "N_CANDIDATES": str(len(rejected)),
+        "N_CANDIDATES": str(len(excluded)),
         "SOURCE": E(source.name),
         "BUILT": date.today().isoformat(),
         "DATA": json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c"),
@@ -834,8 +834,8 @@ TEMPLATE = r"""<!DOCTYPE html>
   <noscript>
     <style>
       /* Only the page's own script opens a body, so without scripting the page holds back four
-         fifths of the record: every selection reason, every note, and every rejected candidate
-         with the reason it was rejected. None of that is decoration. It is shown open instead,
+         fifths of the record: every selection reason, every note, and every excluded candidate
+         with the reason it was excluded. None of that is decoration. It is shown open instead,
          and the controls that would now do nothing are taken away. */
       .entry-body { display: block; }
       #candidates-body { display: block; }
@@ -853,8 +853,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <header>
     <h1>@@TITLE@@</h1>
-    <p class="subtitle">This page records the narrow claims the paper's main results rest on, and the
-    candidates that were considered and rejected. <code>@@PAPER_ID@@</code> &middot; @@PAGES@@ pages.</p>
+    <p class="subtitle">This page records the claims the paper's main results rest on, and the
+    candidates that were considered and excluded. <code>@@PAPER_ID@@</code> &middot; @@PAGES@@ pages.</p>
   </header>
 
   <main>
@@ -865,11 +865,11 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div class="panel">
         <h3>By section of the paper</h3>
         <p class="panel-desc">One row per section heading, in page order. Each mark is one main result, narrow
-        claim, or rejected candidate recorded in that section. Click a mark to open its card.</p>
+        claim, or excluded candidate recorded in that section. Click a mark to open its card.</p>
         <div class="legend in-panel">
           <span class="legend-item"><i class="legend-dot result"></i>main result (B)</span>
-          <span class="legend-item"><i class="legend-dot claim"></i>narrow claim (C)</span>
-          <span class="legend-item"><i class="legend-dot candidate"></i>rejected candidate (R)</span>
+          <span class="legend-item"><i class="legend-dot claim"></i>claim (C)</span>
+          <span class="legend-item"><i class="legend-dot candidate"></i>excluded candidate (R)</span>
         </div>
         <div class="strip">@@STRIP@@</div>
       </div>
@@ -877,12 +877,12 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 @@SEC_MAP@@@@SEC_RESULTS@@@@SEC_CLAIMS@@
     <section id="candidates">
-      <h2>Rejected Candidates@@ANCHOR_CANDIDATES@@</h2>
-      <button class="reveal" id="reveal-candidates" aria-expanded="false">Show @@N_CANDIDATES@@ rejected candidates</button>
+      <h2>Excluded Candidates@@ANCHOR_CANDIDATES@@</h2>
+      <button class="reveal" id="reveal-candidates" aria-expanded="false">Show @@N_CANDIDATES@@ excluded candidates</button>
       <div id="candidates-body">
         <div class="filter-bar">
           <input id="cand-search" type="search" placeholder="Filter by quote, section or reason"
-                 aria-label="Filter rejected candidates">
+                 aria-label="Filter excluded candidates">
           <button class="chip" data-flag="note">Has a note</button>
           <button class="chip" data-flag="table">Checked against a table or figure</button>
           <span class="filter-count" id="cand-count"></span>
@@ -909,9 +909,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 (function () {
   var DATA = JSON.parse(document.getElementById('cea-data').textContent);
   var BY_ID = {};
-  DATA.broad_statements.forEach(function (b) { BY_ID[b.id] = { kind: 'result', e: b }; });
+  DATA.main_results.forEach(function (b) { BY_ID[b.id] = { kind: 'result', e: b }; });
   DATA.claims.forEach(function (c) { BY_ID[c.id] = { kind: 'claim', e: c }; });
-  DATA.rejected.forEach(function (r) { BY_ID[r.id] = { kind: 'candidate', e: r }; });
+  DATA.excluded.forEach(function (r) { BY_ID[r.id] = { kind: 'candidate', e: r }; });
 
   var candidates = document.getElementById('candidates');
   var revealBtn = document.getElementById('reveal-candidates');
@@ -928,7 +928,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     if (candidates.classList.contains('shown')) {
       candidates.classList.remove('shown');
       revealBtn.setAttribute('aria-expanded', 'false');
-      revealBtn.textContent = 'Show ' + DATA.rejected.length + ' rejected candidates';
+      revealBtn.textContent = 'Show ' + DATA.excluded.length + ' excluded candidates';
     } else {
       revealCandidates();
     }
@@ -979,7 +979,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     }
     var extra = rec.kind === 'result'
       ? 'Main result, ' + esc(String(e.source).replace('_', ' ')) + ', page ' + esc(e.page)
-      : 'Narrow claim, page ' + esc(e.page) + ', serves ' + esc([].concat(e.serves || []).join(', '));
+      : 'Claim, page ' + esc(e.page) + ', serves ' + esc([].concat(e.serves || []).join(', '));
     tooltip.innerHTML = '<span class="abbr">' + esc(e.id) + ' &middot; ' + extra + '</span><p>' +
       esc(e.quote) + '</p>';
     tooltip.style.display = 'block';

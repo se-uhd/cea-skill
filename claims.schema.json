@@ -5,17 +5,17 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "broad_statements",
     "claims",
-    "paper",
-    "rejected"
+    "excluded",
+    "main_results",
+    "paper"
   ],
   "properties": {
     "$schema": {
       "type": "string"
     },
     "format": {
-      "const": 1,
+      "const": 2,
       "description": "The record format this record is written in. A record without it is read as format 1, which every record written before the stamp is."
     },
     "paper": {
@@ -47,7 +47,7 @@
         }
       }
     },
-    "broad_statements": {
+    "main_results": {
       "type": "array",
       "items": {
         "type": "object",
@@ -62,7 +62,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^B\\d+$"
+            "pattern": "^R\\d+$"
           },
           "note": {
             "type": "string",
@@ -156,7 +156,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^B\\d+$"
+              "pattern": "^R\\d+$"
             },
             "minItems": 1,
             "uniqueItems": true
@@ -179,7 +179,7 @@
         }
       }
     },
-    "rejected": {
+    "excluded": {
       "type": "array",
       "items": {
         "type": "object",
@@ -196,7 +196,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^B\\d+$"
+              "pattern": "^R\\d+$"
             },
             "minItems": 1,
             "uniqueItems": true
@@ -205,14 +205,14 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^[BCR]\\d+$"
+              "pattern": "^[RCE]\\d+$"
             },
             "minItems": 1,
             "uniqueItems": true
           },
           "id": {
             "type": "string",
-            "pattern": "^R\\d+$"
+            "pattern": "^E\\d+$"
           },
           "note": {
             "type": "string",

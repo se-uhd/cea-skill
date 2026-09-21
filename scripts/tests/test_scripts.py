@@ -731,7 +731,7 @@ class TruncatedFigures(unittest.TestCase):
 
 
 class BroadStatementStates(unittest.TestCase):
-    """`states` on a broad statement carries the main result, so it is held to the split rules."""
+    """`states` on a main result carries the main result, so it is held to the split rules."""
 
     QUOTE = "Caching did not reduce build failures, and it halved median build time."
     TEXT = ("=== page 1 ===\nCaching did not reduce build failures, and it halved median build "
@@ -741,15 +741,15 @@ class BroadStatementStates(unittest.TestCase):
     def warnings(self, states):
         data = valid_claims()
         data["paper"]["pages"] = 2
-        data["broad_statements"][0].update(quote=self.QUOTE, states=states, page=1)
+        data["main_results"][0].update(quote=self.QUOTE, states=states, page=1)
         data["claims"] = [{"id": "C1", "quote": "Across the 48 projects, median build time fell "
                                                 "from 9.2 to 4.1 minutes.",
                            "states": "Across the 48 projects, median build time fell from 9.2 to "
                                      "4.1 minutes.",
-                           "page": 2, "section": "5 Results", "serves": ["B1"],
+                           "page": 2, "section": "5 Results", "serves": ["R1"],
                            "split_from": None,
-                           "selection_reason": "B1 rests on this comparison of build times."}]
-        data["rejected"] = []
+                           "selection_reason": "R1 rests on this comparison of build times."}]
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(self.TEXT, encoding="utf-8")
@@ -776,10 +776,10 @@ class TheSumAdvisory(unittest.TestCase):
     def check(self, note, states=None):
         import tempfile
         data = valid_claims()
-        data["rejected"][0]["note"] = note
+        data["excluded"][0]["note"] = note
         if states:
-            data["rejected"][0]["states"] = states
-            data["rejected"][0]["split_from"] = "S9"
+            data["excluded"][0]["states"] = states
+            data["excluded"][0]["split_from"] = "S9"
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
@@ -898,7 +898,7 @@ class ASumIsCheckedAgainstTheNumberTheNoteNames(unittest.TestCase):
 
     def check(self, note):
         data = valid_claims()
-        data["rejected"][0]["note"] = note
+        data["excluded"][0]["note"] = note
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
@@ -914,9 +914,9 @@ class ASumIsCheckedAgainstTheNumberTheNoteNames(unittest.TestCase):
             "no total: Whole methods 7 and One block 5."))
 
     def test_an_entry_id_is_not_read_as_a_total(self):
-        """"part of B12" captured 12, and four committed notes are written that way."""
+        """"part of R12" captured 12, and four committed notes are written that way."""
         self.assertNotIn("add up to", self.check(
-            "The remaining part of B12 is recorded separately. Table 4 prints 9 and 8 for the "
+            "The remaining part of R12 is recorded separately. Table 4 prints 9 and 8 for the "
             "two groups."))
 
     def test_one_quantity_with_a_wrong_sum_is_still_questioned(self):
@@ -929,7 +929,7 @@ class EveryGroundTheFrameworkGivesPassesTheReasonCheck(unittest.TestCase):
 
     def warns(self, reason):
         data = valid_claims()
-        data["rejected"][0]["reason"] = reason
+        data["excluded"][0]["reason"] = reason
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
@@ -938,9 +938,9 @@ class EveryGroundTheFrameworkGivesPassesTheReasonCheck(unittest.TestCase):
             return any("no ground" in w for w in (problems or cea_claims.advisories(d, loaded)))
 
     def test_the_standing_template_passes_however_it_opens(self):
-        """"B1 would still stand." passed and "Main result B1 would still stand." did not."""
-        for reason in ("B1 would still stand.", "Main result B1 would still stand.",
-                       "Main result B1 still stands without it.",
+        """"R1 would still stand." passed and "Main result R1 would still stand." did not."""
+        for reason in ("R1 would still stand.", "Main result R1 would still stand.",
+                       "Main result R1 still stands without it.",
                        "Describes the data, not a result."):
             with self.subTest(reason=reason):
                 self.assertFalse(self.warns(reason))
@@ -951,7 +951,7 @@ class AVerdictIsNotAGround(unittest.TestCase):
 
     def warns(self, reason):
         data = valid_claims()
-        data["rejected"][0]["reason"] = reason
+        data["excluded"][0]["reason"] = reason
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
@@ -960,7 +960,7 @@ class AVerdictIsNotAGround(unittest.TestCase):
             return any("no ground" in w for w in (problems or cea_claims.advisories(d, loaded)))
 
     def test_every_shape_of_verdict_is_questioned(self):
-        for reason in ("Not a claim.", "Not a claim here.", "Not a claim, B1.",
+        for reason in ("Not a claim.", "Not a claim here.", "Not a claim, R1.",
                        "Does not qualify.", "It does not qualify.", "Nothing rests on it.",
                        "See the note.", "Judged not to be one.", "Excluded from the set.",
                        "Fails the test."):
@@ -969,7 +969,7 @@ class AVerdictIsNotAGround(unittest.TestCase):
 
     def test_a_reason_that_gives_a_ground_is_not(self):
         for reason in ("Describes the data, not a result of the study.",
-                       "B1 would still stand, because this only repeats the sample size."):
+                       "R1 would still stand, because this only repeats the sample size."):
             with self.subTest(reason=reason[:40]):
                 self.assertFalse(self.warns(reason))
 
@@ -989,16 +989,16 @@ class GroundsAreChecked(unittest.TestCase):
             return "\n".join(problems or cea_claims.advisories(d, loaded))
 
     def test_naming_an_id_does_not_excuse_a_verdict_for_a_reason(self):
-        """"Important." was questioned and "Important. B1." was not."""
-        for reason in ("Important.", "Important. B1."):
+        """"Important." was questioned and "Important. R1." was not."""
+        for reason in ("Important.", "Important. R1."):
             with self.subTest(reason=reason):
                 self.assertIn("no ground a checker can assess",
-                              self.warnings(lambda d: d["rejected"][0].update(reason=reason)))
+                              self.warnings(lambda d: d["excluded"][0].update(reason=reason)))
 
     def test_a_selection_reason_of_an_id_alone_is_questioned(self):
         """The reference asks it to say how the main result would fail without the claim."""
-        self.assertIn("names the broad statement and nothing else",
-                      self.warnings(lambda d: d["claims"][0].update(selection_reason="B1")))
+        self.assertIn("names the main result and nothing else",
+                      self.warnings(lambda d: d["claims"][0].update(selection_reason="R1")))
 
     def test_a_real_selection_reason_is_not(self):
         self.assertNotIn("nothing else", self.warnings(lambda d: None))
@@ -1024,10 +1024,10 @@ class MessagesThatCanBeActedOn(unittest.TestCase):
         data = valid_claims()
         data["paper"]["pages"] = 2
         data["claims"] = [{"id": "C1", "quote": "We found 38 dis[...]tinct configurations here.",
-                           "states": states, "page": 2, "section": "5 Results", "serves": ["B1"],
+                           "states": states, "page": 2, "section": "5 Results", "serves": ["R1"],
                            "split_from": None,
-                           "selection_reason": "B1 rests on this count of configurations."}]
-        data["rejected"] = []
+                           "selection_reason": "R1 rests on this count of configurations."}]
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(self.GAPPED, encoding="utf-8")
@@ -1056,10 +1056,10 @@ class MessagesThatCanBeActedOn(unittest.TestCase):
         data["paper"]["pages"] = 2
         data["claims"] = [{"id": "C1",
                            "quote": "The median was 4.1 [...] across every project we measured.",
-                           "states": states, "page": 2, "section": "5 Results", "serves": ["B1"],
+                           "states": states, "page": 2, "section": "5 Results", "serves": ["R1"],
                            "split_from": None,
-                           "selection_reason": "B1 rests on this median."}]
-        data["rejected"] = []
+                           "selection_reason": "R1 rests on this median."}]
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(self.BETWEEN, encoding="utf-8")
@@ -1326,12 +1326,12 @@ class LayoutKeepsEveryWord(unittest.TestCase):
         header = f"{'Code':<30}{'Description':<40}Source"
         width = len(header)
         caption = f"{'':<{(width - 7) // 2}}TABLE I"
-        rows = [f"{'reviewer-burden':<30}{'Workload asymmetry where AI saves':<40}R05"
+        rows = [f"{'reviewer-burden':<30}{'Workload asymmetry where AI saves':<40}E05"
                 for _ in range(3)]
         # Blank where the gutter falls, so it counts one cell where two are asked for and does not
         # read as a row that crosses the gutter either. It is a row because its gap ends where the
         # table's last column begins.
-        continued = f"{'':<30}{'time and the reviewer pays':<40}R13"
+        continued = f"{'':<30}{'time and the reviewer pays':<40}E13"
         gutter = 60
         self.assertTrue(pdf_text._blank_at(continued, gutter), "the fixture crosses the gutter")
         self.assertFalse(pdf_text._spans_with_cells(continued, gutter),
@@ -1856,22 +1856,22 @@ def valid_claims():
     return {
         "format": cea_claims.FORMAT,
         "paper": {"id": "fixture", "title": "Fixture", "pdf": "fixture.pdf", "pages": 3},
-        "broad_statements": [
-            {"id": "B1", "quote": "Caching halves median build time.", "page": 1,
+        "main_results": [
+            {"id": "R1", "quote": "Caching halves median build time.", "page": 1,
              "section": "Abstract", "source": "abstract"},
         ],
         "claims": [
             {"id": "C1", "quote": SPLIT_QUOTE,
              "states": "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.",
-             "page": 2, "section": "5 Results", "serves": ["B1"], "split_from": "S1",
-             "selection_reason": "B1 rests on this comparison."},
+             "page": 2, "section": "5 Results", "serves": ["R1"], "split_from": "S1",
+             "selection_reason": "R1 rests on this comparison."},
             {"id": "C2", "quote": SPLIT_QUOTE,
              "states": "Across the 48 projects, the failure rate stayed at 3%.",
-             "page": 2, "section": "5 Results", "serves": ["B1"], "split_from": "S1",
+             "page": 2, "section": "5 Results", "serves": ["R1"], "split_from": "S1",
              "selection_reason": "Needs different evidence than C1."},
         ],
-        "rejected": [
-            {"id": "R1", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+        "excluded": [
+            {"id": "E1", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
              "section": "4 Data", "reason": "Describes the data, not a result."},
         ],
     }
@@ -1906,24 +1906,24 @@ def unused_hooks(html, anchors=frozenset()):
 
 
 def _a_candidate_weighed_against_a_result(d):
-    """A rejected candidate that names a broad statement hangs off that result in the map."""
-    d["rejected"][0]["duplicate_of"] = "B1"
-    d["rejected"][0]["reason"] = "B1 would still stand, because it repeats B1."
+    """An excluded candidate that names a main result hangs off that result in the map."""
+    d["excluded"][0]["duplicate_of"] = "R1"
+    d["excluded"][0]["reason"] = "R1 would still stand, because it repeats R1."
 
 
 def _a_result_with_a_note(d):
     """A result no claim serves stands only where its note says why, and the page prints both."""
     d["claims"] = []
-    d["broad_statements"][0]["states"] = "Whether caching helps."
-    d["broad_statements"][0]["note"] = "The paper reports no comparison."
+    d["main_results"][0]["states"] = "Whether caching helps."
+    d["main_results"][0]["note"] = "The paper reports no comparison."
 
 
 def _two_statements_of_one_result(d):
-    """Two broad statements that the same claims serve state one result, and the map groups them."""
-    d["broad_statements"].append({"id": "B2", "quote": "Build time is cut in half by caching.",
+    """Two main results that the same claims serve state one result, and the map groups them."""
+    d["main_results"].append({"id": "R2", "quote": "Build time is cut in half by caching.",
                                   "page": 1, "section": "1 Introduction", "source": "contributions"})
     for c in d["claims"]:
-        c["serves"] = ["B1", "B2"]
+        c["serves"] = ["R1", "R2"]
 
 
 class Validate(unittest.TestCase):
@@ -1965,22 +1965,22 @@ class Validate(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 5.0, "the gap search must not blow up")
 
     def test_ten_or_more_results_order_numerically_not_as_strings(self):
-        """B10 sorted before B2 as a string, while the page sorts them numerically."""
+        """R10 sorted before R2 as a string, while the page sorts them numerically."""
         data = valid_claims()
-        base = data["broad_statements"][0]
-        data["broad_statements"] = [dict(base, id=f"B{n}") for n in range(1, 13)]
+        base = data["main_results"][0]
+        data["main_results"] = [dict(base, id=f"R{n}") for n in range(1, 13)]
         for claim in data["claims"]:
-            claim["serves"] = ["B1"]
+            claim["serves"] = ["R1"]
         order = [b["id"] for b in cea_claims._by_weight(data)]
-        tail = [i for i in order if i != "B1"]
-        self.assertEqual(tail, [f"B{n}" for n in range(2, 13)],
+        tail = [i for i in order if i != "R1"]
+        self.assertEqual(tail, [f"R{n}" for n in range(2, 13)],
                          f"results must order numerically, got {order}")
 
     def test_a_rejected_part_without_its_words_is_refused_not_a_crash(self):
-        """`states` is optional on a rejected candidate, so the gate passed it to a KeyError."""
+        """`states` is optional on an excluded candidate, so the gate passed it to a KeyError."""
         import cea_site
         data = valid_claims()
-        data["rejected"][0]["split_from"] = "S1"
+        data["excluded"][0]["split_from"] = "S1"
         cea_claims.render(data)  # must not raise
         self.assertIn("states", self.check(data))
         with tempfile.TemporaryDirectory() as tmp:
@@ -1991,7 +1991,7 @@ class Validate(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 written, messages = cea_site.build_site([rec], Path(tmp) / "_site")
         self.assertEqual(written, 0)
-        self.assertIn("rejected[0].states", "\n".join(messages))
+        self.assertIn("excluded[0].states", "\n".join(messages))
 
     def test_an_entry_page_must_be_a_number_or_a_range(self):
         """The gate took any string, so markup in `page` reached the page's attributes."""
@@ -2025,7 +2025,7 @@ class Validate(unittest.TestCase):
 
     def test_a_non_list_serves_is_reported_not_raised(self):
         """validate raised a TypeError where the skill tells the agent to read a marker."""
-        for bad in (1, True, 1.5, "B1"):
+        for bad in (1, True, 1.5, "R1"):
             with self.subTest(serves=repr(bad)):
                 data = valid_claims()
                 data["claims"][0]["serves"] = bad
@@ -2033,12 +2033,12 @@ class Validate(unittest.TestCase):
 
     def test_duplicate_of_rejects_a_repeated_id(self):
         data = valid_claims()
-        data["rejected"][0]["duplicate_of"] = ["C1", "C1"]
+        data["excluded"][0]["duplicate_of"] = ["C1", "C1"]
         self.assertIn("is listed twice", self.check(data))
 
     def test_breaks_down_rejects_a_repeated_id(self):
         data = valid_claims()
-        data["rejected"][0]["breaks_down"] = ["B1", "B1"]
+        data["excluded"][0]["breaks_down"] = ["R1", "R1"]
         self.assertIn("is listed twice", self.check(data))
 
     def test_paper_id_must_be_one_path_segment(self):
@@ -2051,7 +2051,7 @@ class Validate(unittest.TestCase):
 
     def test_a_broad_statement_states_must_not_be_empty(self):
         data = valid_claims()
-        data["broad_statements"][0]["states"] = ""
+        data["main_results"][0]["states"] = ""
         self.assertIn("states", self.check(data))
 
     def test_valid_record_passes(self):
@@ -2059,80 +2059,80 @@ class Validate(unittest.TestCase):
 
     def test_statements_serving_one_result_are_named(self):
         data = valid_claims()
-        data["broad_statements"] += [
-            {"id": "B2", "quote": "Caching halves median build time.", "page": 1,
+        data["main_results"] += [
+            {"id": "R2", "quote": "Caching halves median build time.", "page": 1,
              "section": "1 Introduction", "source": "contributions"},
-            {"id": "B3", "quote": "Caching halves median build time.", "page": 3,
+            {"id": "R3", "quote": "Caching halves median build time.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"}]
         for c in data["claims"]:
-            c["serves"] = ["B1", "B2", "B3"]
-        self.assertIn("broad_statements B1, B2, B3", self.warnings(data))
+            c["serves"] = ["R1", "R2", "R3"]
+        self.assertIn("main_results R1, R2, R3", self.warnings(data))
 
     def test_one_result_is_rendered_once(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Caching halves median build time.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Caching halves median build time.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
         for c in data["claims"]:
-            c["serves"] = ["B1", "B2"]
+            c["serves"] = ["R1", "R2"]
         md = cea_claims.render(data)
-        self.assertIn("also stated as B2", md)
+        self.assertIn("also stated as R2", md)
         self.assertEqual(md.count("1 of 2 for this result"), 2)
 
     def test_a_claim_serving_two_results_says_so(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
-        # Two claims of their own keep B2 a result apart from B1, rather than a restatement of it.
+        # Two claims of their own keep R2 a result apart from R1, rather than a restatement of it.
         data["claims"] += [
             {"id": "C3", "quote": "Only 3 of the 48 builds failed.", "states": "Only 3 of the 48 builds failed.",
-             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
-             "selection_reason": "B2 says failures are rare."},
+             "page": 3, "section": "5 Results", "serves": ["R2"], "split_from": None,
+             "selection_reason": "R2 says failures are rare."},
             {"id": "C4", "quote": "No project saw its failure rate rise.", "states": "No project saw its failure rate rise.",
-             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
-             "selection_reason": "B2 rests on this as well."}]
-        data["claims"][0]["serves"] = ["B1", "B2"]
+             "page": 3, "section": "5 Results", "serves": ["R2"], "split_from": None,
+             "selection_reason": "R2 rests on this as well."}]
+        data["claims"][0]["serves"] = ["R1", "R2"]
         md = cea_claims.render(data).split("### Every claim")[0]
         self.assertIn("and of 1 other result", md)
         self.assertIn("1 of 3 for this result", md)
 
     def test_a_statement_whose_claims_all_serve_another_is_a_breakdown(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Caching helps most on the largest projects.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Caching helps most on the largest projects.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
-        data["claims"][0]["serves"] = ["B1", "B2"]
+        data["claims"][0]["serves"] = ["R1", "R2"]
         self.assertIn("may break that result down", self.warnings(data))
         # The record puts no order on the statements, so neither does the warning.
-        data["broad_statements"].reverse()
+        data["main_results"].reverse()
         self.assertIn("may break that result down", self.warnings(data))
-        data["broad_statements"].reverse()
+        data["main_results"].reverse()
         # A finding of its own brings a claim of its own.
         data["claims"].append(
             {"id": "C3", "quote": "The largest projects saved 6.1 minutes.", "states": "The largest projects saved 6.1 minutes.",
-             "page": 3, "section": "5 Results", "serves": ["B2"], "split_from": None,
-             "selection_reason": "B2 rests on this."})
+             "page": 3, "section": "5 Results", "serves": ["R2"], "split_from": None,
+             "selection_reason": "R2 rests on this."})
         self.assertNotIn("may break that result down", self.warnings(data))
 
     def test_a_chain_of_breakdowns_names_the_statement_that_survives(self):
         data = valid_claims()
-        data["broad_statements"] += [
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"] += [
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"},
-            {"id": "B3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+            {"id": "R3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
              "section": "4 Data", "source": "other", "note": "No summary sentence states it."}]
-        # B3 is served by C1 alone, B2 by C1 and C2, B1 by C1, C2 and C3.
+        # R3 is served by C1 alone, R2 by C1 and C2, R1 by C1, C2 and C3.
         data["claims"].append(
             {"id": "C3", "quote": "Build failures are rare in general.",
              "states": "Build failures are rare in general.", "page": 3, "section": "5 Results",
-             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."})
-        data["claims"][0]["serves"] = ["B1", "B2", "B3"]
-        data["claims"][1]["serves"] = ["B1", "B2"]
+             "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on this."})
+        data["claims"][0]["serves"] = ["R1", "R2", "R3"]
+        data["claims"][1]["serves"] = ["R1", "R2"]
         warned = [w for w in self.warnings(data).splitlines() if "may break that result down" in w]
         self.assertEqual(len(warned), 2)
-        # Both point at B1, which survives, not at each other.
-        self.assertTrue(all("naming B1" in w for w in warned), warned)
+        # Both point at R1, which survives, not at each other.
+        self.assertTrue(all("naming R1" in w for w in warned), warned)
 
     def test_a_reason_keeps_its_opening_word_when_it_names_a_ground(self):
         data = valid_claims()
@@ -2144,74 +2144,74 @@ class Validate(unittest.TestCase):
                        "Main sizes of the corpus, not a result.",
                        # A reason that runs on has said something, whatever word it opens with.
                        "An important result that the reader should certainly bear in mind here."):
-            data["rejected"][0]["reason"] = reason
+            data["excluded"][0]["reason"] = reason
             self.assertNotIn("gives no ground", self.warnings(data), reason)
         for reason in ("Important result.", "Not an important number.", "Minor.", "No",
                        "Important result for the study.", "A key number of the paper.",
                        "Important result that stands out in the discussion.",
                        "A notable figure about the participants."):
-            data["rejected"][0]["reason"] = reason
+            data["excluded"][0]["reason"] = reason
             self.assertIn("gives no ground", self.warnings(data), reason)
 
     def test_a_reason_that_names_a_statement_keeps_the_phrase(self):
         data = valid_claims()
-        data["rejected"][0]["reason"] = "B1 would still stand, because no main result depends on this subgroup."
+        data["excluded"][0]["reason"] = "R1 would still stand, because no main result depends on this subgroup."
         self.assertNotIn("is the selection question answered no", self.warnings(data))
-        data["rejected"][0]["reason"] = "No main result depends on this subgroup."
+        data["excluded"][0]["reason"] = "No main result depends on this subgroup."
         self.assertIn("is the selection question answered no", self.warnings(data))
 
     def test_a_chain_of_overlaps_does_not_become_one_result(self):
-        # Neighbours share two claims of three, but B1 and B4 share none, so nothing groups.
-        support = {"B1": ["C1", "C2", "C3"], "B2": ["C2", "C3", "C4"],
-                   "B3": ["C3", "C4", "C5"], "B4": ["C4", "C5", "C6"]}
+        # Neighbours share two claims of three, but R1 and R4 share none, so nothing groups.
+        support = {"R1": ["C1", "C2", "C3"], "R2": ["C2", "C3", "C4"],
+                   "R3": ["C3", "C4", "C5"], "R4": ["C4", "C5", "C6"]}
         every = sorted({c for cs in support.values() for c in cs})
         for order in itertools.permutations(support):
-            data = {"broad_statements": [{"id": b} for b in order],
+            data = {"main_results": [{"id": b} for b in order],
                     "claims": [{"id": c, "serves": [b for b in support if c in support[b]]}
                                for c in every]}
             groups = sorted(sorted(g) for g in cea_claims._one_result(data))
-            self.assertEqual(groups, [["B1"], ["B2"], ["B3"], ["B4"]], order)
+            self.assertEqual(groups, [["R1"], ["R2"], ["R3"], ["R4"]], order)
 
     def test_two_statements_with_no_claims_are_not_one_result(self):
         data = valid_claims()
-        data["broad_statements"] += [
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"] += [
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion",
              "note": "The paper gives no result for it."},
-            {"id": "B3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
+            {"id": "R3", "quote": "We collected 1,203 builds from 48 projects.", "page": 2,
              "section": "4 Data", "source": "other", "note": "No summary sentence states it."}]
         self.assertNotIn("the same claims serve all of them", self.warnings(data))
 
     def test_statements_sharing_most_of_their_claims_are_asked_about(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
         for c in data["claims"]:
-            c["serves"] = ["B1", "B2"]
+            c["serves"] = ["R1", "R2"]
         data["claims"] += [
             {"id": "C3", "quote": "We collected 1,203 builds from 48 projects.",
              "states": "We collected 1,203 builds from 48 projects.", "page": 2, "section": "5 Results",
-             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on this."},
+             "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on this."},
             {"id": "C4", "quote": "Build failures are rare in general.",
              "states": "Build failures are rare in general.", "page": 3, "section": "5 Results",
-             "serves": ["B2"], "split_from": None, "selection_reason": "B2 rests on this."}]
-        # B1 has C1, C2, C3 and B2 has C1, C2, C4: half of four shared, so a question, not a verdict.
-        self.assertIn("broad_statements B1 and B2: most of the claims", self.warnings(data))
+             "serves": ["R2"], "split_from": None, "selection_reason": "R2 rests on this."}]
+        # R1 has C1, C2, C3 and R2 has C1, C2, C4: half of four shared, so a question, not a verdict.
+        self.assertIn("main_results R1 and R2: most of the claims", self.warnings(data))
         self.assertNotIn("the same claims serve all of them", self.warnings(data))
-        data["broad_statements"].reverse()
+        data["main_results"].reverse()
         self.assertIn("most of the claims", self.warnings(data))
 
     def test_breaks_down_on_a_broken_record_reports_rather_than_raises(self):
         data = valid_claims()
-        del data["broad_statements"][0]["id"]
-        data["rejected"][0]["breaks_down"] = ["B1"]
-        self.assertIn("is not a broad statement id", self.check(data))
+        del data["main_results"][0]["id"]
+        data["excluded"][0]["breaks_down"] = ["R1"]
+        self.assertIn("is not a main result id", self.check(data))
 
     def test_breaks_down_and_duplicate_of_name_different_things(self):
         data = valid_claims()
-        data["rejected"][0]["duplicate_of"] = ["B1"]
-        data["rejected"][0]["breaks_down"] = ["B1"]
+        data["excluded"][0]["duplicate_of"] = ["R1"]
+        data["excluded"][0]["breaks_down"] = ["R1"]
         self.assertIn("a sentence either repeats a result or breaks it down", self.check(data))
 
     def test_a_breakdown_still_needs_a_ground(self):
@@ -2219,40 +2219,40 @@ class Validate(unittest.TestCase):
         ground it is not a claim. The exemption meant a two-word verdict was published under the
         page's own heading "Breaks a main result into parts" with nothing a checker could read."""
         data = valid_claims()
-        data["rejected"][0]["breaks_down"] = ["B1"]
-        data["rejected"][0]["reason"] = "A breakdown."
+        data["excluded"][0]["breaks_down"] = ["R1"]
+        data["excluded"][0]["reason"] = "A breakdown."
         self.assertIn("gives no ground", self.warnings(data))
 
     def test_a_breakdown_with_a_ground_is_accepted(self):
         data = valid_claims()
-        data["rejected"][0]["breaks_down"] = ["B1"]
-        data["rejected"][0]["reason"] = ("It divides B1's median into the two project groups, so "
-                                         "B1 still stands and this is one part of it.")
+        data["excluded"][0]["breaks_down"] = ["R1"]
+        data["excluded"][0]["reason"] = ("It divides R1's median into the two project groups, so "
+                                         "R1 still stands and this is one part of it.")
         self.assertNotIn("gives no ground", self.warnings(data))
 
     def test_a_repetition_names_the_statement_behind_the_claim(self):
         data = valid_claims()
-        data["rejected"].append(
-            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
+        data["excluded"].append(
+            {"id": "E2", "quote": "As Section 5.1 showed, caching cut median build time.",
              "page": 3, "section": "6 Discussion", "duplicate_of": ["C1"], "reason": "Repeats C1."})
-        self.assertIn("name the broad statement as well", self.warnings(data))
-        data["rejected"][-1]["duplicate_of"] = ["C1", "B1"]
-        self.assertNotIn("name the broad statement as well", self.warnings(data))
+        self.assertIn("name the main result as well", self.warnings(data))
+        data["excluded"][-1]["duplicate_of"] = ["C1", "R1"]
+        self.assertNotIn("name the main result as well", self.warnings(data))
         # A sentence repeating a number no main result rests on names no statement.
-        data["rejected"][-1]["duplicate_of"] = ["R1"]
-        self.assertNotIn("name the broad statement as well", self.warnings(data))
+        data["excluded"][-1]["duplicate_of"] = ["E1"]
+        self.assertNotIn("name the main result as well", self.warnings(data))
 
     def test_the_script_adds_up_the_parts_a_note_names(self):
         data = valid_claims()
-        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+        data["excluded"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
                                        "total: 700 and 503.")
         self.assertNotIn("add up to", self.warnings(data))
         # The same note with a row that does not belong to the total.
-        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+        data["excluded"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
                                        "total: 700 and 403.")
         self.assertIn("add up to 1103", self.warnings(data))
         # Percentages beside the counts are not parts.
-        data["rejected"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
+        data["excluded"][0]["note"] = ("Table 2 (page 2) prints the parts of the sentence's 1,203 and no "
                                        "total: 700 (58.2%) and 503 (41.8%).")
         self.assertNotIn("add up to", self.warnings(data))
 
@@ -2271,30 +2271,30 @@ class Validate(unittest.TestCase):
 
     def test_breaks_down_names_a_broad_statement(self):
         data = valid_claims()
-        data["rejected"][0]["breaks_down"] = ["C1"]
-        self.assertIn("is not a broad statement id", self.check(data))
-        data["rejected"][0]["breaks_down"] = ["B1"]
+        data["excluded"][0]["breaks_down"] = ["C1"]
+        self.assertIn("is not a main result id", self.check(data))
+        data["excluded"][0]["breaks_down"] = ["R1"]
         self.assertEqual(self.check(data), "")
-        self.assertIn("- Breaks down: B1", cea_claims.render(data))
+        self.assertIn("- Breaks down: R1", cea_claims.render(data))
 
     def test_a_breakdown_is_not_a_place_that_states_the_result(self):
         data = valid_claims()
-        data["rejected"][0]["duplicate_of"] = ["B1"]
+        data["excluded"][0]["duplicate_of"] = ["R1"]
         self.assertEqual(cea_claims._stated_in(data), 2)
-        del data["rejected"][0]["duplicate_of"]
-        data["rejected"][0]["breaks_down"] = ["B1"]
+        del data["excluded"][0]["duplicate_of"]
+        data["excluded"][0]["breaks_down"] = ["R1"]
         self.assertEqual(cea_claims._stated_in(data), 1)
 
     def test_grouping_depends_on_neither_the_order_nor_the_ids(self):
         # Two statements the same claims serve, and a third on its own.
         shapes = [["C1", "C2"], ["C1", "C2"], ["C3"]]
         seen = set()
-        for names in itertools.permutations(["B1", "B2", "B3"]):
+        for names in itertools.permutations(["R1", "R2", "R3"]):
             serves: dict[str, list[str]] = {}
             for name, shape in zip(names, shapes):
                 for c in shape:
                     serves.setdefault(c, []).append(name)
-            data = {"broad_statements": [{"id": b} for b in names],
+            data = {"main_results": [{"id": b} for b in names],
                     "claims": [{"id": c, "serves": s} for c, s in sorted(serves.items())]}
             groups = cea_claims._one_result(data)
             self.assertEqual(sorted(len(g) for g in groups), [1, 2], names)
@@ -2305,40 +2305,40 @@ class Validate(unittest.TestCase):
 
     def test_boxed_answer_takes_the_rq_answer_source(self):
         data = valid_claims()
-        data["broad_statements"][0]["section"] = "5 Results, Summary RQ1"
+        data["main_results"][0]["section"] = "5 Results, Summary RQ1"
         self.assertIn("the source is rq_answer", self.warnings(data))
-        data["broad_statements"][0]["source"] = "rq_answer"
+        data["main_results"][0]["source"] = "rq_answer"
         self.assertNotIn("the source is rq_answer", self.warnings(data))
 
     def test_reason_naming_a_ground_needs_no_broad_statement(self):
         data = valid_claims()
-        data["rejected"][0]["reason"] = "Describes the study, not a result."
+        data["excluded"][0]["reason"] = "Describes the study, not a result."
         self.assertNotIn("gives no ground", self.warnings(data))
         # A ground the script has no word for is a ground all the same.
-        data["rejected"][0]["reason"] = "It defines the metric rather than measuring anything."
+        data["excluded"][0]["reason"] = "It defines the metric rather than measuring anything."
         self.assertNotIn("gives no ground", self.warnings(data))
 
     def test_reason_naming_neither_a_result_nor_a_ground_warns(self):
         data = valid_claims()
         for verdict in ("Not an important number.", "Important result.", "Minor.", "No"):
             with self.subTest(reason=verdict):
-                data["rejected"][0]["reason"] = verdict
+                data["excluded"][0]["reason"] = verdict
                 self.assertIn("gives no ground", self.warnings(data))
 
     def test_quote_on_wrong_page(self):
         data = valid_claims()
-        data["rejected"][0]["page"] = 3
+        data["excluded"][0]["page"] = 3
         self.assertIn("found on page 2", self.check(data))
 
     def test_invented_quote(self):
         data = valid_claims()
-        data["broad_statements"][0]["quote"] = "Caching triples median build time."
+        data["main_results"][0]["quote"] = "Caching triples median build time."
         self.assertIn("not found in text.txt", self.check(data))
 
     def test_serves_unknown_broad_statement(self):
         data = valid_claims()
-        data["claims"][0]["serves"] = ["B9"]
-        self.assertIn("'B9' is not a broad statement id", self.check(data))
+        data["claims"][0]["serves"] = ["R9"]
+        self.assertIn("'R9' is not a main result id", self.check(data))
 
     def test_split_from_uses_the_prescribed_letter(self):
         data = valid_claims()
@@ -2364,22 +2364,22 @@ class Validate(unittest.TestCase):
 
     def test_render(self):
         md = cea_claims.render(valid_claims())
-        for expected in ("## Broad statements", "### C1: page 2", "- Split from S1, with C2",
-                         "### R1: page 2, 4 Data"):
+        for expected in ("## Main results", "### C1: page 2", "- Split from S1, with C2",
+                         "### E1: page 2, 4 Data"):
             self.assertIn(expected, md)
 
     def test_render_puts_the_most_stated_result_first(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
-        data["claims"][1]["serves"] = ["B2"]
-        data["rejected"].append(
-            {"id": "R2", "quote": "As Section 5.1 showed, caching cut median build time.",
-             "page": 3, "section": "6 Discussion", "duplicate_of": ["B1"], "reason": "Repeats B1."})
+        data["claims"][1]["serves"] = ["R2"]
+        data["excluded"].append(
+            {"id": "E2", "quote": "As Section 5.1 showed, caching cut median build time.",
+             "page": 3, "section": "6 Discussion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
         md = cea_claims.render(data)
-        self.assertIn("### B1 (abstract, stated in 2 places)", md)
-        self.assertLess(md.index("### B1 (abstract"), md.index("### B2 (conclusion"))
+        self.assertIn("### R1 (abstract, stated in 2 places)", md)
+        self.assertLess(md.index("### R1 (abstract"), md.index("### R2 (conclusion"))
 
     def test_render_lists_claims_in_page_order(self):
         data = valid_claims()
@@ -2389,19 +2389,19 @@ class Validate(unittest.TestCase):
 
     def test_duplicate_of_accepts_a_list_with_a_rejected_id(self):
         data = valid_claims()
-        data["rejected"].append({"id": "R2", "quote": "Build failures are rare in general.",
-                                 "page": 3, "section": "6 Discussion", "duplicate_of": ["R1", "C1"],
-                                 "reason": "Repeats R1."})
+        data["excluded"].append({"id": "E2", "quote": "Build failures are rare in general.",
+                                 "page": 3, "section": "6 Discussion", "duplicate_of": ["E1", "C1"],
+                                 "reason": "Repeats E1."})
         self.assertEqual(self.check(data), "")
 
     def test_duplicate_of_unknown_id(self):
         data = valid_claims()
-        data["rejected"][0]["duplicate_of"] = ["C9"]
-        self.assertIn("'C9' is not the id of a claim, rejected candidate, or broad statement", self.check(data))
+        data["excluded"][0]["duplicate_of"] = ["C9"]
+        self.assertIn("'C9' is not the id of a claim, excluded candidate, or main result", self.check(data))
 
     def test_duplicate_of_accepts_a_broad_statement_id(self):
         data = valid_claims()
-        data["rejected"][0]["duplicate_of"] = ["B1"]
+        data["excluded"][0]["duplicate_of"] = ["R1"]
         self.assertEqual(self.check(data), "")
 
     def test_quote_with_a_gap_inside_a_word(self):
@@ -2419,9 +2419,9 @@ class Validate(unittest.TestCase):
     def test_two_claims_with_the_same_quote(self):
         data = valid_claims()
         quote = "We collected 1,203 builds from 48 projects."
-        data["rejected"] = []
+        data["excluded"] = []
         data["claims"] += [{"id": f"C{n}", "quote": quote, "states": quote, "page": 2, "section": "4 Data",
-                            "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."} for n in (3, 4)]
+                            "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."} for n in (3, 4)]
         self.assertIn("(C4).quote: claims[2] (C3) already quotes the same sentence", self.check(data))
 
     def test_byte_order_mark_and_malformed_values(self):
@@ -2431,7 +2431,7 @@ class Validate(unittest.TestCase):
             (d / "claims.json").write_bytes(b"\xef\xbb\xbf" + json.dumps(valid_claims()).encode())
             self.assertEqual(cea_claims.validate(d)[0], [])
         data = valid_claims()
-        data["claims"][0]["serves"] = [["B1"]]
+        data["claims"][0]["serves"] = [["R1"]]
         data["claims"][1]["quote"] = 123
         data["claims"][1]["states"] = ["median"]
         out = self.check(data)
@@ -2443,9 +2443,9 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["claims"] += [
             {"id": "C3", "quote": quote, "states": "Remote caching cut median build time by 55%.", "page": 3,
-             "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
+             "section": "6", "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."},
             {"id": "C4", "quote": quote, "states": "Remote caching also reduced flaky failures by 12%.", "page": 3,
-             "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
+             "section": "6", "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."}]
         self.assertEqual(self.check(data, TEXT + quote + "\n"), "")
 
     def test_boundary_warnings(self):
@@ -2455,17 +2455,17 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["claims"] = [
             {"id": "C1", "quote": "3% more cache hits", "states": "3% more cache hits", "page": 2, "section": "5",
-             "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
+             "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."},
             {"id": "C2", "quote": "In total, 48 projects were stud", "states": "In total, 48 projects were stud", "page": 2,
-             "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
+             "section": "5", "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."},
             {"id": "C3", "quote": "We saw 13% more cache hits", "states": "We saw 13% more cache hits", "page": 2,
-             "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."},
+             "section": "5", "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."},
             {"id": "C4", "quote": "significant for 12 of the 48 projects.", "states": "significant for 12 of the 48 projects.",
-             "page": 2, "section": "5", "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."}]
-        data["rejected"] = [
-            {"id": "R1", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "48 projects were studied",
+             "page": 2, "section": "5", "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."}]
+        data["excluded"] = [
+            {"id": "E1", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "48 projects were studied",
              "page": 2, "section": "5", "split_from": "S1", "reason": "Describes the study."},
-            {"id": "R2", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "as listed",
+            {"id": "E2", "quote": "In total, 48 projects were studied, as listed, respectively.", "states": "as listed",
              "page": 2, "section": "5", "split_from": "S1", "reason": "Describes the study."}]
         # A quote that begins or ends inside a word of the page is no longer found there at all:
         # "3% more cache hits" against a page reading "13% more cache hits" is a different number,
@@ -2488,7 +2488,7 @@ class Validate(unittest.TestCase):
                 "projects that used remote caching.\n=== page 3 ===\nEnd.\n")
         data = valid_claims()
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "The failure rate increased for 12 of the 48 [...] projects that used remote caching.",
+        data["excluded"] = [{"id": "E1", "quote": "The failure rate increased for 12 of the 48 [...] projects that used remote caching.",
                              "page": 2, "section": "5 Results", "reason": "No main result depends on it."}]
         self.assertEqual([w for w in self.warnings(data, text).splitlines() if "skips" in w], [])
 
@@ -2499,7 +2499,7 @@ class Validate(unittest.TestCase):
                 "=== page 3 ===\nEnd.\n")
         data = valid_claims()
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "The failure rate increased for 12 of the 48 [...] decreased for the other 36 projects.",
+        data["excluded"] = [{"id": "E1", "quote": "The failure rate increased for 12 of the 48 [...] decreased for the other 36 projects.",
                              "page": 2, "section": "5 Results", "reason": "No main result depends on it."}]
         self.assertIn("reads as the paper's own running text", self.refusals(data, text))
 
@@ -2508,7 +2508,7 @@ class Validate(unittest.TestCase):
                 "The failure rate increased for 12 of the 48\nprojects that did not use remote caching, while it\n"
                 "decreased for the other 36 projects.\nTable 2: Failure rates per project group\n=== page 3 ===\nEnd.\n")
         data = valid_claims()
-        data["rejected"] = [{"id": "R1", "quote": "The failure rate increased for 12 of the 48 [...] decreased for the other 36 projects.",
+        data["excluded"] = [{"id": "E1", "quote": "The failure rate increased for 12 of the 48 [...] decreased for the other 36 projects.",
                              "page": 2, "section": "5", "reason": "No main result depends on it."}]
         self.assertIn('the [...] skips "projects that did not use remote caching, while it"',
                       self.refusals(data, text))
@@ -2516,8 +2516,8 @@ class Validate(unittest.TestCase):
     def test_same_sentence_recorded_on_two_pages(self):
         text = TEXT.replace("Build failures are rare in general.", "Caching halves median build time.")
         data = valid_claims()
-        data["rejected"].append({"id": "R2", "quote": "Caching halves median build time.", "page": 3,
-                                 "section": "7 Conclusion", "duplicate_of": ["B1"], "reason": "Repeats B1."})
+        data["excluded"].append({"id": "E2", "quote": "Caching halves median build time.", "page": 3,
+                                 "section": "7 Conclusion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
         self.assertEqual(self.check(data, text), "")
 
     def test_no_gap_warning_for_a_footnote_glued_to_a_word(self):
@@ -2527,7 +2527,7 @@ class Validate(unittest.TestCase):
                 "the 48 projects.\n=== page 3 ===\nEnd.\n")
         data = valid_claims()
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "The failure rate stayed at 3% across [...] the 48 projects.",
+        data["excluded"] = [{"id": "E1", "quote": "The failure rate stayed at 3% across [...] the 48 projects.",
                              "page": 2, "section": "5 Results", "reason": "No main result depends on it."}]
         self.assertEqual([w for w in self.warnings(data, text).splitlines() if "skips" in w], [])
 
@@ -2536,8 +2536,8 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["paper"]["pages"] = 2
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "Caching halves median build time.", "page": "1-2",
-                             "section": "Abstract", "reason": "Repeats B1."}]
+        data["excluded"] = [{"id": "E1", "quote": "Caching halves median build time.", "page": "1-2",
+                             "section": "Abstract", "reason": "Repeats R1."}]
         self.assertIn("names page 2, which text.txt does not have", self.check(data, text))
 
     def test_text_without_page_markers(self):
@@ -2545,22 +2545,22 @@ class Validate(unittest.TestCase):
 
     def test_page_range_must_name_two_consecutive_pages(self):
         data = valid_claims()
-        data["rejected"][0]["page"] = "1-3"
+        data["excluded"][0]["page"] = "1-3"
         self.assertIn("must name two consecutive pages", self.check(data))
 
     def test_page_range_for_a_quote_on_one_page(self):
         data = valid_claims()
-        data["rejected"][0]["page"] = "2-3"
+        data["excluded"][0]["page"] = "2-3"
         self.assertIn("the quote is on page 2 alone", self.check(data))
 
     def test_duplicate_id(self):
         data = valid_claims()
-        data["rejected"][0]["id"] = "C1"
+        data["excluded"][0]["id"] = "C1"
         self.assertIn("'C1' is also used by claims[0]", self.check(data))
 
     def test_unknown_source_and_field(self):
         data = valid_claims()
-        data["broad_statements"][0]["source"] = "summary"
+        data["main_results"][0]["source"] = "summary"
         data["claims"][0]["kind"] = "causal"
         out = self.check(data)
         self.assertIn("source: must be one of", out)
@@ -2568,52 +2568,52 @@ class Validate(unittest.TestCase):
 
     def test_rq_answer_source_is_accepted(self):
         data = valid_claims()
-        data["broad_statements"][0]["source"] = "rq_answer"
+        data["main_results"][0]["source"] = "rq_answer"
         self.assertEqual(self.check(data), "")
 
     def test_source_other_needs_a_note(self):
         data = valid_claims()
-        data["broad_statements"][0]["source"] = "other"
+        data["main_results"][0]["source"] = "other"
         self.assertIn("with source other needs a note", self.check(data))
 
     def test_unserved_broad_statement_needs_a_note(self):
         data = valid_claims()
-        data["broad_statements"].append({"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append({"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
                                          "section": "6 Discussion", "source": "conclusion"})
-        self.assertIn("no claim serves this broad statement", self.check(data))
-        data["broad_statements"][1]["note"] = "The paper gives no result for it."
+        self.assertIn("no claim serves this main result", self.check(data))
+        data["main_results"][1]["note"] = "The paper gives no result for it."
         self.assertEqual(self.check(data), "")
 
     def test_claim_and_rejected_candidate_with_the_same_quote(self):
         data = valid_claims()
         quote = "We collected 1,203 builds from 48 projects."
         data["claims"].append({"id": "C3", "quote": quote, "states": quote, "page": 2, "section": "4 Data",
-                               "serves": ["B1"], "split_from": None, "selection_reason": "B1 rests on it."})
-        self.assertIn("(R1).quote: claims[2] (C3) already quotes the same sentence", self.check(data))
+                               "serves": ["R1"], "split_from": None, "selection_reason": "R1 rests on it."})
+        self.assertIn("(E1).quote: claims[2] (C3) already quotes the same sentence", self.check(data))
 
-    def test_broad_statements_with_the_same_quote(self):
+    def test_main_results_with_the_same_quote(self):
         data = valid_claims()
-        data["broad_statements"].append(dict(data["broad_statements"][0], id="B2"))
-        self.assertIn("(B2).quote: broad_statements[0] (B1) already quotes the same sentence", self.check(data))
+        data["main_results"].append(dict(data["main_results"][0], id="R2"))
+        self.assertIn("(R2).quote: main_results[0] (R1) already quotes the same sentence", self.check(data))
 
     def test_broad_statement_and_rejected_candidate_with_the_same_quote(self):
         data = valid_claims()
-        data["rejected"].append({"id": "R2", "quote": "Caching halves median build time.", "page": 1,
-                                 "section": "Abstract", "reason": "Repeats B1."})
-        self.assertIn("a broad statement is not also a rejected candidate", self.check(data))
+        data["excluded"].append({"id": "E2", "quote": "Caching halves median build time.", "page": 1,
+                                 "section": "Abstract", "reason": "Repeats R1."})
+        self.assertIn("a main result is not also an excluded candidate", self.check(data))
 
     def test_split_statement_and_unsplit_entry_with_the_same_quote(self):
         data = valid_claims()
-        data["rejected"].append({"id": "R2", "quote": SPLIT_QUOTE, "page": 2, "section": "5 Results",
+        data["excluded"].append({"id": "E2", "quote": SPLIT_QUOTE, "page": 2, "section": "5 Results",
                                  "reason": "Not selected."})
         self.assertIn("the parts of split_from 'S1' quote the same sentence", self.check(data))
 
     def test_two_split_groups_with_the_same_quote(self):
         data = valid_claims()
-        data["rejected"] += [
-            {"id": "R2", "quote": SPLIT_QUOTE, "states": "median build time fell from 9.2 to 4.1 minutes",
+        data["excluded"] += [
+            {"id": "E2", "quote": SPLIT_QUOTE, "states": "median build time fell from 9.2 to 4.1 minutes",
              "page": 2, "section": "5 Results", "split_from": "S2", "reason": "Not selected."},
-            {"id": "R3", "quote": SPLIT_QUOTE, "states": "the failure rate stayed at 3%",
+            {"id": "E3", "quote": SPLIT_QUOTE, "states": "the failure rate stayed at 3%",
              "page": 2, "section": "5 Results", "split_from": "S2", "reason": "Not selected."}]
         self.assertIn("split_from 'S1' and 'S2' quote the same sentence", self.check(data))
 
@@ -2622,9 +2622,9 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["claims"] += [
             {"id": "C3", "quote": quote, "states": "project got slower", "page": 3, "section": "6",
-             "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
+             "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."},
             {"id": "C4", "quote": quote, "states": "No failure rate stayed at 3%", "page": 3, "section": "6",
-             "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
+             "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."}]
         out = self.warnings(data, TEXT + quote + "\n")
         self.assertIn('no part keeps "no project" from the quote', out)
         self.assertIn("no part keeps lower, than from the quote", out)
@@ -2632,48 +2632,48 @@ class Validate(unittest.TestCase):
     def test_claim_quoting_a_broad_statement_must_serve_it(self):
         data = valid_claims()
         quote = "Build failures are rare in general."
-        data["broad_statements"].append({"id": "B2", "quote": quote, "page": 3, "section": "6", "source": "conclusion"})
+        data["main_results"].append({"id": "R2", "quote": quote, "page": 3, "section": "6", "source": "conclusion"})
         data["claims"].append({"id": "C3", "quote": quote, "states": quote, "page": 3, "section": "6",
-                               "serves": ["B1"], "split_from": None, "selection_reason": "B2 rests on it."})
-        self.assertIn("so it must serve B2", self.check(data))
+                               "serves": ["R1"], "split_from": None, "selection_reason": "R2 rests on it."})
+        self.assertIn("so it must serve R2", self.check(data))
 
-    def test_split_parts_serve_their_own_broad_statements(self):
+    def test_split_parts_serve_their_own_main_results(self):
         data = valid_claims()
-        data["broad_statements"] = [
-            dict(data["broad_statements"][0], quote=SPLIT_QUOTE, page=2, section="5 Results", source="other",
+        data["main_results"] = [
+            dict(data["main_results"][0], quote=SPLIT_QUOTE, page=2, section="5 Results", source="other",
                  note="The results state this main result, and no summary sentence does."),
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3, "section": "6 Discussion",
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3, "section": "6 Discussion",
              "source": "conclusion"}]
-        data["claims"][0]["serves"] = ["B1"]
-        data["claims"][1]["serves"] = ["B2"]
+        data["claims"][0]["serves"] = ["R1"]
+        data["claims"][1]["serves"] = ["R2"]
         self.assertEqual(self.check(data), "")
-        data["claims"][0]["serves"] = ["B2"]
-        self.assertIn("split_from 'S1': the parts quote the sentence of B1, so one part must serve B1",
+        data["claims"][0]["serves"] = ["R2"]
+        self.assertIn("split_from 'S1': the parts quote the sentence of R1, so one part must serve R1",
                       self.check(data))
 
     def test_ids_use_the_prescribed_letters(self):
         data = valid_claims()
-        data["claims"][0]["id"] = "B7"
-        data["claims"][1]["serves"] = ["B1"]
-        self.assertIn("(B7).id: must be C and a number", self.check(data))
+        data["claims"][0]["id"] = "R7"
+        data["claims"][1]["serves"] = ["R1"]
+        self.assertIn("(R7).id: must be C and a number", self.check(data))
 
     def test_warning_when_the_reason_names_a_longer_id(self):
         data = valid_claims()
-        data["broad_statements"].append({"id": "B12", "quote": "Build failures are rare in general.",
+        data["main_results"].append({"id": "R12", "quote": "Build failures are rare in general.",
                                          "page": 3, "section": "6 Discussion", "source": "conclusion",
                                          "note": "No result of the paper states it."})
-        data["claims"][0]["selection_reason"] = "B12 would need revision."
-        self.assertIn("(C1).selection_reason: names none of the broad statements", self.warnings(data))
+        data["claims"][0]["selection_reason"] = "R12 would need revision."
+        self.assertIn("(C1).selection_reason: names none of the main results", self.warnings(data))
 
     def test_serves_lists_an_id_twice(self):
         data = valid_claims()
-        data["claims"][0]["serves"] = ["B1", "B1"]
-        self.assertIn("'B1' is listed twice", self.check(data))
+        data["claims"][0]["serves"] = ["R1", "R1"]
+        self.assertIn("'R1' is listed twice", self.check(data))
 
     def test_states_on_a_rejected_candidate_without_split(self):
         data = valid_claims()
-        data["rejected"][0]["states"] = "Something else."
-        self.assertIn("only a rejected part of a split statement has words of its own", self.check(data))
+        data["excluded"][0]["states"] = "Something else."
+        self.assertIn("only an excluded part of a split statement has words of its own", self.check(data))
 
     def test_split_part_repeats_the_whole_quote(self):
         data = valid_claims()
@@ -2685,9 +2685,9 @@ class Validate(unittest.TestCase):
         data = valid_claims()
         data["claims"] += [
             {"id": "C3", "quote": quote, "states": "Caching did change the failure rate.", "page": 3,
-             "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."},
+             "section": "6", "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."},
             {"id": "C4", "quote": quote, "states": "Caching cut build time by half.", "page": 3,
-             "section": "6", "serves": ["B1"], "split_from": "S2", "selection_reason": "B1 rests on it."}]
+             "section": "6", "serves": ["R1"], "split_from": "S2", "selection_reason": "R1 rests on it."}]
         self.assertIn("contains a negation (not) that no part keeps", self.warnings(data, TEXT + quote + "\n"))
 
     def test_split_part_of_a_quote_with_a_gap_inside_a_word(self):
@@ -2696,43 +2696,43 @@ class Validate(unittest.TestCase):
         quote = "We found ten dis[...]tinct codes and 4 themes in the data."
         data = valid_claims()
         data["paper"]["pages"] = 2
-        data["rejected"] = []
+        data["excluded"] = []
         data["claims"] = [
             {"id": "C1", "quote": quote, "states": "We found ten distinct codes in the data.", "page": 2,
-             "section": "5", "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on it."},
+             "section": "5", "serves": ["R1"], "split_from": "S1", "selection_reason": "R1 rests on it."},
             {"id": "C2", "quote": quote, "states": "We found 4 themes in the data.", "page": 2,
-             "section": "5", "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on it."}]
+             "section": "5", "serves": ["R1"], "split_from": "S1", "selection_reason": "R1 rests on it."}]
         self.assertEqual(self.check(data, text), "")
 
     def test_warnings(self):
         data = valid_claims()
-        data["rejected"][0]["quote"] = "1,203 builds from 48 projects."
+        data["excluded"][0]["quote"] = "1,203 builds from 48 projects."
         data["claims"][0]["states"] = "Across the 48 projects, median build time fell from 4.1 to 9.2 minutes."
         out = self.warnings(data)
-        self.assertIn("(R1).quote: starts in the middle of a sentence", out)
+        self.assertIn("(E1).quote: starts in the middle of a sentence", out)
         self.assertIn("(C1).states: gives its numbers (48, 4.1, 9.2) in a different order", out)
 
     def test_warning_for_a_reason_that_names_no_broad_statement(self):
         data = valid_claims()
         data["claims"][0]["selection_reason"] = "Important result."
-        self.assertIn("(C1).selection_reason: names none of the broad statements in serves", self.warnings(data))
+        self.assertIn("(C1).selection_reason: names none of the main results in serves", self.warnings(data))
 
     def test_warning_for_the_same_sentence_on_two_pages(self):
         text = TEXT.replace("Build failures are rare in general.", "Caching halves median build time.")
         data = valid_claims()
-        data["rejected"].append({"id": "R2", "quote": "Caching halves median build time.", "page": 3,
-                                 "section": "7 Conclusion", "duplicate_of": ["B1"], "reason": "Repeats B1."})
+        data["excluded"].append({"id": "E2", "quote": "Caching halves median build time.", "page": 3,
+                                 "section": "7 Conclusion", "duplicate_of": ["R1"], "reason": "Repeats R1."})
         self.assertIn("quotes the same sentence on another page", self.warnings(data, text))
 
     def test_warning_for_a_quote_inside_another_quote(self):
         data = valid_claims()
-        data["rejected"][0]["quote"] = "median build time fell from 9.2 to 4.1 minutes"
-        data["rejected"][0]["page"] = 2
-        self.assertIn("quote: contains the quote of rejected[0] (R1)", self.warnings(data))
+        data["excluded"][0]["quote"] = "median build time fell from 9.2 to 4.1 minutes"
+        data["excluded"][0]["page"] = 2
+        self.assertIn("quote: contains the quote of excluded[0] (E1)", self.warnings(data))
 
     def test_render_keeps_a_quote_on_one_line(self):
         data = valid_claims()
-        data["rejected"][0]["quote"] = "We collected 1,203 builds\nfrom 48 projects."
+        data["excluded"][0]["quote"] = "We collected 1,203 builds\nfrom 48 projects."
         self.assertIn("> We collected 1,203 builds from 48 projects.", cea_claims.render(data))
 
 
@@ -2789,8 +2789,8 @@ class PageScript(unittest.TestCase):
     """Run the published page's own JavaScript.
 
     Nothing else in the suite executes it: the other tests read `cea_page.TEMPLATE` as text. That
-    is how a page with no narrow claims came to throw before it installed the candidate filter and
-    the navigation, on the one kind of paper where the rejected candidates are the whole content.
+    is how a page with no claims came to throw before it installed the candidate filter and
+    the navigation, on the one kind of paper where the excluded candidates are the whole content.
     """
 
     SHIM = r"""// A DOM small enough to read, big enough that the page script's loops actually run.
@@ -3192,9 +3192,9 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
         """
         shapes = {
             "a full record": lambda d: None,
-            "no results and no claims": lambda d: d.update(broad_statements=[], claims=[]),
+            "no results and no claims": lambda d: d.update(main_results=[], claims=[]),
             "a result no claim serves": lambda d: d.update(claims=[]),
-            "no rejected candidates": lambda d: d.update(rejected=[]),
+            "no excluded candidates": lambda d: d.update(excluded=[]),
             "two statements of one result": _two_statements_of_one_result,
             "a candidate weighed against a result": _a_candidate_weighed_against_a_result,
             "a result with a note": _a_result_with_a_note,
@@ -3204,7 +3204,7 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
             data = valid_claims()
             mutate(data)
             # record ids are the published anchors, and stand whether or not the page links them
-            anchors = {x["id"] for k in ("broad_statements", "claims", "rejected")
+            anchors = {x["id"] for k in ("main_results", "claims", "excluded")
                        for x in data[k]}
             for nav in ({}, {"index_href": "../../", "framework_href": "../../framework/"}):
                 html = cea_page.build(data, Path("claims.json"), Path("out.html"), **nav)
@@ -3238,11 +3238,11 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
         import cea_page as _  # noqa: F401  (imported at module scope below)
         shapes = {
             "a full record": lambda d: None,
-            "no results and no claims": lambda d: d.update(broad_statements=[], claims=[]),
+            "no results and no claims": lambda d: d.update(main_results=[], claims=[]),
             "a result no claim serves": lambda d: (d.update(claims=[]),
-                                                   d["broad_statements"][0].update(note="why")),
-            "no rejected candidates": lambda d: d.update(rejected=[]),
-            "one claim, one result": lambda d: d.update(claims=d["claims"][:1], rejected=[]),
+                                                   d["main_results"][0].update(note="why")),
+            "no excluded candidates": lambda d: d.update(excluded=[]),
+            "one claim, one result": lambda d: d.update(claims=d["claims"][:1], excluded=[]),
             "a candidate weighed against a result": _a_candidate_weighed_against_a_result,
             "a result with a note": _a_result_with_a_note,
             "two statements of one result": _two_statements_of_one_result,
@@ -3307,22 +3307,23 @@ class WhatThePageAsserts(unittest.TestCase):
         return cea_page.build(data, Path("claims.json"), Path("out.html"))
 
     def test_a_reason_that_names_a_result_without_weighing_it_is_not_called_standing(self):
-        """"B3 names Source Features" is what a candidate is about, not a result it leaves."""
+        """"R3 names Source Features" is what a candidate is about, not a result it leaves."""
         for reason, kind in (
-                ("B1 would still stand, because this only divides the rate by language.", "standing"),
-                ("No broad statement states the main result this would serve: B1 names the "
+                ("R1 would still stand, because this only divides the rate by language.", "standing"),
+                ("No main result states the main result this would serve: R1 names the "
                  "features, and no summary sentence states a result for it.", "other"),
                 ("The accuracy of a model the paper only reads other findings from, fitted so "
-                 "that SHAP can give the importances behind B1.", "other")):
+                 "that SHAP can give the importances behind R1.", "other")):
             with self.subTest(reason=reason[:40]):
-                self.assertEqual(cea_page.kind_of({"id": "R1", "reason": reason}, {"B1"}), kind)
+                self.assertEqual(cea_page.kind_of({"id": "E1", "reason": reason}, {"R1"}), kind)
 
-    def test_the_overview_counts_broad_statements_by_that_name(self):
-        """Several statements can state one result and one can state two, so the page said a
-        number its own Claim Map contradicted."""
+    def test_the_overview_counts_the_entries_it_shows(self):
+        """The counter and the heading over the same cards used to disagree, one saying "broad
+        statements" and the other "Main Results". They are one name now, and the count is of
+        entries: a sentence that states two of the paper's findings is one entry all the same."""
         html = self.page()
-        self.assertIn("broad statements", html)
-        self.assertNotIn('stat-label">main results', html)
+        self.assertIn('stat-label">main results', html)
+        self.assertIn("<h2>Main Results", html)
 
     def test_the_footer_names_the_skill_that_built_the_page(self):
         data = valid_claims()
@@ -3362,12 +3363,12 @@ class StandingIsWeighed(unittest.TestCase):
 
     def test_a_negated_standing_claim_is_not_filed_under_standing(self):
         for reason, kind in (
-                ("B1 would still stand, because this only divides the rate.", "standing"),
-                ("B1 would not stand without this sentence, but the number is in a table.", "other"),
-                ("B1 does not still stand here.", "other"),
-                ("The main result B1 still stands without this sentence.", "standing")):
+                ("R1 would still stand, because this only divides the rate.", "standing"),
+                ("R1 would not stand without this sentence, but the number is in a table.", "other"),
+                ("R1 does not still stand here.", "other"),
+                ("The main result R1 still stands without this sentence.", "standing")):
             with self.subTest(reason=reason[:44]):
-                self.assertEqual(cea_page.kind_of({"id": "R1", "reason": reason}, {"B1"}), kind)
+                self.assertEqual(cea_page.kind_of({"id": "E1", "reason": reason}, {"R1"}), kind)
 
 
 class FootnoteOnAFinalNumeral(unittest.TestCase):
@@ -3514,35 +3515,35 @@ class EveryStatementReachesThePage(unittest.TestCase):
 
     def record(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "6 Discussion", "source": "conclusion"})
         for claim in data["claims"]:
-            claim["serves"] = ["B1", "B2"]
+            claim["serves"] = ["R1", "R2"]
         return data
 
     def test_every_broad_statement_has_a_card(self):
         data = self.record()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
-        self.assertEqual(re.findall(r'<article class="entry result" id="(B\d+)"', html),
-                         [b["id"] for b in data["broad_statements"]])
+        self.assertEqual(re.findall(r'<article class="entry result" id="(R\d+)"', html),
+                         [b["id"] for b in data["main_results"]])
 
     def test_no_link_on_the_page_points_at_a_statement_it_does_not_anchor(self):
         html = cea_page.build(self.record(), Path("claims.json"), Path("out.html"))
         ids = set(re.findall(r'\sid="([^"]+)"', html))
-        self.assertEqual(sorted(set(re.findall(r'href="#(B\d+)"', html)) - ids), [])
+        self.assertEqual(sorted(set(re.findall(r'href="#(R\d+)"', html)) - ids), [])
 
     def test_the_overview_count_matches_the_cards(self):
         html = cea_page.build(self.record(), Path("claims.json"), Path("out.html"))
         said = int(re.search(r'<div class="stat-value">(\d+)</div>'
-                             r'<div class="stat-label">broad statements', html).group(1))
+                             r'<div class="stat-label">main results', html).group(1))
         self.assertEqual(said, len(re.findall(r'<article class="entry result"', html)))
 
     def test_the_page_and_claims_md_hold_the_same_statements(self):
         data = self.record()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
-        self.assertEqual(sorted(set(re.findall(r'<article class="entry result" id="(B\d+)"', html))),
-                         sorted(set(re.findall(r"^### (B\d+)", cea_claims.render(data), re.M))))
+        self.assertEqual(sorted(set(re.findall(r'<article class="entry result" id="(R\d+)"', html))),
+                         sorted(set(re.findall(r"^### (R\d+)", cea_claims.render(data), re.M))))
 
 
 class ResultsAreOrderedByWhatIsPrintedBesideThem(unittest.TestCase):
@@ -3552,23 +3553,23 @@ class ResultsAreOrderedByWhatIsPrintedBesideThem(unittest.TestCase):
 
     def record(self):
         data = valid_claims()
-        data["broad_statements"] = [
-            {"id": f"B{i}", "quote": f"Statement number {i} of the paper here.", "page": 1,
+        data["main_results"] = [
+            {"id": f"R{i}", "quote": f"Statement number {i} of the paper here.", "page": 1,
              "section": "Abstract", "source": "abstract"} for i in (1, 2, 3)]
-        data["broad_statements"].append(
-            {"id": "B4", "quote": "A different result entirely here.", "page": 4,
+        data["main_results"].append(
+            {"id": "R4", "quote": "A different result entirely here.", "page": 4,
              "section": "7 Conclusion", "source": "conclusion"})
         data["claims"] = [
             {"id": "C1", "quote": "A number for the first result.",
              "states": "A number for the first result.", "page": 2, "section": "5 Results",
-             "serves": ["B1", "B2", "B3"], "split_from": None,
+             "serves": ["R1", "R2", "R3"], "split_from": None,
              "selection_reason": "They rest on this."},
             {"id": "C2", "quote": "A number for the other result.",
              "states": "A number for the other result.", "page": 2, "section": "5 Results",
-             "serves": ["B4"], "split_from": None, "selection_reason": "B4 rests on this."}]
-        data["rejected"] = [
-            {"id": "R1", "quote": "It repeats B4 here.", "page": 4, "section": "7 Conclusion",
-             "reason": "Repeats B4.", "duplicate_of": ["B4"]}]
+             "serves": ["R4"], "split_from": None, "selection_reason": "R4 rests on this."}]
+        data["excluded"] = [
+            {"id": "E1", "quote": "It repeats R4 here.", "page": 4, "section": "7 Conclusion",
+             "reason": "Repeats R4.", "duplicate_of": ["R4"]}]
         return data
 
     def test_the_rows_stand_in_the_order_of_the_number_they_print(self):
@@ -3603,24 +3604,24 @@ class MapAgreesWithTheRecord(unittest.TestCase):
         data["claims"][1]["page"] = 2
         html, rows = self.rows(data)
         self.assertIn("claims stand in page order", html)
-        self.assertEqual(rows["B1"][0], ["C2", "C1"], "the map is not in page order")
+        self.assertEqual(rows["R1"][0], ["C2", "C1"], "the map is not in page order")
         cards = re.findall(r'<article class="entry claim" id="(C\d+)"', html)
-        self.assertEqual(rows["B1"][0], cards, "the map and the claim cards disagree")
+        self.assertEqual(rows["R1"][0], cards, "the map and the claim cards disagree")
 
     def two_results_one_repeating_sentence(self):
-        """A record whose single rejected sentence repeats both main results."""
+        """A record whose single excluded sentence repeats both main results."""
         data = valid_claims()
-        data["broad_statements"].append({"id": "B2", "quote": "Failures stayed flat.", "page": 1,
+        data["main_results"].append({"id": "R2", "quote": "Failures stayed flat.", "page": 1,
                                          "section": "Abstract", "source": "abstract"})
         data["claims"].append({"id": "C3", "quote": "Across the 48 projects, the failure rate "
                                                     "stayed at 3%.",
                                "states": "The failure rate stayed at 3%.", "page": 2,
-                               "section": "5 Results", "serves": ["B2"], "split_from": "S2",
-                               "selection_reason": "B2 rests on this."})
-        data["rejected"].append({"id": "R2", "quote": "Caching halves build time and failures "
+                               "section": "5 Results", "serves": ["R2"], "split_from": "S2",
+                               "selection_reason": "R2 rests on this."})
+        data["excluded"].append({"id": "E2", "quote": "Caching halves build time and failures "
                                                       "hold flat.",
                                  "page": 1, "section": "1 Introduction",
-                                 "duplicate_of": ["B1", "B2"], "reason": "Repeats B1 and B2."})
+                                 "duplicate_of": ["R1", "R2"], "reason": "Repeats R1 and R2."})
         return data
 
     def test_a_row_says_how_many_of_its_sentences_state_another_result_too(self):
@@ -3633,9 +3634,9 @@ class MapAgreesWithTheRecord(unittest.TestCase):
             with self.subTest(record=label):
                 data = self.two_results_one_repeating_sentence()
                 for n in range(extra_shared):
-                    data["rejected"].append(
+                    data["excluded"].append(
                         {"id": f"R{10 + n}", "quote": f"Both results hold, restated {n}.",
-                         "page": 1, "section": "6 Discussion", "duplicate_of": ["B1", "B2"],
+                         "page": 1, "section": "6 Discussion", "duplicate_of": ["R1", "R2"],
                          "reason": "Repeats both."})
                 html = cea_page.build(data, Path("claims.json"), Path("out.html"))
                 rows = re.findall(r"stated in (\d+) sentences?(?: \((\d+) shared\))?", html)
@@ -3659,19 +3660,19 @@ class MapAgreesWithTheRecord(unittest.TestCase):
     def test_a_claim_serving_two_results_is_named_under_both(self):
         """It is filed under the first, so the second row showed nothing of it and said nothing."""
         data = valid_claims()
-        data["broad_statements"].append({"id": "B2", "quote": "Failures stayed flat.", "page": 1,
+        data["main_results"].append({"id": "R2", "quote": "Failures stayed flat.", "page": 1,
                                          "section": "Abstract", "source": "abstract"})
-        data["claims"][0]["serves"] = ["B1", "B2"]
+        data["claims"][0]["serves"] = ["R1", "R2"]
         data["claims"].append({"id": "C3", "quote": SPLIT_QUOTE, "states": "Failures held at 3%.",
-                               "page": 3, "section": "5 Results", "serves": ["B2"],
-                               "split_from": "S1", "selection_reason": "B2 rests on this."})
+                               "page": 3, "section": "5 Results", "serves": ["R2"],
+                               "split_from": "S1", "selection_reason": "R2 rests on this."})
         html, rows = self.rows(data)
-        self.assertEqual(rows["B1"][0], ["C1", "C2"])
-        self.assertEqual(rows["B2"][0], ["C3"])
-        self.assertIn("C1", rows["B2"][1],
-                      "B2's row neither shows C1 nor says where it stands, while B2's own card "
+        self.assertEqual(rows["R1"][0], ["C1", "C2"])
+        self.assertEqual(rows["R2"][0], ["C3"])
+        self.assertIn("C1", rows["R2"][1],
+                      "R2's row neither shows C1 nor says where it stands, while R2's own card "
                       "lists it")
-        card = re.search(r'<article class="entry result" id="B2".*?</article>', html, re.S).group(0)
+        card = re.search(r'<article class="entry result" id="R2".*?</article>', html, re.S).group(0)
         self.assertIn(">C1<", card)
 
 
@@ -3720,7 +3721,7 @@ class ARefusedBuildNamesEveryPageItLeaves(unittest.TestCase):
 
     def test_a_refusal_raised_before_validate_still_names_the_page(self):
         """`serves` naming an unknown id is caught by a shape check, long before validate runs."""
-        said = self.build(lambda d: d["claims"][0].update(serves=["B99"]))
+        said = self.build(lambda d: d["claims"][0].update(serves=["R99"]))
         self.assertIn("CEA_INVALID", said)
         self.assertIn("is still published", said)
 
@@ -3742,7 +3743,7 @@ class ARefusedBuildNamesEveryPageItLeaves(unittest.TestCase):
                 written, first = cea_site.build_site(recs, site)
             self.assertEqual(written, 2, "\n".join(first))
             data = json.loads((recs[1] / "claims.json").read_text(encoding="utf-8"))
-            data["claims"][0].update(serves=["B99"])
+            data["claims"][0].update(serves=["R99"])
             (recs[1] / "claims.json").write_text(json.dumps(data), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 _written, messages = cea_site.build_site(recs, site)
@@ -3983,7 +3984,7 @@ class ExtractionThatFailsSaysSoRatherThanPublishingPart(unittest.TestCase):
 
 
 class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
-    """The published pages stamp `M1` on every claim card and link to the framework page for what
+    """The published pages stamp `L1` on every claim card and link to the framework page for what
     it means, and the record's own vocabulary is the framework's. Nothing tied them: `--framework`
     took any Markdown file, the framework document lived in another repository, and no script here
     read the selection rules. The framework is one document in this repository now, so the terms
@@ -3997,7 +3998,7 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
         cls.folded = " ".join(cls.text.lower().split())
 
     def test_it_defines_every_term_the_pages_use(self):
-        for term in ("main result", "broad statement", "narrow claim", "rejected candidate",
+        for term in ("main result", "main result", "claim", "excluded candidate",
                      "checker", "mapping level"):
             with self.subTest(term=term):
                 self.assertIn(term, self.folded,
@@ -4011,10 +4012,10 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
                               f"the card names the {link!r} link and the framework does not")
 
     def test_it_defines_the_level_every_card_carries(self):
-        """A card stamped M1 is unreadable without the level it names."""
-        self.assertRegex(self.text, r"\|\s*M1\s*\|",
-                         "the mapping level table has no M1 row")
-        self.assertIn("M1", cea_page.chain_track())
+        """A card stamped L1 is unreadable without the level it names."""
+        self.assertRegex(self.text, r"\|\s*L1\s*\|",
+                         "the mapping level table has no L1 row")
+        self.assertIn("L1", cea_page.chain_track())
 
     def test_the_selection_rules_and_the_framework_are_one_document(self):
         """Two accounts of the same rules is what contradicts them, so there is only one. The
@@ -4150,14 +4151,14 @@ class ANoteHedgesOnlyTheQuantityItHedges(unittest.TestCase):
     def warnings(self, note):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": "Caching halves median build time.", "page": 1,
+        data["main_results"] = [{
+            "id": "R1", "quote": "Caching halves median build time.", "page": 1,
             "section": "Abstract", "source": "abstract",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "We coded 15 codes in the data.", "page": 1,
+        data["excluded"] = [{"id": "E1", "quote": "We coded 15 codes in the data.", "page": 1,
                              "section": "5 Results", "note": note,
-                             "reason": "B1 would still stand: this only counts the codebook."}]
+                             "reason": "R1 would still stand: this only counts the codebook."}]
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text("=== page 1 ===\nCaching halves median build time.\n"
@@ -4214,24 +4215,26 @@ class TheStampBitesAtALaterFormat(unittest.TestCase):
         self.assertEqual(self.refusals(None, 2), self.refusals(1, 2),
                          "an unstamped record must be treated as the format-1 record it is")
 
-    def test_this_build_accepts_both(self):
-        self.assertEqual(self.refusals(None, cea_claims.FORMAT), [])
+    def test_this_build_accepts_only_its_own_stamp(self):
+        """An unstamped record is a format-1 record, which this build does not read."""
         self.assertEqual(self.refusals(cea_claims.FORMAT, cea_claims.FORMAT), [])
+        self.assertTrue(self.refusals(None, cea_claims.FORMAT),
+                        "an unstamped record is format 1 and has to be refused at format 2")
 
-    def test_the_advisory_names_the_format_it_was_read_as(self):
-        """Naming the build's own FORMAT would tell the checker to relabel a format-1 record as a
-        later format in one edit."""
+    def test_an_unstamped_record_is_refused_rather_than_advised_about(self):
+        """It was read as format 1 and passed with an advisory while this build also wrote 1. At
+        format 2 the terms and the ids have moved, so reading it as current would publish a `B1`
+        under the name `R1` now means."""
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             data = valid_claims()
             data.pop("format")
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
             (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
-            problems, parsed = cea_claims.validate(d)
-            self.assertEqual(problems, [])
-            said = "\n".join(cea_claims.advisories(d, parsed))
-        self.assertIn('"format": 1', said)
-        self.assertIn("read as format 1", said)
+            problems, _ = cea_claims.validate(d)
+        said = "\n".join(problems)
+        self.assertIn("written in format 1", said)
+        self.assertIn("this build writes 2", said)
 
 
 class AWideGapDoesNotHideARealHeading(unittest.TestCase):
@@ -4293,16 +4296,16 @@ class AQuoteKeepsTheHyphensThePaperPrints(unittest.TestCase):
 
 
 class ThePageReportsTheRecordNotThePaper(unittest.TestCase):
-    """With no broad statements the page said "This paper states no quantitative main result".
-    The record does not say that: it says these sentences are not broad statements. Demoting a
+    """With no main results the page said "This paper states no quantitative main result".
+    The record does not say that: it says these sentences are not main results. Demoting a
     quantitative paper's statements to candidates made the page assert it in its own voice, above
     cards quoting that paper's numbers. It is the cheapest attack in the system: delete an array."""
 
     def test_the_scope_card_speaks_for_the_record(self):
         data = valid_claims()
-        data["broad_statements"] = []
+        data["main_results"] = []
         data["claims"] = []
-        for e in data["rejected"]:
+        for e in data["excluded"]:
             e.pop("duplicate_of", None)
             e.pop("breaks_down", None)
             e["reason"] = "No main result depends on this count."
@@ -4312,38 +4315,38 @@ class ThePageReportsTheRecordNotThePaper(unittest.TestCase):
 
 
 class AListOfResultsSharesOneVerb(unittest.TestCase):
-    """Reading a reason clause by clause cuts "B3 and B5 would both still stand" at the "and",
-    which left B3 in a clause with nothing to affirm it. Two real records lost a result they are
+    """Reading a reason clause by clause cuts "R3 and R5 would both still stand" at the "and",
+    which left R3 in a clause with nothing to affirm it. Two real records lost a result they are
     credited with, and the suite did not see it."""
 
     def test_a_list_keeps_every_result_it_names(self):
         for reason, want in (
-                ("This only restates the rate; B3 and B5 would both still stand without it.",
-                 {"B3", "B5"}),
-                ("A remark that a robustness check changed nothing, so B3 and B7 would still "
-                 "stand.", {"B3", "B7"})):
+                ("This only restates the rate; R3 and R5 would both still stand without it.",
+                 {"R3", "R5"}),
+                ("A remark that a robustness check changed nothing, so R3 and R7 would still "
+                 "stand.", {"R3", "R7"})):
             with self.subTest(reason=reason[:44]):
                 self.assertEqual(
-                    cea_page.weighed_against({"reason": reason}, {"B1", "B3", "B5", "B7"}), want)
+                    cea_page.weighed_against({"reason": reason}, {"R1", "R3", "R5", "R7"}), want)
 
     def test_a_comitative_connective_carries_the_list(self):
-        """"B3, together with B5, would still stand" dropped both, and an Oxford comma in
-        "B3, B5, and B7" kept only the last."""
+        """"R3, together with R5, would still stand" dropped both, and an Oxford comma in
+        "R3, R5, and R7" kept only the last."""
         for reason, want in (
-                ("B3, together with B5, would still stand, because the evidence lies elsewhere.",
-                 {"B3", "B5"}),
-                ("B3, along with B5, would still stand here.", {"B3", "B5"}),
-                ("B3, B5, and B7 would still stand, because the abstract states it.",
-                 {"B3", "B5", "B7"}),
-                ("B3, B5 and B7 would still stand.", {"B3", "B5", "B7"})):
+                ("R3, together with R5, would still stand, because the evidence lies elsewhere.",
+                 {"R3", "R5"}),
+                ("R3, along with R5, would still stand here.", {"R3", "R5"}),
+                ("R3, R5, and R7 would still stand, because the abstract states it.",
+                 {"R3", "R5", "R7"}),
+                ("R3, R5 and R7 would still stand.", {"R3", "R5", "R7"})):
             with self.subTest(reason=reason[:44]):
                 self.assertEqual(
-                    cea_page.weighed_against({"reason": reason}, {"B3", "B5", "B7"}), want)
+                    cea_page.weighed_against({"reason": reason}, {"R3", "R5", "R7"}), want)
 
     def test_a_repeat_before_a_verdict_still_credits_only_the_verdict(self):
         self.assertEqual(
-            cea_page.weighed_against({"reason": "Repeats B4, so B2 would still stand."},
-                                     {"B2", "B4"}), {"B2"})
+            cea_page.weighed_against({"reason": "Repeats R4, so R2 would still stand."},
+                                     {"R2", "R4"}), {"R2"})
 
     def test_no_real_record_loses_a_result(self):
         """Measured across the workspace, because the two that broke were real records."""
@@ -4356,12 +4359,12 @@ class AListOfResultsSharesOneVerb(unittest.TestCase):
                 continue
             if not isinstance(data, dict):
                 continue
-            known = {b["id"] for b in data.get("broad_statements", []) if isinstance(b, dict)}
-            for e in data.get("rejected", []):
+            known = {b["id"] for b in data.get("main_results", []) if isinstance(b, dict)}
+            for e in data.get("excluded", []):
                 if not isinstance(e, dict):
                     continue
                 reason = str(e.get("reason", ""))
-                named = set(re.findall(r"\bB\d+\b", reason)) & known
+                named = set(re.findall(r"\bR\d+\b", reason)) & known
                 if len(named) > 1 and cea_page.still_stands(reason):
                     seen += 1
                     self.assertEqual(cea_page.weighed_against(e, known), named,
@@ -4401,25 +4404,25 @@ class AReasonWeighingTwoResultsTagsOnlyTheOneItAffirms(unittest.TestCase):
     """`still_stands` reads a reason clause by clause; `weighed_against` then took every id in the
     whole string as soon as any clause affirmed. A reason weighing two results -- one surviving,
     one not, which is what a careful checker writes -- tagged the candidate with both, and the
-    page printed "leaves standing B5" directly above a reason saying B5 does not stand."""
+    page printed "leaves standing R5" directly above a reason saying R5 does not stand."""
 
-    REASON = ("B7 would still stand without this sentence, because the abstract already states "
-              "the concentration. B5 is a different matter: nothing else in the paper supports "
-              "it, so B5 does not stand without this sentence.")
+    REASON = ("R7 would still stand without this sentence, because the abstract already states "
+              "the concentration. R5 is a different matter: nothing else in the paper supports "
+              "it, so R5 does not stand without this sentence.")
 
     def test_only_the_affirmed_result_is_tagged(self):
-        self.assertEqual(cea_page.weighed_against({"reason": self.REASON}, {"B5", "B7"}), {"B7"})
+        self.assertEqual(cea_page.weighed_against({"reason": self.REASON}, {"R5", "R7"}), {"R7"})
 
     def test_the_candidate_still_counts_as_standing(self):
         self.assertTrue(cea_page.still_stands(self.REASON))
 
     def test_an_ordinary_reason_is_unchanged(self):
         for reason, want in (
-                ("B1 would still stand, because this only divides the rate by language.", {"B1"}),
-                ("B3 would still stand: this reports that a check changed nothing.", {"B3"}),
+                ("R1 would still stand, because this only divides the rate by language.", {"R1"}),
+                ("R3 would still stand: this reports that a check changed nothing.", {"R3"}),
                 ("No main result would still stand without this sentence.", set())):
             with self.subTest(reason=reason[:44]):
-                self.assertEqual(cea_page.weighed_against({"reason": reason}, {"B1", "B3"}), want)
+                self.assertEqual(cea_page.weighed_against({"reason": reason}, {"R1", "R3"}), want)
 
 
 class ATitleThatIsNotThisPapersIsQuestioned(unittest.TestCase):
@@ -4579,19 +4582,19 @@ class AVerdictIsNotAQuestion(unittest.TestCase):
     says it stands only under some reading is stating a condition."""
 
     def test_a_reason_that_leaves_the_question_open_is_not_a_verdict(self):
-        reason = ("Dropping this sentence would leave B2 with no denominator at all, so whether "
-                  "B2 would still stand is the one thing a reader has to decide for themselves.")
+        reason = ("Dropping this sentence would leave R2 with no denominator at all, so whether "
+                  "R2 would still stand is the one thing a reader has to decide for themselves.")
         self.assertFalse(cea_page.still_stands(reason))
-        self.assertNotEqual(cea_page.kind_of({"id": "R1", "reason": reason}, {"B2"}), "standing")
+        self.assertNotEqual(cea_page.kind_of({"id": "E1", "reason": reason}, {"R2"}), "standing")
 
     def test_a_result_that_stands_only_under_a_reading_is_not_standing(self):
-        reason = "B2 would still stand only in a reading that ignores the sample this table rests on."
+        reason = "R2 would still stand only in a reading that ignores the sample this table rests on."
         self.assertFalse(cea_page.still_stands(reason))
 
     def test_the_ordinary_verdicts_are_unchanged(self):
-        for reason in ("B1 would still stand, because this only divides the rate by language.",
-                       "B3 would still stand: this reports that a check changed nothing.",
-                       "B1 still stands without this sentence."):
+        for reason in ("R1 would still stand, because this only divides the rate by language.",
+                       "R3 would still stand: this reports that a check changed nothing.",
+                       "R1 still stands without this sentence."):
             with self.subTest(reason=reason[:44]):
                 self.assertTrue(cea_page.still_stands(reason))
 
@@ -4626,24 +4629,24 @@ class NothingIsANegation(unittest.TestCase):
     saying one does, and the page then asserted the opposite of the record in three places."""
 
     def test_a_reason_that_says_nothing_stands_is_not_called_standing(self):
-        reason = ("This is the condition the measurement was taken under. Nothing in B1 would "
+        reason = ("This is the condition the measurement was taken under. Nothing in R1 would "
                   "still stand if the cache had been cold, so the number is part of the setup.")
         self.assertFalse(cea_page.still_stands(reason))
-        self.assertNotEqual(cea_page.kind_of({"id": "R1", "reason": reason}, {"B1"}), "standing")
+        self.assertNotEqual(cea_page.kind_of({"id": "E1", "reason": reason}, {"R1"}), "standing")
 
     def test_a_result_that_stands_although_something_changed_nothing_still_stands(self):
         """A real reason from a real record: the colon separates the verdict from its ground, so
         the "nothing" in the ground must not deny the verdict in front of it."""
-        reason = ("B3 would still stand: this reports that a robustness check on the AI-only "
+        reason = ("R3 would still stand: this reports that a robustness check on the AI-only "
                   "subset changed nothing.")
         self.assertTrue(cea_page.still_stands(reason))
 
     def test_the_ordinary_shapes_are_unchanged(self):
         for reason, stands in (
-                ("B1 would still stand, because this only divides the rate by language.", True),
+                ("R1 would still stand, because this only divides the rate by language.", True),
                 ("No main result would still stand without this sentence.", False),
-                ("B1 still stands without this sentence.", True),
-                ("Neither B1 nor B2 would still stand.", False)):
+                ("R1 still stands without this sentence.", True),
+                ("Neither R1 nor R2 would still stand.", False)):
             with self.subTest(reason=reason[:40]):
                 self.assertEqual(cea_page.still_stands(reason), stands)
 
@@ -4671,7 +4674,7 @@ class TheReferenceExampleIsARecordThatValidates(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             by_page = {}
-            for key in ("broad_statements", "claims", "rejected"):
+            for key in ("main_results", "claims", "excluded"):
                 for e in example.get(key, []):
                     page = int(str(e["page"]).split("-")[0])
                     by_page.setdefault(page, []).append(e["quote"].replace(" [...] ", "\n"))
@@ -4743,14 +4746,14 @@ class ANoteMaySayItsRowsAreIncomplete(unittest.TestCase):
     def warnings(self, note):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": "Caching halves median build time.", "page": 1,
+        data["main_results"] = [{
+            "id": "R1", "quote": "Caching halves median build time.", "page": 1,
             "section": "Abstract", "source": "abstract",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = [{"id": "R1", "quote": "We coded 15 codes in the data.", "page": 1,
+        data["excluded"] = [{"id": "E1", "quote": "We coded 15 codes in the data.", "page": 1,
                              "section": "5 Results", "note": note,
-                             "reason": "B1 would still stand: this only counts the codebook."}]
+                             "reason": "R1 would still stand: this only counts the codebook."}]
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text("=== page 1 ===\nCaching halves median build time.\n"
@@ -4857,7 +4860,7 @@ class AQuoteMayNotStepFromOneRowToTheNext(unittest.TestCase):
             except (OSError, ValueError):
                 continue
             pages = cea_claims.load_pages(record / "text.txt")
-            for key in ("broad_statements", "claims", "rejected"):
+            for key in ("main_results", "claims", "excluded"):
                 for e in data.get(key, []):
                     if not isinstance(e, dict) or "[" not in str(e.get("quote", "")):
                         continue
@@ -5151,19 +5154,19 @@ class AFiguresAxisIsNotASection(unittest.TestCase):
 
 
 class EveryLabelInAListKeepsItsDigits(unittest.TestCase):
-    """Only the label sitting against its bracket was protected, so "(R01, R02, R03)" guarded R01
+    """Only the label sitting against its bracket was protected, so "(E01, E02, E03)" guarded E01
     alone and the rest could lose their digits and still be certified verbatim."""
 
-    PAGE = ("This yielded 16 documents: 13 Reddit threads (R01, R02, R03) and three Hacker News "
+    PAGE = ("This yielded 16 documents: 13 Reddit threads (E01, E02, E03) and three Hacker News "
             "result pages (H01, H02).\n")
 
     def test_a_later_label_may_not_drop_its_number(self):
-        for bad in ("13 Reddit threads (R01, R, R)", "three Hacker News result pages (H01, H)"):
+        for bad in ("13 Reddit threads (E01, R, R)", "three Hacker News result pages (H01, H)"):
             with self.subTest(quote=bad):
                 self.assertIsNone(cea_claims.find_quote(bad, self.PAGE))
 
     def test_the_list_as_printed_is_accepted(self):
-        for good in ("13 Reddit threads (R01, R02, R03)",
+        for good in ("13 Reddit threads (E01, E02, E03)",
                      "three Hacker News result pages (H01, H02)"):
             with self.subTest(quote=good):
                 self.assertIsNotNone(cea_claims.find_quote(good, self.PAGE))
@@ -5208,11 +5211,11 @@ class AGapMayNotWeldTwoSentences(unittest.TestCase):
     def test_the_commands_stop_for_it(self):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": self.WELD, "page": 1, "section": "4 Results", "source": "abstract",
+        data["main_results"] = [{
+            "id": "R1", "quote": self.WELD, "page": 1, "section": "4 Results", "source": "abstract",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = []
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(f"=== page 1 ===\n{self.PAGE}", encoding="utf-8")
@@ -5277,11 +5280,11 @@ class AVersionDigitSurvivesALineBreak(unittest.TestCase):
 
     def test_a_source_identifier_may_not_lose_its_number(self):
         """A quotation's attribution could be stripped and still certified."""
-        page = "One team reported receiving 30 PRs per day across 6 reviewers [R07].\n"
+        page = "One team reported receiving 30 PRs per day across 6 reviewers [E07].\n"
         self.assertIsNone(cea_claims.find_quote(
             "One team reported receiving 30 PRs per day across 6 reviewers [R].", page))
         self.assertIsNotNone(cea_claims.find_quote(
-            "One team reported receiving 30 PRs per day across 6 reviewers [R07].", page))
+            "One team reported receiving 30 PRs per day across 6 reviewers [E07].", page))
 
     def test_an_ordinary_footnote_marker_may_still_be_left_off(self):
         for page, quote in (
@@ -5298,15 +5301,15 @@ class AVersionDigitSurvivesALineBreak(unittest.TestCase):
                 "The top performers were deepseek-v3 (94.0%) and claude-3-sonnet (93.2%).\n")
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": "We evaluated several models in the study.", "page": 1,
+        data["main_results"] = [{
+            "id": "R1", "quote": "We evaluated several models in the study.", "page": 1,
             "section": "1 Introduction", "source": "abstract",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = [{
-            "id": "R1", "page": 1, "section": "5 Results",
+        data["excluded"] = [{
+            "id": "E1", "page": 1, "section": "5 Results",
             "quote": "The top performers were deepseek-v (94.0%) and claude-3-sonnet (93.2%).",
-            "reason": "B1 would still stand, because this only names the models."}]
+            "reason": "R1 would still stand, because this only names the models."}]
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(page, encoding="utf-8")
@@ -5369,12 +5372,12 @@ class EveryCommandSaysWhatItFound(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = self.record(tmp)
             data = json.loads((d / "claims.json").read_text(encoding="utf-8"))
-            data.pop("format", None)
+            data["paper"]["title"] = "A title this paper's first page does not print"
             (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
             problems, parsed = cea_claims.validate(d)
             self.assertEqual(problems, [])
             said = cea_claims.advisories(d, parsed)
-        self.assertTrue(any("format" in w for w in said), "the unstamped advisory did not fire")
+        self.assertTrue(any("paper.title" in w for w in said), "no advisory fired")
         for warning in said:
             with self.subTest(warning=warning[:48]):
                 self.assertNotIn("\n", warning)
@@ -5414,7 +5417,7 @@ class NoFieldMaySayOneThingAndShowAnother(unittest.TestCase):
 
     def problems(self, field, value):
         data = valid_claims()
-        data["broad_statements"][0][field] = value
+        data["main_results"][0][field] = value
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
@@ -5550,16 +5553,16 @@ class ASharedSentenceIsCountedAsOne(unittest.TestCase):
 
     def counts(self, split):
         data = {"format": 1, "paper": {"id": "d", "title": "T", "pdf": "d.pdf", "pages": 1},
-                "broad_statements": [
-                    {"id": "B1", "quote": "Q1", "page": 1, "section": "A", "source": "rq_answer"},
-                    {"id": "B2", "quote": "Q2", "page": 1, "section": "A", "source": "rq_answer"}],
+                "main_results": [
+                    {"id": "R1", "quote": "Q1", "page": 1, "section": "A", "source": "rq_answer"},
+                    {"id": "R2", "quote": "Q2", "page": 1, "section": "A", "source": "rq_answer"}],
                 "claims": [],
-                "rejected": [dict({"id": f"R{n}", "quote": "S", "page": 1, "section": "A",
-                                   "reason": "r", "duplicate_of": ["B1", "B2"]},
+                "excluded": [dict({"id": f"R{n}", "quote": "S", "page": 1, "section": "A",
+                                   "reason": "r", "duplicate_of": ["R1", "R2"]},
                                   **({"split_from": "S1"} if split else {}))
                              for n in (1, 2, 3)]}
-        return (cea_claims._stated_in(data, ["B1"]),
-                cea_claims._shared_with_other_results(data, ["B1"]))
+        return (cea_claims._stated_in(data, ["R1"]),
+                cea_claims._shared_with_other_results(data, ["R1"]))
 
     def test_the_parts_of_one_sentence_are_one_shared_sentence(self):
         stated, shared = self.counts(True)
@@ -5577,9 +5580,9 @@ class ASharedSentenceIsCountedAsOne(unittest.TestCase):
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            if not isinstance(data, dict) or "broad_statements" not in data:
+            if not isinstance(data, dict) or "main_results" not in data:
                 continue
-            for b in data["broad_statements"]:
+            for b in data["main_results"]:
                 if not isinstance(b, dict) or "id" not in b:
                     continue
                 rows += 1
@@ -5598,19 +5601,19 @@ class OneSentenceCountsOnce(unittest.TestCase):
 
     def data(self, split):
         data = valid_claims()
-        quote = data["rejected"][0]["quote"]
-        base = {"quote": quote, "page": data["rejected"][0]["page"],
-                "section": data["rejected"][0]["section"],
-                "reason": "It repeats the result B1 states.", "duplicate_of": ["B1"]}
-        data["rejected"] = [dict(base, id=f"R{n}", **({"split_from": "S9"} if split else {}))
+        quote = data["excluded"][0]["quote"]
+        base = {"quote": quote, "page": data["excluded"][0]["page"],
+                "section": data["excluded"][0]["section"],
+                "reason": "It repeats the result R1 states.", "duplicate_of": ["R1"]}
+        data["excluded"] = [dict(base, id=f"R{n}", **({"split_from": "S9"} if split else {}))
                             for n in (90, 91, 92)]
         return data
 
     def test_three_parts_of_one_sentence_count_once(self):
-        self.assertEqual(cea_claims._stated_in(self.data(True), ["B1"]), 2)
+        self.assertEqual(cea_claims._stated_in(self.data(True), ["R1"]), 2)
 
     def test_three_separate_sentences_count_three(self):
-        self.assertEqual(cea_claims._stated_in(self.data(False), ["B1"]), 4)
+        self.assertEqual(cea_claims._stated_in(self.data(False), ["R1"]), 4)
 
     def test_no_real_count_changes(self):
         workspace = SCRIPTS.parent / "skills" / "cea-extract-claims-workspace"
@@ -5620,12 +5623,12 @@ class OneSentenceCountsOnce(unittest.TestCase):
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            if not isinstance(data, dict) or "broad_statements" not in data:
+            if not isinstance(data, dict) or "main_results" not in data:
                 continue
-            for b in data["broad_statements"]:
+            for b in data["main_results"]:
                 if not isinstance(b, dict) or "id" not in b:
                     continue
-                loose = 1 + len({r.get("id", n) for n, r in enumerate(data.get("rejected", []))
+                loose = 1 + len({r.get("id", n) for n, r in enumerate(data.get("excluded", []))
                                  if isinstance(r, dict) and b["id"] in (r.get("duplicate_of") or [])})
                 checked += 1
                 self.assertEqual(cea_claims._stated_in(data, [b["id"]]), loose,
@@ -5648,13 +5651,13 @@ class TheSectionIsWhereTheQuoteStands(unittest.TestCase):
     def warnings(self, section):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "page": 1, "section": section, "source": "conclusion",
+        data["main_results"] = [{
+            "id": "R1", "page": 1, "section": section, "source": "conclusion",
             "quote": "Thus, our dataset captures the near-complete population of AI-based review "
                      "activity.",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = []
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(self.PAGE, encoding="utf-8")
@@ -5739,15 +5742,15 @@ class APartStatesItsOwnPartInTheQuotesOrder(unittest.TestCase):
     def problems(self, first, second):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": "Caching halves median build time.", "page": 1,
+        data["main_results"] = [{
+            "id": "R1", "quote": "Caching halves median build time.", "page": 1,
             "section": "Abstract", "source": "abstract"}]
         data["claims"] = [
             {"id": "C1", "quote": self.QUOTE, "states": first, "page": 1, "section": "5 Results",
-             "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on this."},
+             "serves": ["R1"], "split_from": "S1", "selection_reason": "R1 rests on this."},
             {"id": "C2", "quote": self.QUOTE, "states": second, "page": 1, "section": "5 Results",
-             "serves": ["B1"], "split_from": "S1", "selection_reason": "B1 rests on this."}]
-        data["rejected"] = []
+             "serves": ["R1"], "split_from": "S1", "selection_reason": "R1 rests on this."}]
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(f"=== page 1 ===\nCaching halves median build time.\n"
@@ -5815,16 +5818,16 @@ class APartStatesItsOwnPartInTheQuotesOrder(unittest.TestCase):
                 continue
             if not isinstance(data, dict):
                 continue
-            for key in ("broad_statements", "claims", "rejected"):
+            for key in ("main_results", "claims", "excluded"):
                 for e in data.get(key, []):
                     if not isinstance(e, dict):
                         continue
                     states, quote = str(e.get("states", "")), str(e.get("quote", ""))
                     if not states or not quote:
                         continue
-                    if key != "broad_statements" and not e.get("split_from"):
+                    if key != "main_results" and not e.get("split_from"):
                         continue
-                    if key == "broad_statements" and cea_claims._key(states) == cea_claims._key(quote):
+                    if key == "main_results" and cea_claims._key(states) == cea_claims._key(quote):
                         continue
                     free += 1
                     refused += cea_claims._out_of_quote_order(states, quote)
@@ -5855,13 +5858,13 @@ class AQuoteThatEndsMidWordAfterAGap(unittest.TestCase):
     def test_the_commands_report_rather_than_crash(self):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "page": 1, "section": "5 Results", "source": "abstract",
+        data["main_results"] = [{
+            "id": "R1", "page": 1, "section": "5 Results", "source": "abstract",
             "quote": ("These results indicate that more research is required here. [...] "
                       "Our taxonomy provides a multi-dimensional character-"),
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = []
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(f"=== page 1 ===\n{self.PAGE}", encoding="utf-8")
@@ -5923,22 +5926,21 @@ class TheRecordSaysWhichFormatItIsIn(unittest.TestCase):
             return cea_claims.validate(d)[0]
 
     def test_a_record_without_the_stamp_is_read_as_the_first_format(self):
-        """Refusing it stopped the published site's build dead the moment it moved to this
-        version. Every record that can exist without the stamp was written before it, and the one
-        change format 1 records shipped in v0.4.0, before every tag the site has ever pinned, so
-        an unstamped record already has it."""
-        self.assertEqual(self.problems(lambda d: d.pop("format")), [])
-
-    def test_a_record_from_an_older_format_is_refused_and_told_what_changed(self):
-        """FORMAT is 1 today, so the case is staged: a build at format 2 reading a record at 1."""
-        changes = {**cea_claims._FORMAT_CHANGES, 2: "`page` became a range in every entry."}
-        with unittest.mock.patch.object(cea_claims, "FORMAT", 2), \
-                unittest.mock.patch.object(cea_claims, "_FORMAT_CHANGES", changes):
-            said = "\n".join(cea_claims._format_problems({"format": 1}))
+        """An unstamped record is one written before the stamp existed, which makes it format 1.
+        This build writes 2, so it is refused and told what changed rather than read as current:
+        the terms and the ids moved at format 2, and reading an unstamped record as current would
+        publish `B1` under the name `R1` means now."""
+        said = "\n".join(self.problems(lambda d: d.pop("format")))
         self.assertIn("written in format 1", said)
         self.assertIn("this build writes 2", said)
-        self.assertIn("became a range", said, "it has to say what changed since format 1")
-        self.assertNotIn("breaks_down", said, "what changed at format 1 is already in the record")
+        self.assertIn("became `main_results`", said, "it has to say what changed")
+
+    def test_a_record_from_an_older_format_is_refused_and_told_what_changed(self):
+        said = "\n".join(cea_claims._format_problems({"format": 1}))
+        self.assertIn("written in format 1", said)
+        self.assertIn("this build writes 2", said)
+        self.assertIn("became `main_results`", said, "it has to say what changed since format 1")
+        self.assertIn("format 2:", said, "it has to list the change that applies")
 
     def test_a_record_from_a_newer_format_is_refused(self):
         said = "\n".join(self.problems(lambda d: d.update(format=cea_claims.FORMAT + 1)))
@@ -5976,12 +5978,12 @@ class WhatTheValidatorChecksOnAStatement(unittest.TestCase):
     def warnings(self, states):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": self.QUOTE, "states": states, "page": 1, "section": "Abstract",
+        data["main_results"] = [{
+            "id": "R1", "quote": self.QUOTE, "states": states, "page": 1, "section": "Abstract",
             "source": "abstract",
             "note": "No claim serves this statement: the paper gives no other sentence for it."}]
         data["claims"] = []
-        data["rejected"] = []
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(f"=== page 1 ===\n{self.QUOTE}\n", encoding="utf-8")
@@ -6022,22 +6024,22 @@ class AQuoteThatIsARowOfATable(unittest.TestCase):
     def warnings(self, key, quote):
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{
-            "id": "B1", "quote": "Caching halves median build time across every project.",
+        data["main_results"] = [{
+            "id": "R1", "quote": "Caching halves median build time across every project.",
             "page": 1, "section": "Abstract", "source": "abstract"}]
         entry = {"id": "C1", "quote": quote, "states": quote, "page": 1, "section": "5 Results",
-                 "serves": ["B1"], "split_from": None,
-                 "selection_reason": "B1 rests on this count."}
-        if key == "rejected":
-            entry = {"id": "R1", "quote": quote, "page": 1, "section": "5 Results",
-                     "reason": "B1 would still stand, because this is a cell of the table."}
+                 "serves": ["R1"], "split_from": None,
+                 "selection_reason": "R1 rests on this count."}
+        if key == "excluded":
+            entry = {"id": "E1", "quote": quote, "page": 1, "section": "5 Results",
+                     "reason": "R1 would still stand, because this is a cell of the table."}
             data["claims"] = [{"id": "C1", "quote": self.PROSE, "states": self.PROSE, "page": 1,
-                               "section": "5 Results", "serves": ["B1"], "split_from": None,
-                               "selection_reason": "B1 rests on this count of projects."}]
-            data["rejected"] = [entry]
+                               "section": "5 Results", "serves": ["R1"], "split_from": None,
+                               "selection_reason": "R1 rests on this count of projects."}]
+            data["excluded"] = [entry]
         else:
             data["claims"] = [entry]
-            data["rejected"] = []
+            data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(self.PAGE, encoding="utf-8")
@@ -6055,7 +6057,7 @@ class AQuoteThatIsARowOfATable(unittest.TestCase):
 
     def test_a_rejected_candidate_may_quote_a_row(self):
         """Setting a row aside is the rule being followed, not broken."""
-        self.assertEqual(self.warnings("rejected", self.ROW), [])
+        self.assertEqual(self.warnings("excluded", self.ROW), [])
 
 
 class AGapLongerThanTheValidatorAllows(unittest.TestCase):
@@ -6070,15 +6072,15 @@ class AGapLongerThanTheValidatorAllows(unittest.TestCase):
                 "\nacross every project in the corpus.\n")
         data = valid_claims()
         data["paper"]["pages"] = 1
-        data["broad_statements"] = [{"id": "B1", "quote": "Caching halves median build time.",
+        data["main_results"] = [{"id": "R1", "quote": "Caching halves median build time.",
                                      "page": 1, "section": "Abstract", "source": "abstract"}]
         quote = "We measured a median of 4.1 minutes [...] across every project in the corpus."
         data["claims"] = [{"id": "C1", "quote": quote, "page": 1, "section": "5 Results",
                            "states": "We measured a median of 4.1 minutes across every project "
                                      "in the corpus.",
-                           "serves": ["B1"], "split_from": None,
-                           "selection_reason": "B1 rests on this median."}]
-        data["rejected"] = []
+                           "serves": ["R1"], "split_from": None,
+                           "selection_reason": "R1 rests on this median."}]
+        data["excluded"] = []
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(page, encoding="utf-8")
@@ -6102,7 +6104,7 @@ class AGapLongerThanTheValidatorAllows(unittest.TestCase):
 
 
 class ASiteReportsWhatAReaderWouldHaveToSearchFor(unittest.TestCase):
-    """The site skill says to report any paper whose page says that no narrow claim serves one of
+    """The site skill says to report any paper whose page says that no claim serves one of
     its main results. No command printed it: the record is valid, the page carries the heading,
     and the fact stood only inside the generated files."""
 
@@ -6124,8 +6126,8 @@ class ASiteReportsWhatAReaderWouldHaveToSearchFor(unittest.TestCase):
 
     def unserved(self, data):
         """A second main result, on its own sentence, that no claim serves."""
-        data["broad_statements"].append(
-            {"id": "B9", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append(
+            {"id": "R9", "quote": "Build failures are rare in general.", "page": 3,
              "section": "6 Discussion", "source": "conclusion",
              "note": "No claim serves this statement: the paper gives no sentence with a number "
                      "for it."})
@@ -6133,10 +6135,10 @@ class ASiteReportsWhatAReaderWouldHaveToSearchFor(unittest.TestCase):
     def test_the_build_names_the_statement_nothing_serves(self):
         said = self.build(self.unserved)
         self.assertIn("CEA_WARNING", said)
-        self.assertIn("no narrow claim serves B9", said)
+        self.assertIn("no claim serves R9", said)
 
     def test_a_record_where_every_statement_is_served_says_nothing(self):
-        self.assertNotIn("no narrow claim serves", self.build())
+        self.assertNotIn("no claim serves", self.build())
 
 
 class ThePageSaysWhichBuildWroteIt(unittest.TestCase):
@@ -6173,17 +6175,17 @@ class ThePageSaysWhichBuildWroteIt(unittest.TestCase):
 
 
 class TheMappingLevelSaysWhatItMeans(unittest.TestCase):
-    """M1 over six empty circles is the page's own vocabulary. Its only gloss was a title
+    """L1 over six empty circles is the page's own vocabulary. Its only gloss was a title
     attribute, which shows on hover and nowhere else."""
 
     def test_the_gloss_is_in_the_text_of_the_page(self):
         track = cea_page.chain_track()
         without_attributes = re.sub(r'\s\w+="[^"]*"', "", track)
         self.assertIn("none of the six links is reconstructed here", without_attributes)
-        self.assertIn("M1", without_attributes)
+        self.assertIn("L1", without_attributes)
 
     def test_every_claim_card_carries_it(self):
-        """Counted against the cards, not the claims: a claim serving two broad statements gets
+        """Counted against the cards, not the claims: a claim serving two main results gets
         a card under each."""
         data = valid_claims()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
@@ -6223,7 +6225,7 @@ class ARetractedRecordLeavesAPageStanding(unittest.TestCase):
             return page, "\n".join(messages), page.is_file()
 
     def retract(self, data):
-        data["claims"][0]["selection_reason"] = "Unsure whether this is a narrow claim at all."
+        data["claims"][0]["selection_reason"] = "Unsure whether this is a claim at all."
 
     def test_the_refusal_names_the_page_that_is_still_published(self):
         page, messages, standing = self.build(self.retract)
@@ -6257,7 +6259,7 @@ class ARetractedRecordLeavesAPageStanding(unittest.TestCase):
 class AReaderWithoutScripting(unittest.TestCase):
     """Only the page's own script opens a body. A reader with scripting off, a text browser, a
     reader-mode view, or a crawler saw four fifths of the record hidden, including every reason
-    a candidate was rejected. The page is a record, so all of it has to be readable."""
+    a candidate was excluded. The page is a record, so all of it has to be readable."""
 
     HIDES = re.compile(r"(?s)<noscript>(.*?)</noscript>")
 
@@ -6286,8 +6288,8 @@ class AReaderWithoutScripting(unittest.TestCase):
         data = valid_claims()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
         wanted = [c[k] for c in data["claims"] for k in ("selection_reason", "note") if c.get(k)]
-        wanted += [b["note"] for b in data["broad_statements"] if b.get("note")]
-        wanted += [r[k] for r in data["rejected"] for k in ("quote", "reason") if r.get(k)]
+        wanted += [b["note"] for b in data["main_results"] if b.get("note")]
+        wanted += [r[k] for r in data["excluded"] for k in ("quote", "reason") if r.get(k)]
         self.assertTrue(wanted, "the fixture carries nothing to look for")
         body = re.sub(r"(?s)<script.*?</script>", "", html)
         text = re.sub(r"\s+", " ", unescape(re.sub(r"(?s)<[^>]+>", " ", body)))
@@ -6328,7 +6330,7 @@ class PublishedFiles(unittest.TestCase):
         import cea_site
         made_up = "Caching triples median build time and doubles the failure rate."
         tmp, site, written, messages = self.build(
-            lambda d: d["broad_statements"][0].update(quote=made_up))
+            lambda d: d["main_results"][0].update(quote=made_up))
         self.assertEqual(written, 0, "a record whose quote is not in the paper was published")
         self.assertIn("not found in text.txt", messages)
         self.assertFalse(site.exists(), "a refused build still wrote a site")
@@ -6433,27 +6435,27 @@ class PublishedFiles(unittest.TestCase):
 
     def test_site_refuses_an_empty_reason_rather_than_publishing_a_card_without_one(self):
         """validate rejects an empty string. site checked the type and not the text."""
-        tmp, site, written, messages = self.build(lambda d: d["rejected"][0].update(reason=""))
+        tmp, site, written, messages = self.build(lambda d: d["excluded"][0].update(reason=""))
         self.assertEqual(written, 0)
-        self.assertIn("rejected[0].reason", messages)
+        self.assertIn("excluded[0].reason", messages)
 
     def test_a_name_the_record_does_not_hold_is_not_turned_into_a_link(self):
         """The page mined every `B\\d+` out of a reason and made each one a tag and a link.
 
-        A reason is prose. A paper about vitamin B12 says so in one, and the page asserted a main
-        result "B12" behind a link that landed nowhere. Refusing the record instead is no good
+        A reason is prose. A paper about vitamin R12 says so in one, and the page asserted a main
+        result "R12" behind a link that landed nowhere. Refusing the record instead is no good
         either: there is no other way to write that sentence.
         """
-        for reason, label in (("Reports vitamin B12 levels, not a result here.", "real prose"),
-                              ("Data only. B7 would still stand.", "a typo")):
+        for reason, label in (("Reports vitamin R12 levels, not a result here.", "real prose"),
+                              ("Data only. R7 would still stand.", "a typo")):
             with self.subTest(reason=label):
                 tmp, site, written, messages = self.build(
-                    lambda d: d["rejected"][0].update(reason=reason))
+                    lambda d: d["excluded"][0].update(reason=reason))
                 self.assertEqual(written, 1, f"the build refused a reason that is {label}: "
                                              f"{messages}")
                 page = (site / "papers" / "fixture" / "index.html").read_text(encoding="utf-8")
-                self.assertEqual(sorted(set(re.findall(r'class="idbadge" href="#(B\d+)"', page))),
-                                 ["B1"], "the page links a result the record does not hold")
+                self.assertEqual(sorted(set(re.findall(r'class="idbadge" href="#(R\d+)"', page))),
+                                 ["R1"], "the page links a result the record does not hold")
 
     def test_validate_asks_about_a_name_that_looks_like_an_id_but_is_not_one(self):
         """Passing over it is right for prose and wrong for a typo, so the checker is asked."""
@@ -6462,11 +6464,11 @@ class PublishedFiles(unittest.TestCase):
             d = Path(tmp)
             (d / "text.txt").write_text(TEXT, encoding="utf-8")
             data = valid_claims()
-            data["rejected"][0]["reason"] = "Data only. B7 would still stand."
+            data["excluded"][0]["reason"] = "Data only. R7 would still stand."
             (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
             problems, loaded = cea_claims.validate(d)
-            self.assertEqual(problems, [], "a reason naming B7 is not itself invalid")
-            self.assertIn("B7", "\n".join(cea_claims.advisories(d, loaded)))
+            self.assertEqual(problems, [], "a reason naming R7 is not itself invalid")
+            self.assertIn("R7", "\n".join(cea_claims.advisories(d, loaded)))
 
 
 class RecordEdges(unittest.TestCase):
@@ -6505,7 +6507,7 @@ class RecordEdges(unittest.TestCase):
             with self.subTest(where=where):
                 record = valid_claims()
                 if data is None:
-                    record["broad_statements"][0]["zz\ud800"] = "x"
+                    record["main_results"][0]["zz\ud800"] = "x"
                 else:
                     record.update(data)
                 with tempfile.TemporaryDirectory() as tmp:
@@ -6525,11 +6527,11 @@ class RecordEdges(unittest.TestCase):
         import cea_site
         cases = {
             "serves names a claim": lambda d: d["claims"][1].__setitem__("serves", ["C1"]),
-            "serves names nothing": lambda d: d["claims"][1].__setitem__("serves", ["B9"]),
-            "breaks_down names nothing": lambda d: d["rejected"][0].__setitem__("breaks_down", ["B9"]),
-            "duplicate_of names nothing": lambda d: d["rejected"][0].__setitem__("duplicate_of", ["C9"]),
-            "two entries share an id": lambda d: d["broad_statements"].append(
-                dict(d["broad_statements"][0])),
+            "serves names nothing": lambda d: d["claims"][1].__setitem__("serves", ["R9"]),
+            "breaks_down names nothing": lambda d: d["excluded"][0].__setitem__("breaks_down", ["R9"]),
+            "duplicate_of names nothing": lambda d: d["excluded"][0].__setitem__("duplicate_of", ["C9"]),
+            "two entries share an id": lambda d: d["main_results"].append(
+                dict(d["main_results"][0])),
         }
         for label, mutate in cases.items():
             with self.subTest(case=label):
@@ -6761,7 +6763,7 @@ class CommandLine(unittest.TestCase):
     @unittest.skipUnless(shutil.which("pdftotext") and any(PAPERS.glob("*.pdf")),
                          "pdftotext or the test papers are missing")
     def test_a_publisher_file_name_folds_to_a_usable_id(self):
-        """extract used to accept ids that validate then rejected, after the whole paper was read."""
+        """extract used to accept ids that validate then excluded, after the whole paper was read."""
         source = next(iter(sorted(PAPERS.glob("*.pdf"))))
         with tempfile.TemporaryDirectory() as tmp:
             named = Path(tmp) / "Smith et al. (2024).pdf"
@@ -6919,7 +6921,7 @@ class Page(unittest.TestCase):
             code, out = self.run_command("render", str(d))
             self.assertEqual(code, 0, out)
             page = (d / "claims.html").read_text(encoding="utf-8")
-            self.assertIn('id="B1"', page)
+            self.assertIn('id="R1"', page)
             self.assertIn('id="C2"', page)
             self.assertIn("Caching halves median build time.", page)
             self.assertIn("claims.html", out)
@@ -6934,14 +6936,14 @@ class Page(unittest.TestCase):
 
     def test_an_unsettled_record_writes_no_page(self):
         data = valid_claims()
-        data["rejected"][0]["reason"] = ("Unsure whether B1 rests on this, recorded as rejected so "
+        data["excluded"][0]["reason"] = ("Unsure whether R1 rests on this, recorded as excluded so "
                                          "that the checker can change it into a claim.")
         with tempfile.TemporaryDirectory() as tmp:
             d = self.paper(Path(tmp), "fixture", data)
             code, out = self.run_command("render", str(d))
             self.assertEqual(code, 1)
             self.assertIn("CEA_UNRESOLVED", out)
-            self.assertIn("R1", out)
+            self.assertIn("E1", out)
             self.assertFalse((d / "claims.html").exists())
             self.assertTrue((d / "claims.md").exists(), "the checker still needs the Markdown")
 
@@ -6972,7 +6974,7 @@ class Page(unittest.TestCase):
 
     def test_site_writes_nothing_while_one_record_is_unsettled(self):
         data = valid_claims()
-        data["rejected"][0]["reason"] = "Unsure whether B1 rests on this."
+        data["excluded"][0]["reason"] = "Unsure whether R1 rests on this."
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             settled, unsettled = self.paper(root, "one"), self.paper(root, "two", data)
@@ -6983,8 +6985,8 @@ class Page(unittest.TestCase):
 
     def test_a_main_result_no_claim_serves_is_invalid_without_a_note(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion"})
         with tempfile.TemporaryDirectory() as tmp:
             d = self.paper(Path(tmp), "fixture", data)
@@ -6995,8 +6997,8 @@ class Page(unittest.TestCase):
 
     def test_a_noted_main_result_no_claim_serves_is_shown_as_a_finding(self):
         data = valid_claims()
-        data["broad_statements"].append(
-            {"id": "B2", "quote": "Build failures are rare in general.", "page": 3,
+        data["main_results"].append(
+            {"id": "R2", "quote": "Build failures are rare in general.", "page": 3,
              "section": "7 Conclusion", "source": "conclusion",
              "note": "The paper reports no failure rate for projects without caching."})
         with tempfile.TemporaryDirectory() as tmp:
@@ -7004,19 +7006,19 @@ class Page(unittest.TestCase):
             code, out = self.run_command("render", str(d))
             self.assertEqual(code, 0, out)
             page = (d / "claims.html").read_text(encoding="utf-8")
-            self.assertIn("that no narrow claim serves", page)
+            self.assertIn("that no claim serves", page)
             self.assertIn("The paper reports no failure rate", page)
 
     def test_a_paper_without_a_quantitative_main_result_says_so(self):
         data = valid_claims()
-        data["broad_statements"], data["claims"] = [], []
-        data["rejected"][0]["reason"] = "Describes the data, not a result."
+        data["main_results"], data["claims"] = [], []
+        data["excluded"][0]["reason"] = "Describes the data, not a result."
         with tempfile.TemporaryDirectory() as tmp:
             d = self.paper(Path(tmp), "qualitative", data)
             code, out = self.run_command("render", str(d))
             self.assertEqual(code, 0, out)
             page = (d / "claims.html").read_text(encoding="utf-8")
-            # The record's own marking, not a claim about the paper: a record whose broad
+            # The record's own marking, not a claim about the paper: a record whose results
             # statements were all demoted made the page assert that a paper with a quantitative
             # abstract states no quantitative result.
             self.assertIn("marks no sentence of this paper as stating a quantitative main "
@@ -7333,7 +7335,7 @@ class SiteGate(unittest.TestCase):
         link in the published page that scrolls nowhere.
         """
         import cea_site
-        doc = ("# Framework\n\nSee [narrow claims](#narrow-claim) and [results](#main-result).\n\n"
+        doc = ("# Framework\n\nSee [claims](#narrow-claim) and [results](#main-result).\n\n"
                "## Narrow claim\n\nOne.\n\n## Main result\n\nTwo.\n")
         html = cea_site.md_to_html(doc)
         ids = set(re.findall(r'<h\d id="([^"]*)"', html))
@@ -7359,10 +7361,10 @@ class SiteGate(unittest.TestCase):
         import cea_site
         bad_values = (None, 1, True, [], {}, "")
         paths = [("paper", "id"), ("paper", "title"), ("paper", "pdf"), ("paper", "pages"),
-                 ("broad_statements",), ("claims",), ("rejected",),
-                 ("broad_statements", 0, "id"), ("broad_statements", 0, "quote"),
-                 ("broad_statements", 0, "source"), ("claims", 0, "serves"),
-                 ("claims", 0, "split_from"), ("claims", 0, "page"), ("rejected", 0, "reason")]
+                 ("main_results",), ("claims",), ("excluded",),
+                 ("main_results", 0, "id"), ("main_results", 0, "quote"),
+                 ("main_results", 0, "source"), ("claims", 0, "serves"),
+                 ("claims", 0, "split_from"), ("claims", 0, "page"), ("excluded", 0, "reason")]
         for path in paths:
             for bad in bad_values:
                 with self.subTest(path=".".join(map(str, path)), bad=repr(bad)):
@@ -7560,7 +7562,7 @@ class SiteGate(unittest.TestCase):
         import cea_site
         data = valid_claims()
         data["claims"][0]["reason"] = "settled"
-        data["claims"][0]["selection_reason"] = "Unsure whether B1 rests on this."
+        data["claims"][0]["selection_reason"] = "Unsure whether R1 rests on this."
         self.assertEqual([p.split(":")[0] for p in cea_site.unsettled(data)], ["C1"])
 
     def test_a_valid_record_that_is_unsure_is_still_refused_by_a_build(self):
@@ -7568,7 +7570,7 @@ class SiteGate(unittest.TestCase):
         import cea_site
         with tempfile.TemporaryDirectory() as tmp:
             rec = self.record(tmp, lambda d: d["claims"][0].update(
-                selection_reason="Unsure whether B1 rests on this."))
+                selection_reason="Unsure whether R1 rests on this."))
             site = Path(tmp) / "_site"
             with contextlib.redirect_stdout(io.StringIO()):
                 written, messages = cea_site.build_site([rec], site)
@@ -7729,7 +7731,7 @@ class SiteGate(unittest.TestCase):
     def test_a_template_marker_in_the_record_is_not_expanded(self):
         """Substituting key by key re-scanned inserted values, so record text became markup."""
         import cea_page
-        for field, where in (("title", "paper"), ("states", "claims"), ("quote", "rejected")):
+        for field, where in (("title", "paper"), ("states", "claims"), ("quote", "excluded")):
             for marker in ("@@ANCHOR_MAP@@", "@@DATA@@", "@@STATS@@"):
                 with self.subTest(field=field, marker=marker):
                     data = valid_claims()
@@ -7758,7 +7760,7 @@ class SiteGate(unittest.TestCase):
                     self.injected.append(attrs)
 
         for marker in ("@@STRIP@@", "@@PDF_LINK@@", "@@DATA@@", "@@MAP@@", "@@CLAIMS@@"):
-            for field, where in (("states", "claims"), ("quote", "rejected"), ("title", "paper")):
+            for field, where in (("states", "claims"), ("quote", "excluded"), ("title", "paper")):
                 with self.subTest(marker=marker, field=field):
                     data = valid_claims()
                     target = data["paper"] if where == "paper" else data[where][0]
@@ -7811,7 +7813,7 @@ class SiteGate(unittest.TestCase):
             data = valid_claims()
             for key in ("id", "title", "pdf"):
                 data["paper"][key] = payload if key != "pdf" else f"{payload}.pdf"
-            for group in ("broad_statements", "claims", "rejected"):
+            for group in ("main_results", "claims", "excluded"):
                 for entry in data[group]:
                     for key in list(entry):
                         if key == "id":
@@ -7820,13 +7822,13 @@ class SiteGate(unittest.TestCase):
                         if isinstance(entry[key], (str, int)):
                             entry[key] = payload
             if drop_claims:
-                # with no claim serving it, the broad statement renders as a watch card instead,
+                # with no claim serving it, the main result renders as a watch card instead,
                 # which shows `states` and `note`, both optional, so neither is in the fixture
                 data["claims"] = []
-                data["broad_statements"][0]["note"] = payload
+                data["main_results"][0]["note"] = payload
                 # the card shows `states` only when it differs from `quote`, and equal values fall
                 # through to the other branch and leave that escape unexercised
-                data["broad_statements"][0]["states"] = payload + " differing"
+                data["main_results"][0]["states"] = payload + " differing"
             return data
 
         for drop_claims in (False, True):
@@ -7941,14 +7943,14 @@ class SiteGate(unittest.TestCase):
     def test_an_entry_id_with_a_legal_prefix_is_still_refused(self):
         """A prefix match let `R1x` through to cea_page's int(id[1:]), which raised."""
         import cea_site
-        for bad in ("R1x", "R1.5", "R01x"):
+        for bad in ("R1x", "E1.5", "R01x"):
             with self.subTest(id=bad):
                 with tempfile.TemporaryDirectory() as tmp:
-                    rec = self.record(tmp, lambda d, b=bad: d["rejected"][0].__setitem__("id", b))
+                    rec = self.record(tmp, lambda d, b=bad: d["excluded"][0].__setitem__("id", b))
                     with contextlib.redirect_stdout(io.StringIO()):
                         written, messages = cea_site.build_site([rec], Path(tmp) / "_site")
                     self.assertEqual(written, 0, f"{bad} must be refused")
-                    self.assertIn("must be R and a number", "\n".join(messages))
+                    self.assertIn("must be E and a number", "\n".join(messages))
 
     def test_a_pdf_named_after_a_published_file_in_a_subdirectory_is_refused(self):
         """The name was compared exactly, but the checker's filesystem folds case."""
@@ -8086,11 +8088,11 @@ class SiteGate(unittest.TestCase):
         """cea_page does int(id[1:]), which raised a bare ValueError through the site path."""
         import cea_site
         with tempfile.TemporaryDirectory() as tmp:
-            rec = self.record(tmp, lambda d: d["rejected"][0].__setitem__("id", "Rx"))
+            rec = self.record(tmp, lambda d: d["excluded"][0].__setitem__("id", "Rx"))
             with contextlib.redirect_stdout(io.StringIO()):
                 written, messages = cea_site.build_site([rec], Path(tmp) / "_site")
             self.assertEqual(written, 0)
-            self.assertIn("must be R and a number", "\n".join(messages))
+            self.assertIn("must be E and a number", "\n".join(messages))
 
     def test_a_successful_build_prints_its_markers(self):
         """skills/site/SKILL.md promises both, and deleting either print went unnoticed."""
@@ -8109,7 +8111,7 @@ class SiteGate(unittest.TestCase):
         import cea_page
         data = valid_claims()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
-        for key in ("broad_statements", "claims", "rejected"):
+        for key in ("main_results", "claims", "excluded"):
             for entry in data[key]:
                 with self.subTest(id=entry["id"]):
                     anchors = re.findall(rf'\sid="{entry["id"]}"', html)
@@ -8166,11 +8168,11 @@ class SiteGate(unittest.TestCase):
         for served in claim["serves"]:
             self.assertIn(served, body, "the card must name the result it serves")
         self.assertIn(cea_claims._flat(claim["selection_reason"])[:40], body)
-        rejected = data["rejected"][0]
-        rcard = re.search(rf'<article[^>]*\sid="{rejected["id"]}".*?</article>', html, re.S)
-        self.assertIsNotNone(rcard, "every rejected candidate must have a card")
-        self.assertIn(cea_claims._flat(rejected["reason"])[:30], rcard.group(0))
-        self.assertIn(f'p. {rejected["page"]}', rcard.group(0),
+        excluded = data["excluded"][0]
+        rcard = re.search(rf'<article[^>]*\sid="{excluded["id"]}".*?</article>', html, re.S)
+        self.assertIsNotNone(rcard, "every excluded candidate must have a card")
+        self.assertIn(cea_claims._flat(excluded["reason"])[:30], rcard.group(0))
+        self.assertIn(f'p. {excluded["page"]}', rcard.group(0),
                       "the card must state the candidate's page")
         node = re.search(rf'<button class="node claim" data-id="{claim["id"]}".*?</button>',
                          html, re.S)
@@ -8184,8 +8186,8 @@ class SiteGate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             first = self.record(tmp, name="a")
             second = self.record(tmp, lambda d: (d["paper"].update(id="zz", title="Zulu paper"),
-                                                 d.update(broad_statements=[], claims=[],
-                                                          rejected=[])), name="b")
+                                                 d.update(main_results=[], claims=[],
+                                                          excluded=[])), name="b")
             site = Path(tmp) / "_site"
             doc = Path(tmp) / "framework.md"
             doc.write_text("# Terms\n\nProse.\n", encoding="utf-8")
@@ -8199,10 +8201,10 @@ class SiteGate(unittest.TestCase):
         self.assertIn("papers/zz/", rows[1])
         numbers = re.findall(r'<td class="n">([^<]*)</td>', rows[0])
         self.assertEqual(numbers[:4], ["1", "2", "1", "1"],
-                         f"broad, claims, rejected, stated-in must match the record: {numbers}")
+                         f"results, claims, excluded, stated-in must match the record: {numbers}")
         self.assertEqual(numbers[4], "3", "the page count must be the record's")
         self.assertIn("no main result recorded", rows[1],
-                      "a paper with no broad statement must be marked")
+                      "a paper with no main result must be marked")
         self.assertNotIn("no main result recorded", rows[0])
         self.assertIn('href="framework/"', index, "the framework link must be on the index")
 
@@ -8211,23 +8213,23 @@ class SiteGate(unittest.TestCase):
         unserved, contradicting its own card, claims.md, and the watch card built for that case."""
         import cea_page
         data = valid_claims()
-        data["broad_statements"].append({"id": "B2", "quote": "Build failures are rare.",
+        data["main_results"].append({"id": "R2", "quote": "Build failures are rare.",
                                          "page": 3, "section": "7 Conclusion",
                                          "source": "conclusion"})
-        data["claims"][0]["serves"] = ["B1", "B2"]
-        data["claims"][1]["serves"] = ["B1"]
+        data["claims"][0]["serves"] = ["R1", "R2"]
+        data["claims"][1]["serves"] = ["R1"]
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
-        row = re.search(r'<div class="map-row">(?:(?!map-row).)*?data-id="B2".*?</div>\s*</div>',
+        row = re.search(r'<div class="map-row">(?:(?!map-row).)*?data-id="R2".*?</div>\s*</div>',
                         html, re.S)
-        self.assertIsNotNone(row, "B2 must have a map row")
-        self.assertNotIn("No narrow claim serves this result", row.group(0),
-                         "C1 serves B2, so the map must not say otherwise")
+        self.assertIsNotNone(row, "R2 must have a map row")
+        self.assertNotIn("No claim serves this result", row.group(0),
+                         "C1 serves R2, so the map must not say otherwise")
         self.assertNotIn("node result empty", row.group(0),
                          "a served result must not carry the unserved styling")
         self.assertIn("C1", row.group(0), "the map must say where the claim is shown")
-        lead = re.search(r'<div class="map-row">(?:(?!map-row).)*?data-id="B1".*?</div>\s*</div>',
+        lead = re.search(r'<div class="map-row">(?:(?!map-row).)*?data-id="R1".*?</div>\s*</div>',
                          html, re.S)
-        self.assertIsNotNone(lead, "B1 must have a map row")
+        self.assertIsNotNone(lead, "R1 must have a map row")
         self.assertIn('class="node claim" data-id="C1"', lead.group(0),
                       "the result the claims were filed under must still show them")
         self.assertIn('data-id="C2"', lead.group(0))
@@ -8238,9 +8240,9 @@ class SiteGate(unittest.TestCase):
         import cea_site
         payload = '"><img src=x onerror=alert(1)>'
         for label, mutate in (
-                ("serves", lambda d: d["claims"][0].__setitem__("serves", ["B1", payload])),
-                ("duplicate_of", lambda d: d["rejected"][0].__setitem__("duplicate_of", [payload])),
-                ("split_from", lambda d: d["rejected"][0].update({"split_from": payload,
+                ("serves", lambda d: d["claims"][0].__setitem__("serves", ["R1", payload])),
+                ("duplicate_of", lambda d: d["excluded"][0].__setitem__("duplicate_of", [payload])),
+                ("split_from", lambda d: d["excluded"][0].update({"split_from": payload,
                                                                   "states": "x"}))):
             with self.subTest(field=label):
                 with tempfile.TemporaryDirectory() as tmp:
@@ -8252,8 +8254,8 @@ class SiteGate(unittest.TestCase):
 
     def test_an_unpaired_surrogate_is_reported_by_validate(self):
         """Legal JSON, survives json.loads, and only fails when the page is written."""
-        for group, field in (("broad_statements", "note"), ("claims", "section"),
-                             ("rejected", "reason")):
+        for group, field in (("main_results", "note"), ("claims", "section"),
+                             ("excluded", "reason")):
             with self.subTest(field=f"{group}.{field}"):
                 data = valid_claims()
                 data[group][0][field] = "\ud800 lone"
@@ -8264,8 +8266,8 @@ class SiteGate(unittest.TestCase):
         import cea_site
         for label, mutate in (
                 ("page", lambda d: d["claims"][0].__setitem__("page", "9" * 4400 + "-" + "9" * 4400)),
-                ("broad id", lambda d: d["broad_statements"][0].__setitem__("id", "B" + "9" * 4400)),
-                ("rejected id", lambda d: d["rejected"][0].__setitem__("id", "R" + "9" * 4400))):
+                ("results id", lambda d: d["main_results"][0].__setitem__("id", "B" + "9" * 4400)),
+                ("excluded id", lambda d: d["excluded"][0].__setitem__("id", "R" + "9" * 4400))):
             with self.subTest(case=label):
                 data = valid_claims()
                 mutate(data)
@@ -8283,7 +8285,7 @@ class SiteGate(unittest.TestCase):
         """The int-conversion ValueError is not a JSONDecodeError, so it escaped both handlers."""
         import cea_site
         raw = '{"paper": {"id": "fixture", "title": "t", "pdf": "f.pdf", "pages": %s}, ' \
-              '"broad_statements": [], "claims": [], "rejected": []}' % ("9" * 4400)
+              '"main_results": [], "claims": [], "excluded": []}' % ("9" * 4400)
         with tempfile.TemporaryDirectory() as tmp:
             rec = Path(tmp) / "rec"
             rec.mkdir()
@@ -8385,7 +8387,7 @@ class SiteGate(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cea_claims.main(["render", str(d)]), 0)
             self.assertTrue((d / "claims.html").is_file())
-            data["rejected"][0]["reason"] = "Unsure whether B1 rests on this."
+            data["excluded"][0]["reason"] = "Unsure whether R1 rests on this."
             (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 self.assertEqual(cea_claims.main(["render", str(d)]), 1)
@@ -8409,7 +8411,7 @@ class SiteGate(unittest.TestCase):
     def test_an_entry_field_of_the_wrong_type_is_refused(self):
         """The gate checked that fields exist, not that they hold what the pages read."""
         for label, mutate in (("serves", lambda d: d["claims"][0].__setitem__("serves", 1)),
-                              ("source", lambda d: d["broad_statements"][0].__setitem__("source", 7)),
+                              ("source", lambda d: d["main_results"][0].__setitem__("source", 7)),
                               ("split_from", lambda d: d["claims"][0].__setitem__("split_from", {}))):
             with self.subTest(field=label):
                 written, messages, stray = self.build(mutate)
@@ -8469,17 +8471,17 @@ class Unsettled(unittest.TestCase):
 
     def test_an_unsure_claim_stops_the_page(self):
         def mutate(data):
-            data["claims"][0]["selection_reason"] = "Unsure whether B1 rests on this; the checker decides."
+            data["claims"][0]["selection_reason"] = "Unsure whether R1 rests on this; the checker decides."
         self.assertTrue(self.unsettled_for(mutate), "an unsure selection_reason must be caught")
 
     def test_an_unsure_rejected_candidate_stops_the_page(self):
         def mutate(data):
-            data["rejected"][0]["reason"] = "Unsure whether a main result rests on this."
+            data["excluded"][0]["reason"] = "Unsure whether a main result rests on this."
         self.assertTrue(self.unsettled_for(mutate))
 
     def test_leading_whitespace_does_not_hide_an_unsure_reason(self):
         """A reason indented by a space is still unsure. It used to publish."""
-        for field, entry in (("selection_reason", "claims"), ("reason", "rejected")):
+        for field, entry in (("selection_reason", "claims"), ("reason", "excluded")):
             with self.subTest(field=field):
                 def mutate(data, field=field, entry=entry):
                     data[entry][0][field] = "  Unsure whether a main result rests on this."
@@ -8488,18 +8490,18 @@ class Unsettled(unittest.TestCase):
     def test_unsure_inside_the_first_sentence_is_caught(self):
         """The reference's own wording does not put the word first."""
         def mutate(data):
-            data["rejected"][0]["reason"] = "I am unsure whether B1 rests on this, so the checker decides."
+            data["excluded"][0]["reason"] = "I am unsure whether R1 rests on this, so the checker decides."
         self.assertTrue(self.unsettled_for(mutate))
 
     def test_a_period_before_the_word_does_not_hide_it(self):
         """A decimal, an abbreviation or a statistic used to end the search early."""
-        for reason in ("The sentence reports 4.1 minutes, and I am unsure whether B1 rests on it.",
-                       "Reported as p < 0.05; unsure whether B1 rests on this.",
-                       "Fig. 3 shows the same number, so I am unsure whether B1 rests on it.",
-                       "Several passages, e.g. Section 5, make me unsure whether B1 rests on this."):
+        for reason in ("The sentence reports 4.1 minutes, and I am unsure whether R1 rests on it.",
+                       "Reported as p < 0.05; unsure whether R1 rests on this.",
+                       "Fig. 3 shows the same number, so I am unsure whether R1 rests on it.",
+                       "Several passages, e.g. Section 5, make me unsure whether R1 rests on this."):
             with self.subTest(reason=reason[:40]):
                 self.assertTrue(self.unsettled_for(
-                    lambda data, r=reason: data["rejected"][0].__setitem__("reason", r)))
+                    lambda data, r=reason: data["excluded"][0].__setitem__("reason", r)))
 
     def test_the_word_blocks_wherever_it_stands(self):
         """No quote parsing: every reading of the quoting has been wrong in four rounds.
@@ -8508,24 +8510,24 @@ class Unsettled(unittest.TestCase):
         question. A reason that only quotes the paper's own wording blocks too, and is reworded.
         """
         for reason in ('Unsure whether a main result rests on this.',
-                       '  Unsure whether B1 rests on this.',
-                       'The sentence reports 4.1 minutes, and I am unsure whether B1 rests on it.',
-                       'Reported as p < 0.05; unsure whether B1 rests on this.',
-                       'Fig. 3 shows the same number, so I am unsure whether B1 rests on it.',
+                       '  Unsure whether R1 rests on this.',
+                       'The sentence reports 4.1 minutes, and I am unsure whether R1 rests on it.',
+                       'Reported as p < 0.05; unsure whether R1 rests on this.',
+                       'Fig. 3 shows the same number, so I am unsure whether R1 rests on it.',
                        'word"word"unsure',
                        'The abstract reports a 13" screen; unsure whether the 5" figure matters.',
                        'The paper says respondents were "unsure", so this is reworded.'):
             with self.subTest(reason=reason[:44]):
                 self.assertTrue(self.unsettled_for(
-                    lambda data, r=reason: data["rejected"][0].__setitem__("reason", r)))
+                    lambda data, r=reason: data["excluded"][0].__setitem__("reason", r)))
 
     def test_a_reason_without_the_word_publishes(self):
-        for reason in ("B1 would still stand, because the result is a detail.",
+        for reason in ("R1 would still stand, because the result is a detail.",
                        "Describes the data, not a result.",
                        "Ensure is not unsureness; this reason is settled."):
             with self.subTest(reason=reason[:44]):
                 self.assertEqual(self.unsettled_for(
-                    lambda data, r=reason: data["rejected"][0].__setitem__("reason", r)), [])
+                    lambda data, r=reason: data["excluded"][0].__setitem__("reason", r)), [])
 
     def test_a_settled_record_publishes(self):
         self.assertEqual(self.unsettled_for(lambda data: None), [])

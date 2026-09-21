@@ -58,7 +58,7 @@ they do not need migrating. Raising `FORMAT` in a later release does break them:
   the claim-or-not decision open. The word counts wherever it stands, quoted or not. `render` writes
   `claims.md` but no page, and `site` writes nothing at all, both exiting 1. The checker settles it in
   `claims.json`.
-- The page mines a `reason` for the `B\d+` it names and turns each into a tag and a link, but only for the statements the record holds. A paper about vitamin B12 writes that in a reason, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
+- The page mines a `reason` for the `B\d+` it names and turns each into a tag and a link, but only for the statements the record holds. A paper about vitamin R12 writes that in a reason, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
 - `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
 - A record carries a top-level `format`. `validate` refuses one written in a format this build does
   not read, and reads a record without the stamp as format 1, because every record that can lack it
@@ -67,7 +67,7 @@ they do not need migrating. Raising `FORMAT` in a later release does break them:
   together with the field whose meaning changed, and say what changed in `_FORMAT_CHANGES`.
 - `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
   the name to write.
-- Ids (`B1`, `C3`, `R40`) are the anchors of the published pages. Do not renumber them when a record changes.
+- Ids (`R1`, `C3`, `E40`) are the anchors of the published pages. Do not renumber them when a record changes.
 
 ## Tests
 

@@ -2,13 +2,13 @@
 name: extract-claims
 description: >-
   Extract a research paper's claims from its PDF for Claim-Evidence Alignment (CEA): the narrow
-  quantitative claims, the broad statements from the abstract, contributions, research-question
-  answers, and conclusion they serve, and the rejected candidates, each with its exact wording,
+  quantitative claims, the main results from the abstract, contributions, research-question
+  answers, and conclusion they serve, and the excluded candidates, each with its exact wording,
   page, and reason. A claim is one a main result would fail without: the numbers a paper's
   conclusions rest on. Writes claims.json, claims.md, and a claims.html page, and checks every quote
   against the PDF's text. Use it when someone wants to extract, list, identify, or select the claims
   or key quantitative results of a paper PDF, prepare a paper for a claim-evidence, reproducibility,
-  or artifact check, or start a CEA chain, even if they do not say "CEA" or "narrow claim". It reads
+  or artifact check, or start a CEA chain, even if they do not say "CEA" or "claim". It reads
   the paper only and comes first, before any evidence is examined. Later steps judge that evidence.
   Linking those claims to an artifact's experiments is a later CEA step, not one this plugin covers. For a site of several papers' pages, use the site skill.
 license: MIT
@@ -19,14 +19,14 @@ compatibility: Requires Python 3.10 or newer (standard library only) and pdftote
 
 This skill drafts the claim selection step of Claim-Evidence Alignment (CEA) for one paper. For each narrow quantitative claim, CEA reconstructs the chain from the claim to its evidence, and a person, the checker, reviews each step that an agent drafts. This first step records which claims the paper makes, where it makes them, and why each claim was selected. Later steps start from this record. A claim missing here is never checked, and a wrong quote makes every later step work from the wrong passage.
 
-The checker must be able to verify the record. Each statement is quoted exactly with its page, and each selection and rejection has a reason that the checker can accept or overturn. A script, the validator, confirms that each quote is on its page. A candidate is a statement that could be a claim; one that is not selected is a rejected candidate where a checker could expect it to be a claim. A broad statement quotes a sentence stating a main result: the finding the paper puts forward as what the study shows, or the tool, model, or framework the paper presents as a contribution and evaluates.
+The checker must be able to verify the record. Each statement is quoted exactly with its page, and each selection and rejection has a reason that the checker can accept or overturn. A script, the validator, confirms that each quote is on its page. A candidate is a statement that could be a claim; one that is not selected is an excluded candidate where a checker could expect it to be a claim. A main result quotes the sentence that states it: the finding the paper puts forward as what the study shows, or the tool, model, or framework the paper presents as a contribution and evaluates.
 
 ## Stop conditions
 
 - If `check-env` or `extract` fails, stop and report its output. Do not read the PDF yourself instead, because the validator can check quotes only against `text.txt`.
 - Do not edit `text.txt`.
-- A paper may have no narrow claims. A qualitative study, for example, may give counts that describe its data but report no quantitative result. Say that the paper has no narrow claims, record the rejected candidates, and do not turn a qualitative finding into a claim.
-- A paper may also have no broad statements, when every main result it states is qualitative. Record the rejected candidates, say that the paper has no broad statements and no claims, and do not turn a qualitative main result into a broad statement. No broad statement id then exists for a reason to name, so every reason names the ground that excludes its candidate, as "Selection question" in `references/framework.md` describes.
+- A paper may have no claims. A qualitative study, for example, may give counts that describe its data but report no quantitative result. Say that the paper has no claims, record the excluded candidates, and do not turn a qualitative finding into a claim.
+- A paper may also have no main results recorded, when every finding it puts forward is qualitative. Record the excluded candidates, say that the paper has no main results and no claims, and do not record a qualitative finding as a main result. No main result id then exists for a reason to name, so every reason names the ground that excludes its candidate, as "Selection question" in `references/framework.md` describes.
 
 ## Scripts
 
@@ -55,31 +55,31 @@ The lines of two columns can be mixed on any page, whatever `extract` lists, so 
 
 ### 2. Read the definitions
 
-Read `references/framework.md`: its "Scope" and all of "1. Claim selection", the part this skill applies. It defines main results, broad statements, narrow claims, and rejected candidates. The steps below name its subsections in quotation marks, as in "Splitting".
+Read `references/framework.md`: its "Scope" and all of "1. Claim selection", the part this skill applies. It defines main results, claims, and excluded candidates. The steps below name its subsections in quotation marks, as in "Splitting".
 
 ### 3. Read the whole paper
 
 Read all of `text.txt`, in parts if it is long. Claims also appear in answers to research questions, figure captions, the discussion, and appendices. Skimming misses them. A statement missing from the whole record is the error that a checker is least likely to notice, and a detail selected as a claim costs the checker a full chain and hides the claims that matter. While reading, look for a sentence saying that the paper does not quantify prevalence, usually in the limitations. The reference's rule 3 for frequency words turns on it, and it often stands pages after the statements it governs.
 
-### 4. List the main results as broad statements
+### 4. List the main results
 
-Before judging any candidate, list the paper's main results and key contributions, and record each main result once as a broad statement, quoting the sentence that states it. A qualitative main result gets no broad statement. List it all the same and name it in your report, because the ground for rejecting a coded count turns on whether every main result of the paper is qualitative. "Broad statements" says which sentences qualify, which sentence to quote when several state the same main result, and where the other sentences go. Give each broad statement an id (`B1`, `B2`, ...) and a `source`: `abstract`, `contributions`, `rq_answer`, `conclusion`, or `other` for a main result that only the results or the discussion states. A broad statement with `source` `other` needs a `note` that says why, and so does a broad statement that no claim serves.
+Before judging any candidate, list the paper's main results and key contributions, and record each main result once, quoting the sentence that states it. A qualitative finding gets no main result entry. List it all the same and name it in your report, because the ground for rejecting a coded count turns on whether every main result of the paper is qualitative. "Recording a main result" says which sentences qualify, which sentence to quote when several state the same main result, and where the other sentences go. Give each main result an id (`R1`, `R2`, ...) and a `source`: `abstract`, `contributions`, `rq_answer`, `conclusion`, or `other` for a main result that only the results or the discussion states. A main result with `source` `other` needs a `note` that says why, and so does a main result that no claim serves.
 
-### 5. Select the narrow claims
+### 5. Select the claims
 
 Look for statements that report a quantitative result of the study, such as a count, a difference, or an accuracy. Also look for counts from qualitative coding, and for statements with a frequency word but no number when the reference's rule makes them quantitative. For each candidate:
 
-1. Find its most specific wording, as the reference defines it. A result stated in the results section is often repeated in the abstract, the discussion, or the conclusion. The narrow claim is the most specific statement, usually the sentence in the results section that gives the number. Record a repetition outside the broad statements as a rejected candidate, with `duplicate_of` listing the ids that it repeats, where the sentence restates the result as a finding. Where it repeats a main result, name the broad statement that states that result, not only the claim that gives its number. Where a summary sentence divides a broad statement's result into parts instead of restating it, record it as a breakdown, with `breaks_down` in place of `duplicate_of`, or, where no broad statement states that result, with the `reason` naming the entry that does. A passing mention, such as the number named again in the threats section or inside a sentence about something else, is left out, because a checker would not take it for a claim.
+1. Find its most specific wording, as the reference defines it. A result stated in the results section is often repeated in the abstract, the discussion, or the conclusion. The claim is the most specific statement, usually the sentence in the results section that gives the number. Record a repetition outside the main results as an excluded candidate, with `duplicate_of` listing the ids that it repeats, where the sentence restates the result as a finding. Where it repeats a main result, name that main result, not only the claim that gives its number. Where a summary sentence divides a main result into parts instead of restating it, record it as a breakdown, with `breaks_down` in place of `duplicate_of`, or, where no main result states that result, with the `reason` naming the entry that does. A passing mention, such as the number named again in the threats section or inside a sentence about something else, is left out, because a checker would not take it for a claim.
 2. Split the statement when "Splitting" says so. Each part gets the same `quote`, a `states` that gives only that part, and a shared `split_from` id (`S1`, `S2`, ...). Write `states` with the words of the quote. `states` may repeat context from the same sentence, such as "Across the 48 projects", but must not add anything that the quote does not say. If a part no longer says what a word such as "them" refers to, name it in `note`.
-3. First ask whether any broad statement states the main result that the candidate would serve. If none does, item 4 decides and the selection question is not asked. Otherwise ask the selection question from the reference, for each part of a split statement separately. Name the main result by the id of its broad statement, as in "B1 says ...", and say how it would fail or need substantial revision if the candidate were false in the sense that the reference defines. Then record the candidate:
+3. First ask whether any main result is recorded for the finding the candidate would serve. If none does, item 4 decides and the selection question is not asked. Otherwise ask the selection question from the reference, for each part of a split statement separately. Name the main result by its id, as in "R1 says ...", and say how it would fail or need substantial revision if the candidate were false in the sense that the reference defines. Then record the candidate:
    - The main result would fail: a claim (`C1`, `C2`, ...), whose `selection_reason` says how it would fail.
-   - The reference's rule for a main result that rests on several results together applies: a claim as well, because that rule decides. Its `selection_reason` names the broad statement and says which basis of it this claim supplies, as in "B1 rests on the results for four factors together, and this is the one for manual triggering".
-   - The main result would still stand: a rejected candidate whose `reason` names that main result by the id of its broad statement, as in "B2 would still stand, because ...".
-   - The question never reaches the candidate, because it is out of scope: a rejected candidate whose `reason` names one of the grounds that "Selection question" lists. Only where the record has no broad statement, and no other ground fits, does a reason say instead that no main result depends on the candidate.
-   - You cannot tell whether the main result rests on it: a rejected candidate that says so in its `reason`, as in "Unsure whether B2 rests on this, recorded as rejected so that the checker can change it into a claim", and names in `note` the passages that support each choice.
+   - The reference's rule for a main result that rests on several results together applies: a claim as well, because that rule decides. Its `selection_reason` names the main result and says which basis of it this claim supplies, as in "R1 rests on the results for four factors together, and this is the one for manual triggering".
+   - The main result would still stand: an excluded candidate whose `reason` names that main result by its id, as in "R2 would still stand, because ...".
+   - The question never reaches the candidate, because it is out of scope: an excluded candidate whose `reason` names one of the grounds that "Selection question" lists. Only where the record has no main result, and no other ground fits, does a reason say instead that nothing depends on the candidate.
+   - You cannot tell whether the main result rests on it: an excluded candidate that says so in its `reason`, as in "Unsure whether R2 rests on this, recorded as rejected so that the checker can change it into a claim", and names in `note` the passages that support each choice.
 
    "Important result" is not a reason that a checker can assess.
-4. Link each claim to every broad statement that it serves, in `serves`. If no broad statement states the main result that a candidate seems to support, look again in the abstract, the contribution list, the boxed answers, the conclusion, and the discussion. If none states it, record the candidate as a rejected candidate. Its `reason` is that no broad statement states the main result it would serve. Name in `note` any passage that builds on it, so that the checker can change it into a claim. Where the record has no broad statement at all, that ground holds of every candidate and so says nothing: name the ground that excludes this one on its own terms, as "Selection question" describes. A claim quotes the same sentence as a broad statement only under the reference's rule that applies when a broad statement's own sentence alone gives the number of its main result, whatever its source.
+4. Link each claim to every main result that it serves, in `serves`. If no main result is recorded for the finding a candidate seems to support, look again in the abstract, the contribution list, the boxed answers, the conclusion, and the discussion. If none states it, record the candidate as an excluded candidate. Its `reason` is that no main result is recorded for the finding it would serve. Name in `note` any passage that builds on it, so that the checker can change it into a claim. Where the record has no main result at all, that ground holds of every candidate and so says nothing: name the ground that excludes this one on its own terms, as "Selection question" describes. A claim quotes the same sentence as a main result only under the reference's rule that applies when a main result's own sentence alone gives its number, whatever its source.
 
 `extract` prints the paper's tables and figures with their pages, and reading `text.txt` fills in what each one counts. That short list makes the comparison below a lookup rather than a search of the whole paper for every number.
 
@@ -89,17 +89,17 @@ Compare an entry with a table or figure where its sentence gives a number for a 
 - The text and the table or figure give a quantity or an ordering differently. Record both in `note` as printed, with both locations, and do not say which is right. A table that splits what the sentence groups, or prints the sentence's number under a different heading, gives it differently in this sense, even where a cell matches. The `note` then names the heading the table prints it under, so that the checker can see the mismatch without opening the paper.
 - The extraction has left a figure as scattered labels. Say so in `note` and compare nothing.
 
-Record a rejected candidate (`R1`, `R2`, ...) when a checker could expect a statement to be a claim. Common reasons are a result that leaves its broad statement standing (named by that statement's id), a repetition, and a number that describes the study, such as a sample size or an agreement score. The reference lists further reasons, such as the accuracy of a model that the paper only reads other findings from. Another reason works if it says why the statement is not a claim. Also record the sizes of the study, which "Results and descriptions of the study" sets out, including the size of the codebook. The sentences that overlap with the broad statements follow their own rules:
+Record an excluded candidate (`E1`, `E2`, ...) when a checker could expect a statement to be a claim. Common reasons are a result that leaves its main result standing (named by that statement's id), a repetition, and a number that describes the study, such as a sample size or an agreement score. The reference lists further reasons, such as the accuracy of a model that the paper only reads other findings from. Another reason works if it says why the statement is not a claim. Also record the sizes of the study, which "Results and descriptions of the study" sets out, including the size of the codebook. The sentences that overlap with the main results follow their own rules:
 
-- A summary sentence is a rejected candidate when it gives at least one number, every one of its numbers describes the study, and it states no quantitative result. Record one entry for each such sentence.
-- A sentence recorded as a broad statement is never also a rejected candidate on its own, although one part of it can be a rejected part when the reference's rule splits it.
-- Where a broad statement's sentence also gives a number that describes the study, record that number from the method sentence instead, unless a summary sentence that is already a rejected candidate states it.
+- A summary sentence is an excluded candidate when it gives at least one number, every one of its numbers describes the study, and it states no quantitative result. Record one entry for each such sentence.
+- A sentence recorded as a main result is never also an excluded candidate on its own, although one part of it can be a rejected part when the reference's rule splits it.
+- Where a main result's sentence also gives a number that describes the study, record that number from the method sentence instead, unless a summary sentence that is already an excluded candidate states it.
 
-Qualitative findings, formal claims, and novelty claims are out of scope. Do not record them, not even as rejected candidates. The exceptions are:
+Qualitative findings, formal claims, and novelty claims are out of scope. Do not record them, not even as excluded candidates. The exceptions are:
 
 - a summary sentence that repeats or breaks down a recorded main result, whether or not it gives a quantitative part, because the record has to show every place the paper states that result
-- a statement whose basis the paper does not make clear, which the reference's rule for frequency words records as a rejected candidate with a note
-- a summary sentence that combines a qualitative finding with numbers that describe the study, which is a rejected candidate under the rule above
+- a statement whose basis the paper does not make clear, which the reference's rule for frequency words records as an excluded candidate with a note
+- a summary sentence that combines a qualitative finding with numbers that describe the study, which is an excluded candidate under the rule above
 
 ### 6. Write claims.json
 
@@ -113,7 +113,7 @@ python3 <plugin root>/scripts/cea_claims.py validate <output directory>/<paper_i
 
 Fix every problem and run it again until it prints `CEA_VALID`. After that line, it can print `warning:` lines, for example about a quote that ends in the middle of a sentence. Read each warning, and fix the record where it is right. If a quote is not found, copy it again from `text.txt`. If it was found on another page, correct `page`. The validator also checks that the `states` of a split part uses only words from its quote. The validator warns when no part of a split statement keeps a negation of the quote. "Splitting" lists the negation words. Keep the negation unless it belongs to a clause that is out of scope, such as a qualitative finding. Most of its other warnings are listed in `references/record-format.md`, under "What the validator warns about". It also checks a `note` that says its values are the parts of a number, naming that number, and adds them up, so that a note gives the parts of its number rather than a total.
 
-Recording a broad statement as a rejected candidate leaves an id that no longer exists in every claim that served it, and in the `duplicate_of` or `breaks_down` of every rejected candidate that named it, which is a problem rather than a warning. Judge those claims again under item 3 of step 5, and point those rejected candidates at the entry's new id, before running the validator again.
+Recording a main result as an excluded candidate leaves an id that no longer exists in every claim that served it, and in the `duplicate_of` or `breaks_down` of every excluded candidate that named it, which is a problem rather than a warning. Judge those claims again under item 3 of step 5, and point those excluded candidates at the entry's new id, before running the validator again.
 
 It cannot tell whether a part pairs a number with the wrong item, so reread each part against its quote.
 
@@ -123,19 +123,19 @@ It cannot tell whether a part pairs a number with the wrong item, so reread each
 python3 <plugin root>/scripts/cea_claims.py render <output directory>/<paper_id>
 ```
 
-The render command writes `claims.md` and `claims.html`. `claims.md` is the working document that the checker reads and it is always written. `claims.html` is the page for readers outside the check, so it is written only when every entry states a decision. Where a rejected candidate's `reason` or a claim's `selection_reason` uses the word "unsure" anywhere, quoted or not, the command prints `CEA_UNRESOLVED`, names those entries, writes no page, and exits 1. A broad statement that no claim serves reaches the page as a finding, under its own heading with the note that says why the paper's own evidence does not reach it. The validator therefore rejects such a statement without a note. Report that to the user rather than working around it. The checker settles each one in `claims.json`, by turning the candidate into a claim or by replacing the reason with the ground that excludes it, and then you render again.
+The render command writes `claims.md` and `claims.html`. `claims.md` is the working document that the checker reads and it is always written. `claims.html` is the page for readers outside the check, so it is written only when every entry states a decision. Where an excluded candidate's `reason` or a claim's `selection_reason` uses the word "unsure" anywhere, quoted or not, the command prints `CEA_UNRESOLVED`, names those entries, writes no page, and exits 1. A main result that no claim serves reaches the page as a finding, under its own heading with the note that says why the paper's own evidence does not reach it. The validator therefore rejects such a statement without a note. Report that to the user rather than working around it. The checker settles each one in `claims.json`, by turning the candidate into a claim or by replacing the reason with the ground that excludes it, and then you render again.
 
-`claims.md` The claims stand under each main result they serve, the result the paper states in the most places first, and within a result in page order, because the paper puts no order on the claims that support one result. Broad statements that the same claims serve are shown together as one result, which usually means that the paper states one result twice, so check that grouping against the quotes. A list of every claim in page order and the rejected candidates come next. Then tell the user, briefly:
+`claims.md` The claims stand under each main result they serve, the result the paper states in the most places first, and within a result in page order, because the paper puts no order on the claims that support one result. Main results that the same claims serve are shown together as one result, which usually means that the paper states one result twice, so check that grouping against the quotes. A list of every claim in page order and the excluded candidates come next. Then tell the user, briefly:
 
 - where `claims.json` and `claims.md` are
-- how many broad statements, claims, and rejected candidates you recorded
-- which broad statements, if any, no narrow claim serves, or that the paper has none
+- how many main results, claims, and excluded candidates you recorded
+- which main results, if any, no claim serves, or that the paper has none
 - any selection you were unsure about, with its id and one sentence saying why, and say so if there were none
-- the paper's main results that got no broad statement, and why each of them is qualitative
+- the paper's main results that got no main result, and why each of them is qualitative
 - whether the paper's own sentence about not quantifying prevalence removed statements that give a frequency only in words, and where that sentence stands, and say so if the paper has no such sentence
 - which entries you compared with a table or a figure, which of those disagree, and which numbers no table reports
 - any extraction problems, such as pages with garbled text, or a figure the extraction left as scattered labels
 
 ## Left to later steps
 
-Do not interpret the claims here. The next CEA step interprets each claim, as "Not part of this step" describes, and a later step decides whether the evidence supports a claim. An interpretation added now would look like a checked part of the record.
+Do not interpret the claims here. The next CEA step interprets each claim, as "What claim selection does not decide" describes, and a later step decides whether the evidence supports a claim. An interpretation added now would look like a checked part of the record.

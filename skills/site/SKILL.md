@@ -56,7 +56,7 @@ The record sits beside its page so that the page's links to it work wherever the
 and so that a zip of one paper's folder is complete on its own.
 
 A successful build prints `CEA_SITE`, preceded by a `CEA_WARNING` line for each paper whose PDF is
-missing, for each main result that no narrow claim serves, and for each paper directory left in the
+missing, for each main result that no claim serves, and for each paper directory left in the
 output by an earlier build that this one no longer lists. A record that fails the checks prints `CEA_INVALID` or `CEA_UNRESOLVED`, then `CEA_FAILED`.
 Nothing is written unless every record holds the fields the pages need, passes `validate`, and
 leaves no decision open. The build runs `validate` itself, so a record whose quote is not on its
@@ -64,8 +64,8 @@ page stops it. Each record therefore needs its `text.txt` beside its `claims.jso
 
 ## The framework page
 
-The pages use the framework's terms: main result, broad statement, narrow claim, rejected
-candidate, checker, and mapping level. Every claim card carries an `M1` badge over six dots, so
+The pages use the framework's terms: main result, main result, claim, rejected
+candidate, checker, and mapping level. Every claim card carries an `L1` badge over six dots, so
 the document has to define the mapping levels and name the six links of the chain the badge shows:
 interpretation, operationalization, measurement, unit bridge, analysis, and reasoning. `site` always publishes the framework as a page and links it from every footer, so a reader has
 the definitions at hand. It publishes the plugin's own
@@ -85,5 +85,5 @@ the site only when that tag moves. `se-uhd/cea-website` is that arrangement, and
 states the contract.
 
 Report to the user: where the site is, how many papers it holds, which records stopped the build,
-and any paper whose page says that no narrow claim serves one of its main results, because that is
+and any paper whose page says that no claim serves one of its main results, because that is
 a finding a reader should not have to search for.

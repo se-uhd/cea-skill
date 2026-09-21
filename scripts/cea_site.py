@@ -173,7 +173,7 @@ def md_to_html(text: str) -> str:
         elif re.match(r"^#{1,6} ", line):
             level = len(line) - len(line.lstrip("#"))
             title = line[level:].strip()
-            # Two headings can slug to one name ("Narrow claim" and "Narrow Claim"), and a
+            # Two headings can slug to one name ("Claim" and "Narrow Claim"), and a
             # heading with no letters or digits slugs to nothing. Both leave a link pointing at
             # whichever of them the browser happens to find first, so each slug is made unique.
             # The fallback is derived from the title, not from the heading's position: a counter
@@ -296,13 +296,13 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
             break
     else:
         print(f"CEA_WARNING: {record}: no PDF found for {pdf_name}, the page will name it without a link")
-    # A main result that no narrow claim serves is the finding a reader should not have to search
+    # A main result that no claim serves is the finding a reader should not have to search
     # for, and the site skill says to report it. Nothing printed it: the record is valid, the page
     # carries the heading, and the fact stood only inside the generated files.
     served = {b for c in data["claims"] for b in c.get("serves", [])}
-    for statement in data["broad_statements"]:
+    for statement in data["main_results"]:
         if statement["id"] not in served:
-            print(f"CEA_WARNING: {record}: no narrow claim serves {statement['id']}, "
+            print(f"CEA_WARNING: {record}: no claim serves {statement['id']}, "
                   "so its page says the paper's own evidence does not reach that main result")
     out = dest / "index.html"
     out.write_text(cea_page.build(data, dest / "claims.json", out, index_href="../../",
@@ -318,9 +318,9 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
         rows.append(
             f'<tr><td class="t"><a href="papers/{E(p["id"])}/">{E(_flat(p["title"]))}</a>'
             f'<div class="pid">{E(p["id"])}'
-            f'{"" if d["broad_statements"] else " &middot; no main result recorded"}</div></td>'
-            f'<td class="n">{len(d["broad_statements"])}</td><td class="n">{len(d["claims"])}</td>'
-            f'<td class="n">{len(d["rejected"])}</td><td class="n">{_stated_in(d) if d["broad_statements"] else 0}</td>'
+            f'{"" if d["main_results"] else " &middot; no main result recorded"}</div></td>'
+            f'<td class="n">{len(d["main_results"])}</td><td class="n">{len(d["claims"])}</td>'
+            f'<td class="n">{len(d["excluded"])}</td><td class="n">{_stated_in(d) if d["main_results"] else 0}</td>'
             f'<td class="n">{p["pages"]}</td></tr>')
     framework_link = ('<a class="nav-home" href="framework/">Framework</a>' if framework else "")
     page = f"""<!DOCTYPE html>
@@ -348,15 +348,15 @@ def write_index(site: Path, papers: list[dict], framework: bool = False) -> None
   <nav><span class="mark">CEA</span><a href="#papers" class="active">Papers</a>{framework_link}<a class="nav-repo" href="https://github.com/se-uhd/cea-skill">cea-skill on GitHub &nearr;</a></nav>
   <header>
     <h1>Claim-Evidence Alignment</h1>
-    <p class="subtitle">Each paper's page records the narrow claims its main results rest on, and the
-    candidates that were considered and rejected. Claim-Evidence Alignment covers quantitative empirical
+    <p class="subtitle">Each paper's page records the claims its main results rest on, and the
+    candidates that were considered and excluded. Claim-Evidence Alignment covers quantitative empirical
     claims, so where a paper states its main results as qualitative findings, only the candidates are recorded.</p>
   </header>
   <main>
     <section id="papers">
       <h2>Papers</h2>
-      <table class="idx"><thead><tr><th>Paper</th><th>Broad statements</th><th>Narrow claims</th>
-      <th>Rejected candidates</th><th>Sentences the record marks as stating the main results</th><th>Pages</th></tr></thead>
+      <table class="idx"><thead><tr><th>Paper</th><th>Main results</th><th>Claims</th>
+      <th>Excluded candidates</th><th>Sentences the record marks as stating the main results</th><th>Pages</th></tr></thead>
       <tbody>{"".join(rows)}</tbody></table>
     </section>
   </main>
@@ -464,63 +464,63 @@ def build_site(records: list[Path], site: Path, framework: Path | None = None) -
             still_published.append(named)
             continue
         shapes = [f"{key}[{n}] is missing {f}"
-                  for key in ("broad_statements", "claims", "rejected")
+                  for key in ("main_results", "claims", "excluded")
                   for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                   for f in sorted(cea_claims.FIELDS[key][0])
                   if not isinstance(e, dict) or f not in e]
-        shapes += [f"{key} must be a list" for key in ("broad_statements", "claims", "rejected")
+        shapes += [f"{key} must be a list" for key in ("main_results", "claims", "excluded")
                    if not isinstance(data[key], list)]
         # Not just a string: the page drops a field whose text is empty, so an empty reason
         # publishes a card with no reason on it at all, and claims.md prints a bare heading.
         shapes += [f"{key}[{n}].{f} must be text that is not empty"
-                   for key in ("broad_statements", "claims", "rejected")
+                   for key in ("main_results", "claims", "excluded")
                    for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                    if isinstance(e, dict)
                    for f in ("quote", "section", "source", "states", "selection_reason",
                              "reason", "note")
                    if f in e and not (isinstance(e[f], str) and e[f].strip())]
-        prefix = {"broad_statements": "B", "claims": "C", "rejected": "R"}
+        prefix = {"main_results": "R", "claims": "C", "excluded": "E"}
         shapes += [f"{key}[{n}].id must be {prefix[key]} and a number"
-                   for key in ("broad_statements", "claims", "rejected")
+                   for key in ("main_results", "claims", "excluded")
                    for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                    if not isinstance(e, dict) or not isinstance(e.get("id"), str)
                    or not re.fullmatch(rf"{prefix[key]}\d{{1,6}}", e["id"])]
-        shapes += [f"rejected[{n}].states is missing, which a rejected part of a split needs"
-                   for n, e in enumerate(data["rejected"] if isinstance(data["rejected"], list) else [])
+        shapes += [f"excluded[{n}].states is missing, which an excluded part of a split needs"
+                   for n, e in enumerate(data["excluded"] if isinstance(data["excluded"], list) else [])
                    if isinstance(e, dict) and e.get("split_from") and "states" not in e]
         shapes += [f"{key}[{n}].split_from must be a name or null"
-                   for key in ("claims", "rejected")
+                   for key in ("claims", "excluded")
                    for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                    if isinstance(e, dict) and "split_from" in e
                    and e["split_from"] is not None and not isinstance(e["split_from"], str)]
         entries = {key: [e for e in (data[key] if isinstance(data[key], list) else [])
                          if isinstance(e, dict)]
-                   for key in ("broad_statements", "claims", "rejected")}
+                   for key in ("main_results", "claims", "excluded")}
         known = {e["id"] for group in entries.values() for e in group
                  if isinstance(e.get("id"), str)}
-        broad_ids = {e["id"] for e in entries["broad_statements"] if isinstance(e.get("id"), str)}
+        result_ids = {e["id"] for e in entries["main_results"] if isinstance(e.get("id"), str)}
         shapes += [f"{key}[{n}].{f} must be a list of ids"
-                   for key in ("claims", "rejected")
+                   for key in ("claims", "excluded")
                    for n, e in enumerate(entries[key])
                    for f in ("serves", "duplicate_of", "breaks_down")
                    if f in e and not (isinstance(e[f], list)
                                       and all(isinstance(r, str)
-                                              and re.fullmatch(r"[BCR]\d{1,6}", r) for r in e[f]))]
+                                              and re.fullmatch(r"[RCE]\d{1,6}", r) for r in e[f]))]
         # The page turns these into links and map edges, so an id that names nothing, or names
         # the wrong kind of entry, publishes a page that contradicts its own record.
-        shapes += [f"{key}[{n}].{f} names {r!r}, which is not a broad statement"
-                   for key in ("claims", "rejected")
+        shapes += [f"{key}[{n}].{f} names {r!r}, which is not a main result"
+                   for key in ("claims", "excluded")
                    for n, e in enumerate(entries[key])
                    for f in ("serves", "breaks_down")
                    if isinstance(e.get(f), list)
-                   for r in e[f] if isinstance(r, str) and r not in broad_ids]
+                   for r in e[f] if isinstance(r, str) and r not in result_ids]
         shapes += [f"{key}[{n}].duplicate_of names {r!r}, which is not in this record"
-                   for key in ("claims", "rejected")
+                   for key in ("claims", "excluded")
                    for n, e in enumerate(entries[key])
                    if isinstance(e.get("duplicate_of"), list)
                    for r in e["duplicate_of"] if isinstance(r, str) and r not in known]
         seen_entry_ids: dict[str, str] = {}
-        for key in ("broad_statements", "claims", "rejected"):
+        for key in ("main_results", "claims", "excluded"):
             for n, e in enumerate(entries[key]):
                 eid = e.get("id")
                 if isinstance(eid, str):
@@ -529,7 +529,7 @@ def build_site(records: list[Path], site: Path, framework: Path | None = None) -
                                       f"{seen_entry_ids[eid]}; the page would drop one")
                     seen_entry_ids[eid] = f"{key}[{n}].id"
         shapes += [f"{key}[{n}].split_from must be a split name such as S1"
-                   for key in ("claims", "rejected")
+                   for key in ("claims", "excluded")
                    for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                    if isinstance(e, dict) and e.get("split_from") is not None
                    and not (isinstance(e["split_from"], str)
@@ -537,7 +537,7 @@ def build_site(records: list[Path], site: Path, framework: Path | None = None) -
                             # refuses and then send the user to it
                             and re.fullmatch(r"S\d+", e["split_from"]))]
         shapes += [f"{key}[{n}].page must be a number or a range"
-                   for key in ("broad_statements", "claims", "rejected")
+                   for key in ("main_results", "claims", "excluded")
                    for n, e in enumerate(data[key] if isinstance(data[key], list) else [])
                    if isinstance(e, dict) and "page" in e
                    and not (isinstance(e["page"], str)
