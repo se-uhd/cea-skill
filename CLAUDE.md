@@ -41,16 +41,17 @@ documents every field, and some fields carry no bullet of their own there.
 with this skill, pinned to a tag in its `.skill-version`. A change here reaches the site only when that file
 names a tag that contains the change, so release a tag and bump it there.
 
-Before moving that tag, run the release gate the way a release runs it:
+Before moving that tag, run the gates the way a release runs them:
 
 ```sh
-CEA_REQUIRE_PAPERS=1 sh scripts/check.sh
+sh scripts/gates.sh
 ```
 
-which needs the PDFs in `evals/papers/`, and check that the site's records still validate under the new
-build. A record the site already holds carries no `format` stamp, which this build reads as format 1, so
-they do not need migrating. Raising `FORMAT` in a later release does break them: add the entry to
-`_FORMAT_CHANGES` saying what changed, and stamp the site's records before the tag moves.
+and check that the site's records still validate under the new build. The records it holds now carry
+no `format` stamp, so this build reads them as format 1 and refuses them: the terms and the ids moved
+at format 2. There is no migration to run and no backwards compatibility to keep. Record those papers
+again with this build, because a record written against the older rules needs its selection checked,
+not its field names edited.
 
 ## Rules that the code enforces
 
@@ -60,11 +61,12 @@ they do not need migrating. Raising `FORMAT` in a later release does break them:
   `claims.json`.
 - The page mines a `reason` for the `B\d+` it names and turns each into a tag and a link, but only for the statements the record holds. A paper about vitamin R12 writes that in a reason, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
 - `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
-- A record carries a top-level `format`. `validate` refuses one written in a format this build does
-  not read, and reads a record without the stamp as format 1, because every record that can lack it
-  was written before it existed. The stamp is what stops a record written against an older format
-  from passing every check and publishing a number that means something else. Raise `FORMAT` only
-  together with the field whose meaning changed, and say what changed in `_FORMAT_CHANGES`.
+- A record carries a top-level `format`, and `validate` refuses one written in a format this build
+  does not read. A record without the stamp is one written before the stamp existed, so it is read as
+  format 1 and refused with it. The stamp is not there for compatibility: it is what stops a record
+  written against older rules from passing every check and publishing a number that means something
+  else. Raise `FORMAT` only together with the field whose meaning changed, say what changed in
+  `_FORMAT_CHANGES`, and record the affected papers again rather than editing their records.
 - `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
   the name to write.
 - Ids (`R1`, `C3`, `E40`) are the anchors of the published pages. Do not renumber them when a record changes.

@@ -79,7 +79,9 @@ _FORMAT_CHANGES = {
        "former `B` id is now `R`, and a former `R` id is now `E`, in `id`, in `serves`, "
        "`duplicate_of`, `breaks_down` and `split_from`, and wherever a `reason`, `note` or "
        "`selection_reason` names one. The mapping levels are L1 to L4 rather than M1 to M4. "
-       "`scripts/migrate_format_2.py` makes the change.",
+       "Record the paper again rather than editing the old record: the selection was drafted "
+       "against rules that have since moved, so what needs checking is the selection, not the "
+       "field names.",
 }
 
 FIELDS = {
