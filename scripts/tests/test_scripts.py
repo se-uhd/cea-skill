@@ -826,17 +826,21 @@ class NoTestCanFakeACleanRun(unittest.TestCase):
             raise unittest.SkipTest("this is the run the gate started")
         cls.tree = Path(tempfile.mkdtemp())
         root = Path(__file__).resolve().parent.parent.parent
-        # framework.md travels inside skills/, where the spec has a skill keep the files it names.
-        for name in ("scripts", "skills", "evals", "claims.schema.json", ".claude-plugin"):
+        # What a commit carries, not a list written out here. The list left out framework.md, and
+        # then README.md and CLAUDE.md, each time giving the inner run a tree the tests could not
+        # judge: a test that reads a document cannot fail over one that is absent.
+        listed = subprocess.run(["git", "ls-files", "-z"], cwd=root,
+                                capture_output=True, text=True, timeout=120)
+        names = [n for n in listed.stdout.split("\0") if n] if listed.returncode == 0 else []
+        if not names:
+            raise unittest.SkipTest("no tracked-file listing, so there is no tree to judge")
+        for name in names:
             src = root / name
-            if not src.exists():
+            if not src.is_file() or "papers" in Path(name).parts:
                 continue
-            if src.is_dir():
-                shutil.copytree(src, cls.tree / name,
-                                ignore=shutil.ignore_patterns("__pycache__", "*-workspace",
-                                                              "papers"))
-            else:
-                shutil.copy2(src, cls.tree / name)
+            dest = cls.tree / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
 
     @classmethod
     def tearDownClass(cls):
