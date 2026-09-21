@@ -47,8 +47,15 @@ def seeds():
             yield str(record.relative_to(WORKSPACE)), record, data
 
 
+# Taken from the module under test, not written out here: this harness named the record's three
+# entry lists itself, and a field rename left it looking for fields no record had. It went on
+# reporting success, with 250 cases where there had been 466.
+ENTRY_KEYS = tuple(C._ID_PREFIX)
+RESULTS_KEY = next(k for k, letter in C._ID_PREFIX.items() if letter == "R")
+
+
 def _entries(data):
-    for key in ("broad_statements", "claims", "rejected"):
+    for key in ENTRY_KEYS:
         for i, e in enumerate(data.get(key, [])):
             if isinstance(e, dict):
                 yield key, i, e
@@ -96,7 +103,7 @@ def variants(data):
             yield f"{key}[{i}].{field}", one
         for field, value in (("duplicate_of", ["B1"]), ("breaks_down", ["B1"]),
                              ("split_from", "S9")):
-            if key == "broad_statements":
+            if key == RESULTS_KEY:
                 continue
             one = copy.deepcopy(data)
             one[key][i][field] = value
@@ -133,12 +140,21 @@ def answers(record: Path, data: dict) -> dict:
     return out
 
 
-def collect() -> dict:
-    found = {}
+def collect() -> tuple[dict, dict]:
+    """The answers, and how many of the corpus's entries the harness reached.
+
+    The per-key counts are returned because a key no record holds is the shape of this harness
+    having come apart from the record. Counting entries instead is not enough: `claims` kept its
+    name through the format-2 rename, so two wrong keys out of three still found entries and the
+    run reported success over 250 cases where there had been 466.
+    """
+    found, holding = {}, {k: 0 for k in ENTRY_KEYS}
     for name, record, data in seeds():
+        for k in ENTRY_KEYS:
+            holding[k] += 1 if isinstance(data.get(k), list) else 0
         for label, one in variants(data):
             found[f"{name} :: {label}"] = answers(record, one)
-    return found
+    return found, holding
 
 
 def main(argv=None) -> int:
@@ -148,10 +164,17 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     with redirect_stdout(io.StringIO()):
-        now = collect()
+        now, holding = collect()
 
     # The diff runs before the write, and neither returns early: passing both used to write the
     # snapshot and silently skip the comparison, so a run that looked like a check was not one.
+    absent = [k for k, n in holding.items() if not n]
+    if absent:
+        print(f"CEA_FAILED: no record holds {', '.join(absent)}, so every case over those entries "
+              f"is missing and {len(now)} case(s) remain. The harness and the record have come "
+              f"apart.")
+        return 1
+
     if args.diff:
         was = json.loads(Path(args.diff).read_text(encoding="utf-8"))
         # Through JSON first: the baseline is read back as lists and the fresh answers hold
