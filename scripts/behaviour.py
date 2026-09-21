@@ -101,7 +101,11 @@ def variants(data):
             else:
                 target[field] = "Changed."
             yield f"{key}[{i}].{field}", one
-        for field, value in (("duplicate_of", ["B1"]), ("breaks_down", ["B1"]),
+        # The id is built from the prefix map rather than written out: `B1` was a well-formed
+        # main-result id before format 2 and is a malformed one after, so these cases went from
+        # asking what the validator does with a reference to asking what it does with a bad shape.
+        a_result_id = f"{C._ID_PREFIX[RESULTS_KEY]}1"
+        for field, value in (("duplicate_of", [a_result_id]), ("breaks_down", [a_result_id]),
                              ("split_from", "S9")):
             if key == RESULTS_KEY:
                 continue
