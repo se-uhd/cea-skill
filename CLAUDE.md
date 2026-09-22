@@ -48,8 +48,9 @@ sh scripts/gates.sh
 
 and check that the site's records still validate under the new build. There is no record format to
 read and no backwards compatibility to keep: a record written against older rules is refused by its
-shape, which names what is wrong with it. Where the rules move, record those papers again, because
-what needs checking is the selection, not the field names.
+shape, which names what is wrong with it. Where a rule moves, run `extract` on those papers again
+and select their claims again, rather than editing the old records' fields to match: what needs
+checking is the selection, not the field names.
 
 ## Rules that the code enforces
 

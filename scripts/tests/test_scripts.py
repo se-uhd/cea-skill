@@ -4272,15 +4272,55 @@ class NoIdShapedTokenStandsWhereAnIdCannot(unittest.TestCase):
                                   "an ordinary reference must not be flagged")
 
 
+class ASplitPartSaysWhichWordsItCarries(unittest.TestCase):
+    """Both renderings name the part of a split sentence that was not selected, and neither was
+    held to it. claims.md printed its words from `states` and the page tagged it with the split it
+    came from; emptying either left a well-formed line that says nothing, and 62 of the 466
+    behaviour cases moved with the suite green."""
+
+    def record(self):
+        data = valid_claims()
+        data["excluded"] = [
+            {"id": "E1", "quote": SPLIT_QUOTE,
+             "states": "Across the 48 projects, the failure rate stayed at 3%.",
+             "page": 2, "section": "5 Results", "split_from": "S1",
+             "reason": "R1 would still stand: it states the build time, not the failure rate."}]
+        return data
+
+    def test_claims_md_prints_the_words_of_the_excluded_part(self):
+        md = cea_claims.render(self.record())
+        line = next((l for l in md.splitlines() if l.startswith("- Excluded part:")), None)
+        self.assertIsNotNone(line, f"claims.md names no excluded part:\n{md[:400]}")
+        self.assertIn("the failure rate stayed at 3%", line,
+                      "the line has to carry the words the part states")
+        self.assertIn("split from S1", line, "and the split it came from")
+
+    def test_the_page_tags_the_part_with_the_split_it_came_from(self):
+        html = cea_page.build(self.record(), Path("claims.json"), Path("out.html"))
+        self.assertIn("split from", html, "the page does not tag the part at all")
+        m = re.search(r'<span class="taglabel">split from</span>([^<]*)', html)
+        self.assertIsNotNone(m, "the split-from tag carries no name")
+        self.assertEqual(m.group(1).strip(), "S1",
+                         "the tag has to name the split, not stand empty")
+
+    def test_the_rendering_and_the_page_name_the_same_split(self):
+        data = self.record()
+        md = cea_claims.render(data)
+        html = cea_page.build(data, Path("claims.json"), Path("out.html"))
+        self.assertIn("split from S1", md)
+        self.assertIn(">S1", html.replace("</span>S1", ">S1"))
+
+
 class ARecordFromTheOldRulesIsRefusedByItsShape(unittest.TestCase):
     """There was a `format` stamp, and eleven tests around it, to refuse a record written against
     older rules. It earned nothing: such a record names fields this one does not have and ids of
     the wrong letter, so the shape refuses it already, and each message names what is wrong. The
     stamp only ever added a version to compare, which is a thing to keep in step for its own sake.
 
-    What it did cover, and no longer does, is a change that moves a field's meaning while leaving
-    its name: nothing detects that. The answer is not a version number but that a record whose
-    rules have moved is recorded again rather than read."""
+    One thing it could have covered and nothing now does: a change that moves a field's meaning
+    while leaving its name. No shape check sees that. What to do about it is not to carry a version
+    number but to run `extract` on the paper again and select its claims again, rather than editing
+    an old record's fields to match the new names."""
 
     def old_record(self):
         """A record as the published site held it before the terms and the ids moved."""

@@ -2280,7 +2280,8 @@ def render(data: dict) -> str:
     for r in sorted(excluded, key=_first_page):
         out += [f"### {r['id']}: page {r['page']}, {_flat(r['section'])}", "", *_quote_block(r["quote"]), ""]
         if r.get("split_from"):
-            out.append(f"- Rejected part: {_flat(r.get('states') or '')} (split from {r['split_from']})")
+            out.append(f"- Excluded part: {_flat(r.get('states') or '')} "
+                       f"(split from {r['split_from']})")
         if r.get("duplicate_of"):
             refs = r["duplicate_of"] if isinstance(r["duplicate_of"], list) else [r["duplicate_of"]]
             out.append(f"- Repeats: {', '.join(refs)}")
