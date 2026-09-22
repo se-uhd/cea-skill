@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cea_claims as C  # noqa: E402
 import cea_page as P  # noqa: E402
+import cea_site as S  # noqa: E402
 
 WORKSPACE = Path(__file__).resolve().parent.parent / "skills" / "cea-extract-claims-workspace"
 
@@ -114,6 +115,11 @@ def variants(data):
             yield f"{key}[{i}].{field} added", one
 
 
+def _without_paths(message: str) -> str:
+    """A message with the temporary directory taken out, so the answer is the same every run."""
+    return re.sub(r"/\S*/(?=[\w.-]+)", "", message)
+
+
 def answers(record: Path, data: dict) -> dict:
     """Everything the scripts say about one record."""
     out: dict[str, object] = {}
@@ -141,6 +147,21 @@ def answers(record: Path, data: dict) -> dict:
                 r"<h3>([^<]{0,80})</h3>|class=\"taglabel\">([^<]{0,40})<|"
                 r"stat-value\">(\d+)</div><div class=\"stat-label\">([^<]{0,60})<|"
                 r"stated in ([^<·]{0,40})", page)))
+        # The site as well, or nothing here reaches cea_site: it was absent from this harness, so
+        # every cea_site mutant came back as reaching nothing in the corpus, which said only that
+        # the harness never built a site.
+        (here / "fixture.pdf").write_bytes(b"%PDF-1.4\n")
+        try:
+            written, messages = S.build_site([here], here / "_site")
+        except Exception as e:
+            out["site"] = f"<raised {type(e).__name__}: {e}>"
+        else:
+            out["site"] = [written] + sorted(_without_paths(m) for m in messages)
+            index = here / "_site" / "index.html"
+            if index.is_file():
+                out["index"] = sorted(set(re.findall(
+                    r"<td[^>]*>([^<]{0,60})</td>|class=\"count\">([^<]{0,30})<",
+                    index.read_text(encoding="utf-8"))))
     return out
 
 

@@ -4269,6 +4269,47 @@ class TheMutationHarnessPutsAMutantToEveryTestThatReachesIt(unittest.TestCase):
                               "but the map should say so on purpose")
 
 
+class TheBehaviourHarnessReachesEveryModuleItJudges(unittest.TestCase):
+    """It imported cea_claims and cea_page and never built a site, so every cea_site mutant came
+    back as reaching nothing in the corpus. That verdict said only that the harness never called
+    cea_site: 50 survivors across two runs were filed as harmless on the strength of it. A mutation
+    of cea_site now moves 147 of the 466 cases."""
+
+    def setUp(self):
+        sys.path.insert(0, str(SCRIPTS))
+        import behavior
+        self.behavior = behavior
+
+    def test_it_imports_every_module_a_mutant_can_be_taken_from(self):
+        import mutants
+        source = (SCRIPTS / "behavior.py").read_text(encoding="utf-8")
+        for module in mutants.MODULES:
+            name = module[:-3]
+            if name == "pdf_text":
+                continue  # the digests pin that one, over the real papers
+            with self.subTest(module=module):
+                self.assertRegex(source, rf"import {name}\b",
+                                 f"a mutant of {module} cannot move a case this harness never runs")
+
+    def test_one_record_answers_for_all_three(self):
+        """What the answer holds, not how it is produced: a missing key is a module not reached."""
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(valid_claims()), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                out = self.behavior.answers(d, valid_claims())
+        for key, module in (("problems", "cea_claims"), ("claims_md", "cea_claims"),
+                            ("page", "cea_page"), ("site", "cea_site")):
+            with self.subTest(key=key):
+                self.assertIn(key, out, f"nothing in the answer comes from {module}")
+
+    def test_the_site_answer_does_not_carry_a_temporary_path(self):
+        """Otherwise every case moves on every run and the diff says nothing."""
+        self.assertEqual(self.behavior._without_paths("/tmp/x9/rec: no claim serves R3"),
+                         "rec: no claim serves R3")
+
+
 class TheMutationHarnessRefusesAMeaninglessRun(unittest.TestCase):
     """It reported 152 of 153 mutants killed once, from a run where `check.sh` could not find a
     python new enough for its own version gate. The two tests that run the gate failed for every
