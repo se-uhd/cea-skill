@@ -4134,6 +4134,109 @@ class ACandidateIsShownAgainstTheResultItWeighs(unittest.TestCase):
                          f"{under['R2']!r}")
 
 
+class TheSiteRefusesAnIdThatNamesNothingInTheRecord(unittest.TestCase):
+    """`duplicate_of` names the entries a sentence repeats, and the page turns each into a link. An
+    id naming nothing would be a dead link on a published page, so the site gate refuses it. Both
+    halves of that check could be inverted with the whole suite green, and each moved 147 of the 466
+    corpus cases."""
+
+    def build(self, mutate):
+        import cea_site
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = Path(tmp) / "rec"
+            rec.mkdir()
+            (rec / "text.txt").write_text(TEXT, encoding="utf-8")
+            data = valid_claims()
+            mutate(data)
+            (rec / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                written, messages = cea_site.build_site([rec], Path(tmp) / "_site")
+            return written, "\n".join(messages)
+
+    def test_a_duplicate_of_naming_nothing_stops_the_site(self):
+        written, said = self.build(
+            lambda d: d["excluded"][0].update(duplicate_of=["R9"]))
+        self.assertEqual(written, 0, "the site was written with a dead reference in it")
+        self.assertIn("'R9'", said)
+        self.assertIn("not in this record", said)
+
+    def test_a_duplicate_of_naming_an_entry_is_accepted(self):
+        written, said = self.build(
+            lambda d: d["excluded"][0].update(duplicate_of=["R1", "C1"]))
+        self.assertEqual(written, 1, f"a reference to R1 and C1 was refused: {said}")
+
+    def test_the_check_reads_every_id_in_the_list(self):
+        """The second of two, not only the first."""
+        written, said = self.build(
+            lambda d: d["excluded"][0].update(duplicate_of=["R1", "E7"]))
+        self.assertEqual(written, 0)
+        self.assertIn("'E7'", said)
+
+    def test_serves_and_breaks_down_are_held_to_the_main_results(self):
+        written, said = self.build(lambda d: d["claims"][0].update(serves=["R9"]))
+        self.assertEqual(written, 0, "a claim served a result the record does not hold")
+        self.assertIn("'R9'", said)
+
+
+class ClaimsMdSaysWhichClaimsServeAResult(unittest.TestCase):
+    """The rendering lists, under each main result, the claims that serve it, whether its `states`
+    clause differs from its quote, and how many places state it. Each of those was held by nothing:
+    inverting which claims are collected, the `states` comparison, or the plural left a document
+    that reads wrongly, and they moved 94, 40 and 94 of the 466 cases."""
+
+    def record(self):
+        data = valid_claims()
+        data["main_results"] = [
+            {"id": "R1", "quote": "Caching halves median build time.", "page": 1,
+             "section": "Abstract", "source": "abstract"},
+            {"id": "R2", "quote": "Failures did not increase with caching.", "page": 1,
+             "section": "Abstract", "source": "abstract",
+             "states": "Failures did not increase.",
+             "note": "The sentence states two main results; R1 holds the other."}]
+        data["claims"][0]["serves"] = ["R1"]
+        data["claims"][1]["serves"] = ["R2"]
+        return data
+
+    def under(self, md, result):
+        """The lines of the Main results section for one result."""
+        block = md.split("## Main results", 1)[1].split("\n## ", 1)[0]
+        parts = block.split(f"### {result}:")
+        self.assertGreater(len(parts), 1, f"{result} has no entry:\n{block[:300]}")
+        return parts[1].split("### ")[0]
+
+    def test_each_result_lists_only_the_claims_that_serve_it(self):
+        md = cea_claims.render(self.record())
+        self.assertIn("- Claims: C1", self.under(md, "R1"))
+        self.assertIn("- Claims: C2", self.under(md, "R2"))
+        self.assertNotIn("C2", self.under(md, "R1").split("- Note")[0])
+
+    def test_a_result_no_claim_serves_says_none_selected(self):
+        data = self.record()
+        data["claims"][1]["serves"] = ["R1"]
+        md = cea_claims.render(data)
+        self.assertIn("- Claims: none selected", self.under(md, "R2"))
+
+    def test_the_states_clause_is_shown_only_where_it_differs_from_the_quote(self):
+        md = cea_claims.render(self.record())
+        self.assertIn("- States: Failures did not increase.", self.under(md, "R2"),
+                      "a states clause that differs from the quote has to be shown")
+        self.assertNotIn("- States:", self.under(md, "R1"),
+                         "a result whose states repeats its quote must not show it twice")
+
+    def test_the_place_count_is_singular_for_one_and_plural_for_two(self):
+        data = self.record()
+        md = cea_claims.render(data)
+        self.assertIn("stated in 1 place", md)
+        self.assertNotIn("stated in 1 places", md)
+        data["excluded"].append(
+            {"id": "E2", "quote": "Caching halves median build time.", "page": 4,
+             "section": "7 Conclusion", "duplicate_of": ["R1"],
+             "reason": "Repeats the result R1 states."})
+        md = cea_claims.render(data)
+        self.assertIn("stated in 2 places", md)
+        self.assertNotIn("stated in 2 place,", md)
+
+
 class OnlyAnotherPdfBesideTheRecordIsAStray(unittest.TestCase):
     """The advisory names a second PDF in the record's directory, because the page says every quote
     was checked against the paper the record names. Which files count was held by nothing: joining
