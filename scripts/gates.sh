@@ -21,11 +21,25 @@ clone="$(mktemp -d)"
 trap 'rm -rf "$clone"' EXIT
 # --cached and --others --exclude-standard: what a commit would carry, which is what someone
 # cloning gets. Gitignored paths -- the papers, the workspace -- are left out on purpose.
-git ls-files --cached --others --exclude-standard -z \
-  | while IFS= read -r -d '' f; do
-        mkdir -p "$clone/$(dirname "$f")"
-        cp "$root/$f" "$clone/$f"
-    done
+#
+# The copying is python3, not a shell loop: `read -d ''` is a bashism, and on a machine whose
+# /bin/sh is dash it silently copies nothing, so this gate failed in CI while passing on a Mac
+# where /bin/sh is bash. python3 is already required by check.sh.
+git ls-files --cached --others --exclude-standard -z | python3 -c '
+import os, shutil, sys
+root, clone = sys.argv[1], sys.argv[2]
+names = [n for n in sys.stdin.buffer.read().split(b"\0") if n]
+if not names:
+    sys.exit("gates.sh: git listed no files to copy")
+for raw in names:
+    name = os.fsdecode(raw)
+    src = os.path.join(root, name)
+    if not os.path.isfile(src):
+        continue
+    dest = os.path.join(clone, name)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.copy2(src, dest)
+' "$root" "$clone"
 if sh "$clone/scripts/check.sh"; then
     echo "GATE 1: pass"
 else
