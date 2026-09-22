@@ -166,8 +166,7 @@ def weighed_against(r: dict, known: set[str] | None = None) -> set[str]:
     """The main results that an excluded claim candidate refers to.
 
     `duplicate_of` and `breaks_down` name them as data. A reason names one in its text, because the
-    skill requires "R2 would still stand, because ...". Prose is not data, though: a paper about
-    vitamin R12 puts that in a reason too, so a name the record does not hold is not a reference.
+    skill requires "R2 would still stand, because ...". Prose is not data, though: a paper can print a token of that shape without meaning an id, so a name the record does not hold is not a reference.
 
     Nor is every mention a weighing. A reason may name a statement to say what it is about, or to
     say that no statement states the result the candidate would serve, and calling that "leaves

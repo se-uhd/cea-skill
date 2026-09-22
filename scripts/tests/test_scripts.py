@@ -4225,6 +4225,58 @@ class EveryFlagTheDocsShowIsOneTheCommandTakes(unittest.TestCase):
                          "the docstring and this test disagree about the commands")
 
 
+class NoIdShapedTokenStandsWhereAnIdCannot(unittest.TestCase):
+    """The format-2 rename rewrote every `B` id to `R`, including inside prose naming a B-numbered
+    thing from the world. A sentence about the vitamin came out naming one that does not exist, and
+    it was there to explain why the page checks the record before linking a token of that shape. It
+    survived in CLAUDE.md, in cea_page.py's comment and in a test's own fixture, because a
+    retired-term check looks for retired terms and this is not one.
+
+    The examples below are built from fragments so that this file does not match its own search."""
+
+    # Words that rule out an id: no record entry is a vitamin or a figure.
+    NOT_AN_ID = (r"\b(vitamin|figure|fig\.|table|section|appendix|chapter|step|phase|round|"
+                 r"revision|version|python|gpt|claude|deepseek|llama|rq|participant|item|code|"
+                 r"model)\s+([RCE]\d+)\b")
+
+    def test_no_file_names_an_id_shaped_token_after_such_a_word(self):
+        listed = subprocess.run(["git", "ls-files", "-z"], cwd=SCRIPTS.parent,
+                                capture_output=True, text=True, timeout=120)
+        if listed.returncode != 0 or not listed.stdout.strip("\0").strip():
+            raise unittest.SkipTest("no tracked-file listing")
+        pattern = re.compile(self.NOT_AN_ID, re.I)
+        seen = 0
+        for name in listed.stdout.split("\0"):
+            if not name or Path(name).suffix.lower() not in (".md", ".py", ".json", ".yaml", ".sh"):
+                continue
+            path = SCRIPTS.parent / name
+            if not path.is_file():
+                continue
+            seen += 1
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in pattern.finditer(text):
+                with self.subTest(file=name, token=m.group(0)):
+                    self.fail(f"{name} says {m.group(0)!r}; a {m.group(1)} is not an entry, so the "
+                              f"id was written by a rename over prose")
+        self.assertGreater(seen, 10, f"only {seen} file(s) were read")
+
+    def test_it_would_catch_the_one_that_got_through(self):
+        """Three passes missed the renamed vitamin, so the pattern is held against its shape here."""
+        pattern = re.compile(self.NOT_AN_ID, re.I)
+        renamed = "a paper about " + "vita" + "min R12 puts that in a reason"
+        self.assertTrue(pattern.search(renamed), "the shape it missed three times")
+        self.assertTrue(pattern.search("as " + "Fig" + "ure C4 shows"),
+                        "any id letter after such a word, not only R")
+        for fine in ("Repeats the result R1 states", "the ranking that C1 gives",
+                     "vita" + "min B12 is not an id at all"):
+            with self.subTest(text=fine[:28]):
+                self.assertIsNone(pattern.search(fine),
+                                  "an ordinary reference must not be flagged")
+
+
 class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
     """The terms retired at format 2 kept turning up after the rename: in the site skill's own list
     of the terms the pages use, in the validator's messages, and in `evals/`, where the graders are
@@ -6790,11 +6842,11 @@ class PublishedFiles(unittest.TestCase):
     def test_a_name_the_record_does_not_hold_is_not_turned_into_a_link(self):
         """The page mined every `B\\d+` out of a reason and made each one a tag and a link.
 
-        A reason is prose. A paper about vitamin R12 says so in one, and the page asserted a main
+        A reason is prose. A paper numbering a respondent R12 says so in one, and the page asserted a main
         result "R12" behind a link that landed nowhere. Refusing the record instead is no good
         either: there is no other way to write that sentence.
         """
-        for reason, label in (("Reports vitamin R12 levels, not a result here.", "real prose"),
+        for reason, label in (("Reports what respondent R12 said, not a result here.", "real prose"),
                               ("Data only. R7 would still stand.", "a typo")):
             with self.subTest(reason=label):
                 tmp, site, written, messages = self.build(
