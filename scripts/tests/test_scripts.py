@@ -4292,7 +4292,7 @@ class TheSiteRefusesAnIdThatNamesNothingInTheRecord(unittest.TestCase):
     """`duplicate_of` names the entries a sentence repeats, and the page turns each into a link. An
     id naming nothing would be a dead link on a published page, so the site gate refuses it. Both
     halves of that check could be inverted with the whole suite green, and each moved 147 of the 466
-    corpus cases."""
+    cases of the records."""
 
     def build(self, mutate):
         import cea_site
@@ -4528,7 +4528,7 @@ class TheMutationHarnessPutsAMutantToEveryTestThatReachesIt(unittest.TestCase):
 
 class TheBehaviourHarnessReachesEveryModuleItJudges(unittest.TestCase):
     """It imported cea_claims and cea_page and never built a site, so every cea_site mutant came
-    back as reaching nothing in the corpus. That verdict said only that the harness never called
+    back as reaching nothing in the records. That verdict said only that the harness never called
     cea_site: 50 survivors across two runs were filed as harmless on the strength of it. A mutation
     of cea_site now moves 147 of the 466 cases."""
 

@@ -2,7 +2,7 @@
 
 Every regression this codebase has shipped passed the whole test suite and changed no verdict on
 the 30 real records. Both signals are blind to it, because a test asks about the case it was
-written for and the corpus holds only the shapes its authors happened to write. The signal that
+written for and the records hold only the shapes their authors happened to write. The signal that
 was missing is a differential one: run everything over a large, deliberately varied set of
 records, write down every answer, and after a change look at what moved.
 
@@ -154,7 +154,7 @@ def answers(record: Path, data: dict) -> dict:
                 r"stat-value\">(\d+)</div><div class=\"stat-label\">([^<]{0,60})<|"
                 r"stated in ([^<·]{0,40})", page)))
         # The site as well, or nothing here reaches cea_site: it was absent from this harness, so
-        # every cea_site mutant came back as reaching nothing in the corpus, which said only that
+        # every cea_site mutant came back as reaching nothing in the records, which said only that
         # the harness never built a site.
         (here / "fixture.pdf").write_bytes(b"%PDF-1.4\n")
         try:
@@ -172,7 +172,7 @@ def answers(record: Path, data: dict) -> dict:
 
 
 def collect() -> tuple[dict, dict]:
-    """The answers, and how many of the corpus's entries the harness reached.
+    """The answers, and how many of the records' entries the harness reached.
 
     The per-key counts are returned because a key no record holds is the shape of this harness
     having come apart from the record. Counting entries instead is not enough: `claims` kept its

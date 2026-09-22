@@ -4,7 +4,7 @@
     python3 scripts/mutants.py --sample 90 --out /tmp/mutants.json
 
 A surviving mutant is a decision the suite does not hold. Not every survivor is a hole: a flipped
-comparison can be equivalent for every input the corpus has. The survivors are a list to triage, by
+comparison can be equivalent for every input the records hold. The survivors are a list to triage, by
 applying one and reading what the page or the record does differently.
 
 The run starts with a control: the frozen tree, unmutated, must pass. Without it a broken
@@ -155,10 +155,10 @@ def one_test_dominates(results: list[dict]) -> tuple[str, int] | None:
 
 
 def moves_output(frozen: Path, module: str, kind: str, n: int, baseline: str) -> int:
-    """How many of behavior.py's cases a mutant moves, over the corpus.
+    """How many of behavior.py's cases a mutant moves, over the records.
 
     A surviving mutant that moves nothing changes no record's problems, no claims.md and no page
-    for any paper in the corpus, so it is a decision the corpus never reaches rather than one the
+    for any paper recorded, so it is a decision the records never reach rather than one the
     suite fails to hold. A survivor that moves cases is a gap: the output differs and nothing
     said so.
     """
@@ -274,12 +274,12 @@ def main(argv=None) -> int:
                 r["moved"] = future.result()
                 done_n += 1
                 verdict = ("GAP" if r["moved"] > 0 else
-                           "reaches nothing in the corpus" if r["moved"] == 0 else
+                           "reaches nothing in the records" if r["moved"] == 0 else
                            "could not be measured")
                 print(f"  [{done_n}/{len(survivors)}] {r['module']:16s} {r['kind']:7s} "
                       f"{r['where']:22s} {r['moved']:5d} case(s)  {verdict}", flush=True)
         gaps = [r for r in survivors if r.get("moved", 0) > 0]
-        print(f"\n  {len(gaps)} of {len(survivors)} survivor(s) change what the corpus produces")
+        print(f"\n  {len(gaps)} of {len(survivors)} survivor(s) change what the records produce")
         if args.out:
             Path(args.out).write_text(json.dumps(results, indent=1), encoding="utf-8")
     else:
