@@ -5970,6 +5970,20 @@ class GeneratedGapCases(unittest.TestCase):
         self.assertGreater(self.built["legitimate"], 100)
         self.assertGreater(self.built["weld"], 100)
 
+    def test_every_kind_of_skippable_thing_is_found(self):
+        """The rates below are a share of what was built, so they read the same whether a kind of
+        material is found often or not at all. A comment in the harness records that it once drew
+        no panel labels, and the rule keeping those out of the prose count was covered by nothing
+        while that was true."""
+        blocks, pairs = self.gap_cases.material()
+        for kind in ("caption", "table", "footnote", "heading", "panel"):
+            with self.subTest(kind=kind):
+                self.assertGreater(len(blocks[kind]), 10,
+                                   f"only {len(blocks.get(kind, []))} {kind} block(s) were found, "
+                                   f"so a gap over one is barely tested")
+        self.assertGreater(len(pairs), 1000,
+                           f"only {len(pairs)} sentence pair(s) to weld")
+
     def test_a_gap_where_the_marker_belongs_is_not_refused(self):
         """A false refusal is the worse error: it stops a record a checker wrote correctly."""
         bad = self.fails["legitimate refused"]
