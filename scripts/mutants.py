@@ -27,7 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -255,15 +255,24 @@ def main(argv=None) -> int:
           f"-> {100 * (total - survived) // max(total, 1)}% killed")
     survivors = [r for r in results if not r["killed"]]
     if args.triage:
-        print("\n  triage: cases of behavior.py each survivor moves over the corpus")
+        print(f"\n  triage: how many of behavior.py's cases each of the {len(survivors)} survivor(s)"
+              f" moves. Every case runs validate, render, the page and the site, so no module can be"
+              f" left out of one.", flush=True)
+        # as_completed, not map: map yields in order and prints nothing until the slowest of a batch
+        # finishes, so a twenty-minute run showed no progress at all.
+        done_n = 0
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            moved = list(pool.map(lambda r: moves_output(frozen, r["module"], r["kind"], r["n"],
-                                                         args.triage), survivors))
-        for r, n in zip(survivors, moved):
-            r["moved"] = n
-            verdict = ("GAP" if n > 0 else "reaches nothing in the corpus" if n == 0
-                       else "could not be measured")
-            print(f"  {r['module']:16s} {r['kind']:7s} {r['where']:22s} {n:5d} case(s)  {verdict}")
+            futures = {pool.submit(moves_output, frozen, r["module"], r["kind"], r["n"],
+                                   args.triage): r for r in survivors}
+            for future in as_completed(futures):
+                r = futures[future]
+                r["moved"] = future.result()
+                done_n += 1
+                verdict = ("GAP" if r["moved"] > 0 else
+                           "reaches nothing in the corpus" if r["moved"] == 0 else
+                           "could not be measured")
+                print(f"  [{done_n}/{len(survivors)}] {r['module']:16s} {r['kind']:7s} "
+                      f"{r['where']:22s} {r['moved']:5d} case(s)  {verdict}", flush=True)
         gaps = [r for r in survivors if r.get("moved", 0) > 0]
         print(f"\n  {len(gaps)} of {len(survivors)} survivor(s) change what the corpus produces")
         if args.out:
