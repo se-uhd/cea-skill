@@ -10,7 +10,7 @@ applying one and reading what the page or the record does differently.
 The run starts with a control: the frozen tree, unmutated, must pass. Without it a broken
 environment reads as perfect coverage. The first campaign of this kind ran with a PATH whose
 `python3` was too old for `check.sh`, so the two tests that run the gate failed for all 153 mutants
-and the report claimed 152 of them killed. It had measured nothing. The run also refuses a result
+and the run reported 152 of them killed, having measured nothing. The run also refuses a result
 where one test killed nearly every mutant, which is what that looks like from the outside.
 """
 
@@ -124,6 +124,27 @@ def one_test_dominates(results: list[dict]) -> tuple[str, int] | None:
     return (test, n) if n > ONE_TEST_CEILING * len(results) else None
 
 
+def moves_output(frozen: Path, module: str, kind: str, n: int, baseline: str) -> int:
+    """How many of behaviour.py's cases a mutant moves, over the corpus.
+
+    A surviving mutant that moves nothing changes no record's problems, no claims.md and no page
+    for any paper in the corpus, so it is a decision the corpus never reaches rather than one the
+    suite fails to hold. A survivor that moves cases is a gap: the output differs and nothing
+    said so.
+    """
+    source = (frozen / "scripts" / module).read_text(encoding="utf-8")
+    mutated, _ = mutate(source, kind, n)
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "t"
+        shutil.copytree(frozen, tree)
+        (tree / "scripts" / module).write_text(mutated, encoding="utf-8")
+        done = subprocess.run([sys.executable, str(tree / "scripts" / "behaviour.py"),
+                               "--diff", baseline], capture_output=True, text=True,
+                              env=env(), timeout=2400, cwd=tree)
+    found = re.search(r"CEA_BEHAVIOUR: (\d+) of \d+ case\(s\) moved", done.stdout)
+    return int(found.group(1)) if found else -1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--module", action="append", choices=MODULES,
@@ -132,6 +153,9 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=41)
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", help="write the result here as JSON")
+    ap.add_argument("--triage", metavar="BASELINE",
+                    help="for each survivor, how many behaviour.py cases it moves, against this "
+                         "baseline written by `behaviour.py --out`")
     args = ap.parse_args(argv)
     chosen = args.module or [m for m in MODULES if m != "pdf_text.py"]
 
@@ -195,8 +219,23 @@ def main(argv=None) -> int:
               f"-> {100 * (len(mine) - len(out)) // max(len(mine), 1)}% killed")
     print(f"  {'TOTAL':16s} {total:3d} mutant(s), {survived:3d} survived "
           f"-> {100 * (total - survived) // max(total, 1)}% killed")
-    for r in results:
-        if not r["killed"]:
+    survivors = [r for r in results if not r["killed"]]
+    if args.triage:
+        print("\n  triage: cases of behaviour.py each survivor moves over the corpus")
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            moved = list(pool.map(lambda r: moves_output(frozen, r["module"], r["kind"], r["n"],
+                                                         args.triage), survivors))
+        for r, n in zip(survivors, moved):
+            r["moved"] = n
+            verdict = ("GAP" if n > 0 else "reaches nothing in the corpus" if n == 0
+                       else "could not be measured")
+            print(f"  {r['module']:16s} {r['kind']:7s} {r['where']:22s} {n:5d} case(s)  {verdict}")
+        gaps = [r for r in survivors if r.get("moved", 0) > 0]
+        print(f"\n  {len(gaps)} of {len(survivors)} survivor(s) change what the corpus produces")
+        if args.out:
+            Path(args.out).write_text(json.dumps(results, indent=1), encoding="utf-8")
+    else:
+        for r in survivors:
             print(f"  SURVIVOR {r['module']:16s} {r['kind']:7s} {r['where']}")
     return 0
 

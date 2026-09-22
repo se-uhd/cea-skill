@@ -21,8 +21,8 @@ contradicts it.
 
 `scripts/cea_claims.py`, at the root of the plugin, has the commands for both skills. `extract` writes `text.txt`, the agent
 writes `claims.json`, `validate` checks every quote against the page text, and `render` writes `claims.md` and
-`claims.html`. `site` assembles several papers into a static site with an index, and its `--framework` option publishes
-a Markdown document as the page that defines the terms the pages use.
+`claims.html`. `site` assembles several papers into a static site with an index, and always publishes the
+framework as the page that defines the terms the pages use.
 
 The page template is `cea_page.py` and the site assembly is `cea_site.py`. Both are modules with no command
 line of their own; `cea_claims.py` is the only entry point. `cea_page.py` reuses the ordering
@@ -59,7 +59,7 @@ not its field names edited.
   the claim-or-not decision open. The word counts wherever it stands, quoted or not. `render` writes
   `claims.md` but no page, and `site` writes nothing at all, both exiting 1. The checker settles it in
   `claims.json`.
-- The page mines a `reason` for the `B\d+` it names and turns each into a tag and a link, but only for the statements the record holds. A paper about vitamin R12 writes that in a reason, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
+- The page mines a `reason` for the `R\d+` it names and turns each into a tag and a link, but only for the main results the record holds. A paper can print a token of that shape without meaning an id, such as a respondent or a round numbered R1, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
 - `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
 - A record carries a top-level `format`, and `validate` refuses one written in a format this build
   does not read. A record without the stamp is one written before the stamp existed, so it is read as
