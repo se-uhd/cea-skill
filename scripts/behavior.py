@@ -6,9 +6,9 @@ written for and the corpus holds only the shapes its authors happened to write. 
 was missing is a differential one: run everything over a large, deliberately varied set of
 records, write down every answer, and after a change look at what moved.
 
-    python3 scripts/behaviour.py --out before.json     # on the tree as it stands
+    python3 scripts/behavior.py --out before.json     # on the tree as it stands
     ... make a change ...
-    python3 scripts/behaviour.py --diff before.json    # every answer that moved, and why
+    python3 scripts/behavior.py --diff before.json    # every answer that moved, and why
 
 A move is not a failure. It is the question to answer: did I mean to change this? An unintended
 move is a regression, found in seconds rather than in the next review round.
@@ -203,14 +203,14 @@ def main(argv=None) -> int:
                         print(f"  + {field}: {came[:150]}")
                 else:
                     print(f"  ~ {field} changed ({len(str(a))} -> {len(str(b))} chars)")
-        print(f"\nCEA_BEHAVIOUR: {moved} of {len(now)} case(s) moved")
+        print(f"\nCEA_BEHAVIOR: {moved} of {len(now)} case(s) moved")
 
     if args.out:
         Path(args.out).write_text(json.dumps(now, indent=1, sort_keys=True), encoding="utf-8")
-        print(f"CEA_BEHAVIOUR: {len(now)} case(s) written to {args.out}")
+        print(f"CEA_BEHAVIOR: {len(now)} case(s) written to {args.out}")
 
     if not args.diff and not args.out:
-        print(f"CEA_BEHAVIOUR: {len(now)} case(s); pass --out or --diff")
+        print(f"CEA_BEHAVIOR: {len(now)} case(s); pass --out or --diff")
     return 0
 
 

@@ -125,7 +125,7 @@ def one_test_dominates(results: list[dict]) -> tuple[str, int] | None:
 
 
 def moves_output(frozen: Path, module: str, kind: str, n: int, baseline: str) -> int:
-    """How many of behaviour.py's cases a mutant moves, over the corpus.
+    """How many of behavior.py's cases a mutant moves, over the corpus.
 
     A surviving mutant that moves nothing changes no record's problems, no claims.md and no page
     for any paper in the corpus, so it is a decision the corpus never reaches rather than one the
@@ -138,10 +138,10 @@ def moves_output(frozen: Path, module: str, kind: str, n: int, baseline: str) ->
         tree = Path(tmp) / "t"
         shutil.copytree(frozen, tree)
         (tree / "scripts" / module).write_text(mutated, encoding="utf-8")
-        done = subprocess.run([sys.executable, str(tree / "scripts" / "behaviour.py"),
+        done = subprocess.run([sys.executable, str(tree / "scripts" / "behavior.py"),
                                "--diff", baseline], capture_output=True, text=True,
                               env=env(), timeout=2400, cwd=tree)
-    found = re.search(r"CEA_BEHAVIOUR: (\d+) of \d+ case\(s\) moved", done.stdout)
+    found = re.search(r"CEA_BEHAVIOR: (\d+) of \d+ case\(s\) moved", done.stdout)
     return int(found.group(1)) if found else -1
 
 
@@ -154,8 +154,8 @@ def main(argv=None) -> int:
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", help="write the result here as JSON")
     ap.add_argument("--triage", metavar="BASELINE",
-                    help="for each survivor, how many behaviour.py cases it moves, against this "
-                         "baseline written by `behaviour.py --out`")
+                    help="for each survivor, how many behavior.py cases it moves, against this "
+                         "baseline written by `behavior.py --out`")
     args = ap.parse_args(argv)
     chosen = args.module or [m for m in MODULES if m != "pdf_text.py"]
 
@@ -221,7 +221,7 @@ def main(argv=None) -> int:
           f"-> {100 * (total - survived) // max(total, 1)}% killed")
     survivors = [r for r in results if not r["killed"]]
     if args.triage:
-        print("\n  triage: cases of behaviour.py each survivor moves over the corpus")
+        print("\n  triage: cases of behavior.py each survivor moves over the corpus")
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
             moved = list(pool.map(lambda r: moves_output(frozen, r["module"], r["kind"], r["n"],
                                                          args.triage), survivors))

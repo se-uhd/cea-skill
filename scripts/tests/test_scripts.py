@@ -3075,7 +3075,7 @@ console.log('SCRIPT_OK ' + JSON.stringify(did));
         return "SCRIPT_OK", json.loads(out[len("SCRIPT_OK "):])
 
     def test_every_selector_the_script_uses_matches_something_it_emits(self):
-        """A renamed class or id silently disables behaviour: nothing errors, it just stops.
+        """A renamed class or id silently disables behavior: nothing errors, it just stops.
 
         Renaming `entry-header`, for instance, leaves every card on every published page
         permanently collapsed, because the CSS hides the body until the script adds `expanded`.
@@ -3346,7 +3346,7 @@ class WhatThePageAsserts(unittest.TestCase):
     def test_the_table_chip_counts_a_note_that_says_there_is_no_table(self):
         """That note is the check, made and written down, and it was the one being excluded.
 
-        Read as the pattern's own behaviour rather than its spelling: pinning the source text
+        Read as the pattern's own behavior rather than its spelling: pinning the source text
         meant the test had to be edited to say the same thing whenever the pattern changed.
         """
         html = self.page()
@@ -3994,7 +3994,7 @@ class ExtractionThatFailsSaysSoRatherThanPublishingPart(unittest.TestCase):
 class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
     """Thirty places write the record's entry lists out by hand, in the scripts and in this suite.
     A field rename leaves any of them naming a list no record holds, and a loop over a name that
-    matches nothing does not fail: it does less. behaviour.py named two of the three after format 2
+    matches nothing does not fail: it does less. behavior.py named two of the three after format 2
     and reported success over 250 cases where it had produced 466."""
 
     KEYS = frozenset(cea_claims._ID_PREFIX) | {"paper"}
@@ -4325,7 +4325,7 @@ class ASplitPartSaysWhichWordsItCarries(unittest.TestCase):
     """Both renderings name the part of a split sentence that was not selected, and neither was
     held to it. claims.md printed its words from `states` and the page tagged it with the split it
     came from; emptying either left a well-formed line that says nothing, and 62 of the 466
-    behaviour cases moved with the suite green."""
+    behavior cases moved with the suite green."""
 
     def record(self):
         data = valid_claims()
@@ -4403,7 +4403,7 @@ class ARecordFromTheOldRulesIsRefusedByItsShape(unittest.TestCase):
                       "a reference to an id of the old letter has to be named")
 
     def test_a_stamp_left_on_a_record_is_an_unknown_field(self):
-        """Nothing reads one, so a record carrying one is told rather than quietly accepted."""
+        """Nothing reads one, so a record carrying one is told rather than accepted with nothing said."""
         data = valid_claims()
         data["format"] = 2
         self.assertIn("unknown top-level field 'format'", "\n".join(self.problems(data)))
@@ -4639,7 +4639,7 @@ class WhatTheLayoutSaysThePapersHold(unittest.TestCase):
 class ExtractNamesEachFigureOnce(unittest.TestCase):
     """The list is what a number in the text is looked up against. "Fig. 2" and "Figure 2" are
     one figure, and listing both costs a reader a hunt for a third. Reverting the fold left every
-    test green, so the behaviour had no cover at all."""
+    test green, so the behavior had no cover at all."""
 
     def labels(self, lines):
         return cea_claims.figure_labels(lines)
@@ -7851,7 +7851,7 @@ class SiteGate(unittest.TestCase):
                 written, _ = cea_site.build_site([rec], site)
             self.assertEqual(written, 1)
             self.assertTrue((site / "papers" / "fixture" / "index.html").is_file())
-            # documented behaviour: the copy merges, so a dropped paper's directory survives
+            # documented behavior: the copy merges, so a dropped paper's directory survives
             self.assertTrue((site / "papers" / "gone" / "index.html").is_file())
             self.assertNotIn("gone", (site / "index.html").read_text(encoding="utf-8"))
 
@@ -8547,7 +8547,7 @@ class SiteGate(unittest.TestCase):
                     self.assertRegex(html, rf'\sid="{claim}"')
 
     def test_the_page_links_the_files_it_was_built_from(self):
-        """`near`/`source_links` had no behavioural test: the reader's way back to the record."""
+        """`near`/`source_links` had no behavioral test: the reader's way back to the record."""
         import cea_page
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "rec"
