@@ -37,17 +37,27 @@ echo
 echo "=============================================================="
 echo "GATE 2/2  this tree, release mode (CEA_REQUIRE_PAPERS=1)"
 echo "=============================================================="
-if CEA_REQUIRE_PAPERS=1 sh "$root/scripts/check.sh"; then
+# The papers are third-party and not committed, so this gate cannot run where they are absent,
+# which includes CI. Saying so beats failing there: a gate that cannot pass in CI is a gate nobody
+# runs in CI, and then the script itself is only ever exercised by hand.
+if [ -z "$(find "$root/evals/papers" -name '*.pdf' -print -quit 2>/dev/null)" ]; then
+    echo "GATE 2: not run -- no PDFs in evals/papers/, which are third-party and not committed."
+    echo "  A release has to run this gate on a tree that holds them."
+    gate2="not run"
+elif CEA_REQUIRE_PAPERS=1 sh "$root/scripts/check.sh"; then
     echo "GATE 2: pass"
+    gate2="pass"
 else
     echo "GATE 2: FAIL -- a release run skipped a test or something broke"
     failed=1
 fi
 
 echo
-if [ "$failed" -eq 0 ]; then
-    echo "CEA_GATES: both gates pass"
-else
+if [ "$failed" -ne 0 ]; then
     echo "CEA_GATES: FAILED"
     exit 1
+elif [ "${gate2:-}" = "not run" ]; then
+    echo "CEA_GATES: gate 1 passes; gate 2 needs the papers and was not run here"
+else
+    echo "CEA_GATES: both gates pass"
 fi

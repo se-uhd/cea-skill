@@ -26,5 +26,10 @@ jobs:
         # skills-ref requires Python 3.11+; check.sh reports it as skipped when absent.
         if: matrix.python != '3.10'
         run: pip install "skills-ref @ git+https://github.com/agentskills/agentskills#subdirectory=skills-ref"
-      - name: Run every check
-        run: sh scripts/check.sh
+      - name: Run the gates
+        # gates.sh, not check.sh: it runs check.sh over a tree holding only what a commit carries,
+        # which is the environment a reader installs into, and it is the script a release runs.
+        # Running it here means a mistake in it shows up before a release depends on it. Its second
+        # gate needs the papers in evals/papers/, which are third-party and not committed, so it
+        # reports itself as not run rather than failing.
+        run: sh scripts/gates.sh
