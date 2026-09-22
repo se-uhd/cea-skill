@@ -4134,6 +4134,160 @@ class ACandidateIsShownAgainstTheResultItWeighs(unittest.TestCase):
                          f"{under['R2']!r}")
 
 
+class WhatALineHasToLookLikeToCountAsProse(unittest.TestCase):
+    """`_reads_like_prose` decides whether a line a `[...]` skipped is the paper's running text,
+    which a gap may not join across, or a caption, a table row or a footnote, which it may. Each of
+    its five conditions was held by nothing: loosening the word count moved 129 of the 466 cases."""
+
+    def test_running_text_is_prose(self):
+        self.assertTrue(cea_claims._reads_like_prose(
+            "the failure rate stayed at three percent across every project"))
+
+    def test_too_few_words_is_not_prose(self):
+        for line in ("Trigger auto 2", "48 projects", "yes"):
+            with self.subTest(line=line):
+                self.assertFalse(cea_claims._reads_like_prose(line),
+                                 "a line of under four words is not running text")
+
+    def test_a_caption_is_not_prose(self):
+        self.assertFalse(cea_claims._reads_like_prose(
+            "Fig. 2. Distribution of the review comments we collected"))
+
+    def test_a_figure_label_is_not_prose(self):
+        self.assertFalse(cea_claims._reads_like_prose("(a) commits per developer per week"))
+
+    def test_a_row_of_cells_is_not_prose(self):
+        self.assertFalse(cea_claims._reads_like_prose(
+            "anc95/ChatGPT-CodeReview    2,831    2,384    84.21%"),
+            "a run of wide gaps reads as cells, not as a sentence")
+
+    def test_a_line_with_a_link_is_not_prose(self):
+        self.assertFalse(cea_claims._reads_like_prose(
+            "see http://example.org/the-replication-package for the data"))
+
+    def test_the_marker_the_extraction_leaves_is_not_prose(self):
+        self.assertFalse(cea_claims._reads_like_prose(
+            "[references removed from here to the end of the paper]"))
+
+
+class AQuoteMayOpenWhereASentenceDoes(unittest.TestCase):
+    """The warning about a quote starting mid-sentence turns on what stands before it: a lower-case
+    letter or a comma means the sentence carries on, while a blank line or a line break before a
+    capital usually follows a heading. Loosening that moved 67 of the 466 cases."""
+
+    PAGE = ("Caching was configured in most projects, and the build time fell.\n"
+            "\n"
+            "5.1 RQ1: Build time\n"
+            "Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.\n")
+
+    def warnings(self, quote):
+        data = valid_claims()
+        data["paper"]["pages"] = 1  # the page written below is the only one
+        data["main_results"] = [{"id": "R1", "quote": quote, "page": 1, "section": "5 Results",
+                                 "source": "other",
+                                 "note": "No claim serves this result: the paper gives no number."}]
+        data["claims"] = []
+        data["excluded"] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(f"=== page 1 ===\n{self.PAGE}", encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            problems, parsed = cea_claims.validate(d)
+            self.assertEqual(problems, [], f"the record itself is not valid: {problems}")
+            return "\n".join(cea_claims.advisories(d, parsed))
+
+    def test_a_quote_opening_after_a_heading_is_not_questioned(self):
+        said = self.warnings("Across the 48 projects, median build time fell from 9.2 to 4.1 minutes.")
+        self.assertNotIn("middle of a sentence", said,
+                         "a sentence that follows a heading opens where a sentence opens")
+
+    def test_a_quote_opening_mid_sentence_is_questioned(self):
+        said = self.warnings("and the build time fell.")
+        self.assertIn("middle of a sentence", said)
+
+
+class ABreaksDownListHasToHoldIds(unittest.TestCase):
+    """`breaks_down` names the main results a statement divides into parts. Three things make it
+    wrong: not a list, an empty list, and a list with an empty string in it. Collapsing any of them
+    moved 54 of the 466 cases."""
+
+    def problems(self, value):
+        data = valid_claims()
+        data["excluded"][0]["breaks_down"] = value
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            return "\n".join(cea_claims.validate(d)[0])
+
+    def test_a_list_of_ids_is_accepted(self):
+        self.assertNotIn("breaks_down: must be", self.problems(["R1"]))
+
+    def test_each_wrong_shape_is_refused(self):
+        for value, what in (("R1", "a bare string"), ([], "an empty list"),
+                            (["R1", ""], "an empty string among the ids"), ([None], "a null")):
+            with self.subTest(what=what):
+                self.assertIn("breaks_down: must be", self.problems(value),
+                              f"{what} was accepted")
+
+
+class ThePageMapNamesEveryPlaceAResultIsStated(unittest.TestCase):
+    """A row of the claim map carries the result, whether any claim serves it, and where else the
+    paper states it. Loosening the test for a grouped result moved 94 of the 466 cases."""
+
+    def record(self, grouped):
+        data = valid_claims()
+        if grouped:
+            data["main_results"].append(
+                {"id": "R2", "quote": "Caching halves median build time.", "page": 4,
+                 "section": "7 Conclusion", "source": "conclusion"})
+            for c in data["claims"]:
+                c["serves"] = ["R1", "R2"]
+        return data
+
+    def test_a_result_stated_in_one_place_has_a_row_and_no_also(self):
+        html = cea_page.build(self.record(False), Path("claims.json"), Path("out.html"))
+        self.assertIn('data-id="R1"', html, "the map has no row for R1")
+        # the span, not the class: the page's stylesheet names the class either way
+        self.assertNotIn('class="node-also">', html)
+
+    def test_a_grouped_result_has_one_row_naming_the_other_place(self):
+        html = cea_page.build(self.record(True), Path("claims.json"), Path("out.html"))
+        rows = re.findall(r'class="node result[^"]*" data-id="(\w+)"', html)
+        self.assertEqual(rows, ["R1"], f"a grouped result must have one row, not {rows}")
+        self.assertIn("R2", re.search(r'class="node-also">([^<]*)<', html).group(1))
+
+    def test_a_result_no_claim_serves_is_marked_empty(self):
+        data = valid_claims()
+        data["main_results"].append(
+            {"id": "R2", "quote": "Failures did not increase with caching.", "page": 4,
+             "section": "7 Conclusion", "source": "conclusion",
+             "note": "No claim serves this result: the paper gives no number for it."})
+        html = cea_page.build(data, Path("claims.json"), Path("out.html"))
+        self.assertRegex(html, r'class="node result empty"[^>]*data-id="R2"',
+                         "a result no claim serves has to be marked empty")
+        self.assertNotRegex(html, r'class="node result empty"[^>]*data-id="R1"')
+
+
+class OneSectionNumberStandsInsideAnother(unittest.TestCase):
+    """`_nested` decides whether 6.1 is part of 6, which is how a quote's section is checked against
+    the paper's headings. Its guard for an empty number moved 7 of the 466 cases."""
+
+    def test_a_subsection_stands_inside_its_section(self):
+        self.assertTrue(cea_claims._nested(["6"], ["6", "1"]))
+        self.assertTrue(cea_claims._nested(["6", "1"], ["6"]))
+
+    def test_a_different_section_does_not(self):
+        self.assertFalse(cea_claims._nested(["6"], ["7"]))
+        self.assertFalse(cea_claims._nested(["6", "1"], ["6", "2"]))
+
+    def test_an_empty_number_stands_inside_nothing(self):
+        for a, b in (([], ["6"]), (["6"], []), ([], [])):
+            with self.subTest(a=a, b=b):
+                self.assertFalse(cea_claims._nested(a, b),
+                                 "an absent section number matches nothing")
+
+
 class TheSiteRefusesAnIdThatNamesNothingInTheRecord(unittest.TestCase):
     """`duplicate_of` names the entries a sentence repeats, and the page turns each into a link. An
     id naming nothing would be a dead link on a published page, so the site gate refuses it. Both
