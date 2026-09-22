@@ -168,9 +168,14 @@ def moves_output(frozen: Path, module: str, kind: str, n: int, baseline: str) ->
         tree = Path(tmp) / "t"
         shutil.copytree(frozen, tree)
         (tree / "scripts" / module).write_text(mutated, encoding="utf-8")
-        done = subprocess.run([sys.executable, str(tree / "scripts" / "behavior.py"),
-                               "--diff", baseline], capture_output=True, text=True,
-                              env=env(), timeout=2400, cwd=tree)
+        try:
+            done = subprocess.run([sys.executable, str(tree / "scripts" / "behavior.py"),
+                                   "--diff", baseline], capture_output=True, text=True,
+                                  env=env(), timeout=2400, cwd=tree)
+        except subprocess.TimeoutExpired:
+            # One survivor that will not finish used to end the whole campaign and lose every
+            # verdict already measured. It is reported as unmeasured instead.
+            return -1
     found = re.search(r"CEA_BEHAVIOR: (\d+) of \d+ case\(s\) moved", done.stdout)
     return int(found.group(1)) if found else -1
 

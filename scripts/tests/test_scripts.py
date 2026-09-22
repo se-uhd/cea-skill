@@ -4304,10 +4304,33 @@ class TheBehaviourHarnessReachesEveryModuleItJudges(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertIn(key, out, f"nothing in the answer comes from {module}")
 
-    def test_the_site_answer_does_not_carry_a_temporary_path(self):
-        """Otherwise every case moves on every run and the diff says nothing."""
-        self.assertEqual(self.behavior._without_paths("/tmp/x9/rec: no claim serves R3"),
-                         "rec: no claim serves R3")
+    def test_the_site_answer_carries_no_name_that_changes_between_runs(self):
+        """A record sits in a directory named by mkdtemp, so a message naming it moved every case
+        between two runs of the same tree: 147 of 466, and every survivor of a triage read as a
+        gap."""
+        for message, want in (
+                ("/var/folders/dq/T/tmp7nbm6yyw: text.txt records no source paper",
+                 "<record>: text.txt records no source paper"),
+                ("/tmp/tmpABC123/rec: no claim serves R3", "<record>/rec: no claim serves R3")):
+            with self.subTest(message=message[:34]):
+                self.assertEqual(self.behavior._without_paths(message), want)
+
+    def test_the_same_record_answers_the_same_way_twice(self):
+        """The null case of the whole harness. Four measurements today reported a change that was
+        their own noise, so this asks the cheapest question there is: does running the same thing
+        twice give the same answer? A harness that fails this cannot report a change at all."""
+        data = valid_claims()
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            out = []
+            for tmp in (first, second):
+                d = Path(tmp)
+                (d / "text.txt").write_text(TEXT, encoding="utf-8")
+                (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    out.append(self.behavior.answers(d, data))
+        # through JSON, as a saved baseline is compared
+        self.assertEqual(json.loads(json.dumps(out[0])), json.loads(json.dumps(out[1])),
+                         "the same record answered differently in two directories")
 
 
 class TheMutationHarnessRefusesAMeaninglessRun(unittest.TestCase):

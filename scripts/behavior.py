@@ -116,8 +116,14 @@ def variants(data):
 
 
 def _without_paths(message: str) -> str:
-    """A message with the temporary directory taken out, so the answer is the same every run."""
-    return re.sub(r"/\S*/(?=[\w.-]+)", "", message)
+    """A message with the record's directory replaced, so the answer is the same every run.
+
+    Stripping only the directories above it was not enough: the record sits in a directory named
+    by mkdtemp, so `tmp7nbm6yyw: text.txt records no source paper` kept a name that changes every
+    run, and 147 of the 466 cases moved between two runs of the same tree. Every one of the 180
+    survivors of a triage then read as a gap.
+    """
+    return re.sub(r"(?:/[^/\s:]+)*/?tmp[A-Za-z0-9_]+", "<record>", message)
 
 
 def answers(record: Path, data: dict) -> dict:
