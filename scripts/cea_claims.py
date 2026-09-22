@@ -61,28 +61,6 @@ RESULT_REF = re.compile(r"\bR\d+\b")
 MAX_GAP = 4000
 
 # Required and optional fields per entry type.
-# The record format this build reads and writes. A record carries it as a top-level `format`, so
-# that a record written against an older format cannot pass every check and publish a number that
-# means something else. Raise it whenever a field changes meaning, and say under it what changed.
-#
-#   1  `breaks_down` split off from `duplicate_of`. Before it, `duplicate_of` named both the
-#      places that state a result and the statements that divide one into parts, so a record from
-#      before the split counts too many places and publishes a headline that is too high.
-FORMAT = 2
-_FORMAT_CHANGES = {
-    1: "`breaks_down` split off from `duplicate_of`: an excluded claim candidate that divides a result "
-       "into parts now names the statements in `breaks_down`, and `duplicate_of` names only the "
-       "places that state the result. Check every `duplicate_of` in the record before stamping it.",
-    2: "the terms and the ids changed. `broad_statements` became `main_results` and `rejected` "
-       "became `excluded`. What was called a broad statement is a main result, a narrow claim "
-       "is a claim, and a rejected candidate is an excluded claim candidate. Ids moved with them: a "
-       "former `B` id is now `R`, and a former `R` id is now `E`, in `id`, in `serves`, "
-       "`duplicate_of`, `breaks_down` and `split_from`, and wherever a `reason`, `note` or "
-       "`selection_reason` names one. The mapping levels are L1 to L4 rather than M1 to M4. "
-       "Record the paper again rather than editing the old record: the selection was drafted "
-       "against rules that have since moved, so what needs checking is the selection, not the "
-       "field names.",
-}
 
 FIELDS = {
     "paper": ({"id", "title", "pdf", "pages"}, set()),
@@ -122,46 +100,6 @@ PROPERTIES = {
 _ID_PREFIX = {"main_results": "R", "claims": "C", "excluded": "E"}
 
 
-def _format_problems(data: dict) -> list[str]:
-    """Whether the record says which format it is written in, and whether this build reads it.
-
-    Without the stamp a record from an older format passes every check and publishes a number that
-    means something else, with nothing on the page or in the record to say so.
-    """
-    if "format" not in data:
-        # Read as format 1 rather than refused. Every record that can exist without the stamp was
-        # written before it, and the one change format 1 records -- `breaks_down` splitting off
-        # from `duplicate_of` -- shipped in v0.4.0, before every tag the published site has ever
-        # pinned. So an unstamped record already has the split, and refusing it would have
-        # stopped the site's build dead the moment it moved to this version, with no migration to
-        # run and nothing gained. A later format that changes a field's meaning must raise FORMAT
-        # and will then be refused here, which is what the stamp is for.
-        #
-        # The limit, stated plainly: a record written before v0.4.0 would carry the old meaning
-        # of `duplicate_of` and is read here as the new one. Nothing can tell the two apart,
-        # because naming a main result in `duplicate_of` is ordinary and common in records
-        # that are correct, so a warning about it would point at all of them. `advisories` says
-        # the record is unstamped instead, and leaves that judgement to whoever knows which
-        # build wrote it.
-        pass
-    # Read as the format it means, not returned early: an early return made the comparisons below
-    # unreachable for an unstamped record, so at a future FORMAT the stamp would have been inert
-    # for the one case it exists for -- an unstamped record would have passed a build that refuses
-    # a stamped format-1 one.
-    said = data.get("format", 1)
-    if not isinstance(said, int) or isinstance(said, bool) or said < 1:
-        return [f"format: must be a whole number of 1 or more, and this build writes {FORMAT}"]
-    if said > FORMAT:
-        return [f"format: the record is written in format {said} and this build reads {FORMAT}; "
-                "use the build that wrote it, or a newer one"]
-    if said < FORMAT:
-        changed = "\n  ".join(f"format {n}: {_FORMAT_CHANGES[n]}"
-                              for n in sorted(_FORMAT_CHANGES) if n > said)
-        return [f"format: the record is written in format {said} and this build writes {FORMAT}. "
-                f"Check it against what has changed, then stamp it.\n  {changed}"]
-    return []
-
-
 def schema() -> dict:
     """The shape of claims.json as JSON Schema, generated from FIELDS.
 
@@ -187,10 +125,6 @@ def schema() -> dict:
         "additionalProperties": False,
         "required": sorted(FIELDS),
         "properties": {"$schema": {"type": "string"},
-                       "format": {"const": FORMAT,
-                                  "description": "The record format this record is written in. "
-                                                 "A record without it is read as format 1, which "
-                                                 "every record written before the stamp is."},
                        "paper": entry("paper"),
                        **{k: {"type": "array", "items": entry(k)}
                           for k in ("main_results", "claims", "excluded")}},
@@ -1008,12 +942,11 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
         problems.append(f"text.txt opens page {n} more than once; extract writes each page once, "
                         "so run extract again rather than editing text.txt")
 
-    for key in sorted(set(data) - set(FIELDS) - {"$schema", "format"}):
+    for key in sorted(set(data) - set(FIELDS) - {"$schema"}):
         problems.append(f"unknown top-level field '{_printable(key)}'")
     for key in FIELDS:
         if key not in data:
             problems.append(f"missing top-level field '{key}'")
-    problems.extend(_format_problems(data))
 
     def check_fields(key: str, entry: dict, label: str) -> None:
         required, optional = FIELDS[key]
@@ -2562,7 +2495,6 @@ def cmd_extract(args) -> int:
 PAPER_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 _UNSURE = re.compile(r"\bunsure\b", re.I)
-
 
 
 def unsettled(data: dict) -> list[str]:

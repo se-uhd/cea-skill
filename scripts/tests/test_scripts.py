@@ -1863,7 +1863,6 @@ SPLIT_QUOTE = ("Across the 48 projects, median build time fell from 9.2 to 4.1 m
 
 def valid_claims():
     return {
-        "format": cea_claims.FORMAT,
         "paper": {"id": "fixture", "title": "Fixture", "pdf": "fixture.pdf", "pages": 3},
         "main_results": [
             {"id": "R1", "quote": "Caching halves median build time.", "page": 1,
@@ -4033,10 +4032,6 @@ class NoScriptNamesAFieldTheRecordDoesNotHold(unittest.TestCase):
                             f"{f.name}:{node.lineno} names {name!r} beside the record's real "
                             f"lists; the record holds {sorted(self.KEYS)}")
 
-    def test_the_change_note_is_the_one_place_the_old_names_survive(self):
-        """The format-2 entry has to name them, since it says what changed."""
-        self.assertIn("broad_statements", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
-        self.assertIn("main_results", cea_claims._FORMAT_CHANGES[cea_claims.FORMAT])
 
 
 class TheSectionStripCountsWhatItShows(unittest.TestCase):
@@ -4277,6 +4272,60 @@ class NoIdShapedTokenStandsWhereAnIdCannot(unittest.TestCase):
                                   "an ordinary reference must not be flagged")
 
 
+class ARecordFromTheOldRulesIsRefusedByItsShape(unittest.TestCase):
+    """There was a `format` stamp, and eleven tests around it, to refuse a record written against
+    older rules. It earned nothing: such a record names fields this one does not have and ids of
+    the wrong letter, so the shape refuses it already, and each message names what is wrong. The
+    stamp only ever added a version to compare, which is a thing to keep in step for its own sake.
+
+    What it did cover, and no longer does, is a change that moves a field's meaning while leaving
+    its name: nothing detects that. The answer is not a version number but that a record whose
+    rules have moved is recorded again rather than read."""
+
+    def old_record(self):
+        """A record as the published site held it before the terms and the ids moved."""
+        return {"paper": {"id": "fixture", "title": "Fixture", "pdf": "fixture.pdf", "pages": 3},
+                "broad_statements": [{"id": "B1", "quote": "Caching halves median build time.",
+                                      "page": 1, "section": "Abstract", "source": "abstract"}],
+                "claims": [{"id": "C1", "quote": "Caching halves median build time.", "page": 1,
+                            "section": "Abstract", "serves": ["B1"], "split_from": None,
+                            "selection_reason": "B1 rests on this comparison."}],
+                "rejected": []}
+
+    def problems(self, data):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            return cea_claims.validate(d)[0]
+
+    def test_it_is_refused_and_every_name_that_moved_is_reported(self):
+        said = "\n".join(self.problems(self.old_record()))
+        for names in ("unknown top-level field 'broad_statements'",
+                      "unknown top-level field 'rejected'",
+                      "missing top-level field 'main_results'",
+                      "missing top-level field 'excluded'"):
+            with self.subTest(names=names):
+                self.assertIn(names, said)
+
+    def test_an_id_of_the_old_letter_is_reported_where_it_is_used(self):
+        said = "\n".join(self.problems(self.old_record()))
+        self.assertIn("'B1' is not a main result id", said,
+                      "a reference to an id of the old letter has to be named")
+
+    def test_a_stamp_left_on_a_record_is_an_unknown_field(self):
+        """Nothing reads one, so a record carrying one is told rather than quietly accepted."""
+        data = valid_claims()
+        data["format"] = 2
+        self.assertIn("unknown top-level field 'format'", "\n".join(self.problems(data)))
+
+    def test_the_schema_does_not_describe_a_format(self):
+        schema = cea_claims.schema()
+        self.assertNotIn("format", schema["properties"],
+                         "the schema still describes a record format")
+        self.assertNotIn("format", schema.get("required", []))
+
+
 class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
     """The terms retired at format 2 kept turning up after the rename: in the site skill's own list
     of the terms the pages use, in the validator's messages, and in `evals/`, where the graders are
@@ -4286,8 +4335,9 @@ class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
     # Built from fragments, so this file does not match its own search.
     RETIRED = ("broad" + " statement", "narrow" + " claim", "rejected" + " candidate",
                "broad" + "_statements")
-    # The change note has to name them, since it says what changed.
-    ALLOWED = ("scripts/cea_claims.py",)
+    # Nothing is exempt. The one file that was, cea_claims.py, is so because its format-change
+    # note had to name the old terms, and there is no record format any more.
+    ALLOWED = ()
 
     def files(self):
         # The gate runs this suite over a copied tree that carries no .git, where a listing is
@@ -4325,19 +4375,6 @@ class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
                     self.assertNotIn(term, text.lower(),
                                      f"{name} still uses {term!r}, which format 2 retired")
         self.assertGreater(seen, 20, f"only {seen} file(s) were read; the listing failed")
-
-    def test_the_one_allowed_file_is_allowed_for_a_reason(self):
-        text = (SCRIPTS / "cea_claims.py").read_text(encoding="utf-8")
-        note = cea_claims._FORMAT_CHANGES[cea_claims.FORMAT]
-        for term in self.RETIRED:
-            with self.subTest(term=term):
-                self.assertIn(term, note,
-                              "the change note is exempt because it names the retired terms")
-        outside = text.replace(note, "")
-        # the note is one string in the source, split over lines, so compare on the words
-        for term in self.RETIRED:
-            for word in term.split():
-                self.assertIn(word, text)
 
 
 class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
@@ -4587,54 +4624,6 @@ class ANoteHedgesOnlyTheQuantityItHedges(unittest.TestCase):
                      "Table I gives shares of the 978 posts; the parts of the sentence's 15: 5 and 3."):
             with self.subTest(note=note[:44]):
                 self.assertEqual(self.warnings(note), 0)
-
-
-class TheStampBitesAtALaterFormat(unittest.TestCase):
-    """Reading a missing stamp as format 1 was done with an early return, which made the
-    comparisons below it unreachable: at a future FORMAT an unstamped record would have passed a
-    build that refuses a stamped format-1 one, so the stamp was inert for its own purpose."""
-
-    def refusals(self, stamp, writes):
-        data = valid_claims()
-        if stamp is None:
-            data.pop("format", None)
-        else:
-            data["format"] = stamp
-        with unittest.mock.patch.object(cea_claims, "FORMAT", writes), \
-                unittest.mock.patch.object(
-                    cea_claims, "_FORMAT_CHANGES",
-                    {**cea_claims._FORMAT_CHANGES, 2: "`page` became a range everywhere."}):
-            return [p for p in cea_claims._format_problems(data) if p.startswith("format")]
-
-    def test_an_unstamped_record_is_refused_by_a_later_build(self):
-        said = "\n".join(self.refusals(None, 2))
-        self.assertIn("written in format 1 and this build writes 2", said)
-        self.assertIn("became a range", said, "it has to say what changed")
-
-    def test_a_stamped_record_is_refused_the_same_way(self):
-        self.assertEqual(self.refusals(None, 2), self.refusals(1, 2),
-                         "an unstamped record must be treated as the format-1 record it is")
-
-    def test_this_build_accepts_only_its_own_stamp(self):
-        """An unstamped record is a format-1 record, which this build does not read."""
-        self.assertEqual(self.refusals(cea_claims.FORMAT, cea_claims.FORMAT), [])
-        self.assertTrue(self.refusals(None, cea_claims.FORMAT),
-                        "an unstamped record is format 1 and has to be refused at format 2")
-
-    def test_an_unstamped_record_is_refused_rather_than_advised_about(self):
-        """It was read as format 1 and passed with an advisory while this build also wrote 1. At
-        format 2 the terms and the ids have moved, so reading it as current would publish a `B1`
-        under the name `R1` now means."""
-        with tempfile.TemporaryDirectory() as tmp:
-            d = Path(tmp)
-            data = valid_claims()
-            data.pop("format")
-            (d / "text.txt").write_text(TEXT, encoding="utf-8")
-            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
-            problems, _ = cea_claims.validate(d)
-        said = "\n".join(problems)
-        self.assertIn("written in format 1", said)
-        self.assertIn("this build writes 2", said)
 
 
 class AWideGapDoesNotHideARealHeading(unittest.TestCase):
@@ -5061,11 +5050,10 @@ class TheReferenceExampleIsARecordThatValidates(unittest.TestCase):
         found = re.search(r"```json\n(\{.*?\n\})\n```", reference, re.S)
         self.assertIsNotNone(found, "the reference has no worked example")
         example = json.loads(found.group(1))
-        for field in [*cea_claims.FIELDS, "format"]:  # the example shows it even though it is optional
+        for field in cea_claims.FIELDS:
             with self.subTest(field=field):
                 self.assertIn(field, example,
                               f"the example an agent copies has no '{field}'")
-        self.assertEqual(example["format"], cea_claims.FORMAT)
 
     def test_the_example_is_not_refused_for_its_shape(self):
         reference = (SCRIPTS.parent / "skills" / "extract-claims" / "references"
@@ -5952,7 +5940,7 @@ class ASharedSentenceIsCountedAsOne(unittest.TestCase):
     more sentences shared than the row says exist."""
 
     def counts(self, split):
-        data = {"format": 1, "paper": {"id": "d", "title": "T", "pdf": "d.pdf", "pages": 1},
+        data = {"paper": {"id": "d", "title": "T", "pdf": "d.pdf", "pages": 1},
                 "main_results": [
                     {"id": "R1", "quote": "Q1", "page": 1, "section": "A", "source": "rq_answer"},
                     {"id": "R2", "quote": "Q2", "page": 1, "section": "A", "source": "rq_answer"}],
@@ -6307,66 +6295,6 @@ class AVersionDigitIsNotAFootnote(unittest.TestCase):
                                ("10-20", 4, True), ("media5", 5, False)):
             with self.subTest(text=text):
                 self.assertEqual(cea_claims._names_a_version(text, at), want)
-
-
-class TheRecordSaysWhichFormatItIsIn(unittest.TestCase):
-    """A record written against an older format passed every check and published a number that
-    meant something else. `duplicate_of` once covered what `breaks_down` covers now, so such a
-    record counts too many places a result is stated and puts a headline on the page that is too
-    high, with nothing anywhere saying so."""
-
-    def problems(self, mutate=None):
-        data = valid_claims()
-        if mutate:
-            mutate(data)
-        with tempfile.TemporaryDirectory() as tmp:
-            d = Path(tmp)
-            (d / "text.txt").write_text(TEXT, encoding="utf-8")
-            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
-            return cea_claims.validate(d)[0]
-
-    def test_a_record_without_the_stamp_is_read_as_the_first_format(self):
-        """An unstamped record is one written before the stamp existed, which makes it format 1.
-        This build writes 2, so it is refused and told what changed rather than read as current:
-        the terms and the ids moved at format 2, and reading an unstamped record as current would
-        publish `B1` under the name `R1` means now."""
-        said = "\n".join(self.problems(lambda d: d.pop("format")))
-        self.assertIn("written in format 1", said)
-        self.assertIn("this build writes 2", said)
-        self.assertIn("became `main_results`", said, "it has to say what changed")
-
-    def test_a_record_from_an_older_format_is_refused_and_told_what_changed(self):
-        said = "\n".join(cea_claims._format_problems({"format": 1}))
-        self.assertIn("written in format 1", said)
-        self.assertIn("this build writes 2", said)
-        self.assertIn("became `main_results`", said, "it has to say what changed since format 1")
-        self.assertIn("format 2:", said, "it has to list the change that applies")
-
-    def test_a_record_from_a_newer_format_is_refused(self):
-        said = "\n".join(self.problems(lambda d: d.update(format=cea_claims.FORMAT + 1)))
-        self.assertIn("use the build that wrote it", said)
-
-    def test_the_stamp_has_to_be_a_whole_number(self):
-        for bad in ("1", 1.5, 0, -1, True, None, [1]):
-            with self.subTest(format=bad):
-                self.assertTrue(any(p.startswith("format:")
-                                    for p in self.problems(lambda d, b=bad: d.update(format=b))),
-                                f"{bad!r} must be refused")
-
-    def test_the_current_stamp_passes(self):
-        self.assertEqual(self.problems(), [])
-
-    def test_the_schema_pins_the_stamp_without_requiring_it(self):
-        s = cea_claims.schema()
-        self.assertNotIn("format", s["required"],
-                         "requiring it refuses every record written before the stamp")
-        self.assertEqual(s["properties"]["format"]["const"], cea_claims.FORMAT)
-
-    def test_every_format_since_the_first_says_what_changed(self):
-        """The message is only worth printing if each raise recorded what it changed."""
-        self.assertEqual(sorted(cea_claims._FORMAT_CHANGES), list(range(1, cea_claims.FORMAT + 1)))
-        for n, what in cea_claims._FORMAT_CHANGES.items():
-            self.assertGreater(len(what.split()), 8, f"format {n} says too little")
 
 
 class WhatTheValidatorChecksOnAStatement(unittest.TestCase):
@@ -7451,9 +7379,7 @@ class Schema(unittest.TestCase):
 
     def test_the_reference_documents_only_real_fields(self):
         import re
-        # `format` stands at the top of the record rather than inside an entry, so FIELDS, which
-        # names the fields of the entries, does not hold it.
-        fields = set().union(*(r | o for r, o in cea_claims.FIELDS.values())) | {"format"}
+        fields = set().union(*(r | o for r, o in cea_claims.FIELDS.values()))
         text = self.REFERENCE.read_text(encoding="utf-8")
         self.assertIn("## Fields", text, "the reference has no Fields section")
         body = text.split("## Fields", 1)[1].split("\n## ")[0]

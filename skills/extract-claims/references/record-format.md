@@ -10,7 +10,6 @@ are what the schema cannot say.
 
 ```json
 {
-  "format": 2,
   "paper": {
     "id": "icse25-build-cache",
     "title": "Remote Build Caching in Open-Source Projects",
@@ -72,7 +71,6 @@ are what the schema cannot say.
 ## Fields
 
 - Ids run in page order within each list, which is the order `render` prints them in. They are the permanent anchors of the published page, so a later change never renumbers them: a new entry takes the next free number even where that puts it out of order.
-- `format`: the record format, `2` for this build. A record without it is read as format 1, which this build does not write, so it is refused and told what changed. It says which meaning the fields carry, so that a record written against an older format cannot pass every check and publish a number that means something else. `validate` refuses a record whose format this build does not read, stamped or not, and names what has changed since. Raise it only together with the field whose meaning changed.
 
 - `paper.pdf`: the file name that `extract` printed after `pdf:`, which is the copy it put in the record's own directory beside `claims.json`. A name, not a path: no directories and no `..`, because the site publishes that file beside the page and a path would name a file on one machine only. Where `extract` printed no `pdf:` line, it said why. Write the paper's file name anyway, and the page will name the paper without linking it. `paper.pages`: the number of pages in `text.txt`.
 - A digit that ends a name is part of the name, not a footnote marker. That covers a hyphenated name such as `deepseek-v3` or `gpt-4`, one the extraction broke across two lines, a version such as `v1.0` or `@v1`, and a source label such as `[E07]` or `(P13)`. Copy the digit. A quote that drops it names a model, release, or source the paper does not.

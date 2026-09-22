@@ -28,8 +28,7 @@ The page template is `cea_page.py` and the site assembly is `cea_site.py`. Both 
 line of their own; `cea_claims.py` is the only entry point. `cea_page.py` reuses the ordering
 functions of `cea_claims.py`, so the page and `claims.md` cannot disagree about which claims stand under which
 main result. Changing the page design means editing `cea_page.py`; changing what a record holds means editing
-`FIELDS` and `PROPERTIES` in `cea_claims.py`, raising `FORMAT` and adding what changed to
-`_FORMAT_CHANGES` when a field changes meaning, `references/record-format.md`, `claims.schema.json` (regenerate it with
+`FIELDS` and `PROPERTIES` in `cea_claims.py`, `references/record-format.md`, `claims.schema.json` (regenerate it with
 `cea_claims.py schema --out claims.schema.json`), and the existing records together. The tests fail when the
 committed schema is stale, when a field in `FIELDS` has no constraint in `PROPERTIES`, and when the
 reference documents a field that the record does not hold. They do not check that the reference
@@ -47,11 +46,10 @@ Before moving that tag, run the gates the way a release runs them:
 sh scripts/gates.sh
 ```
 
-and check that the site's records still validate under the new build. The records it holds now carry
-no `format` stamp, so this build reads them as format 1 and refuses them: the terms and the ids moved
-at format 2. There is no migration to run and no backwards compatibility to keep. Record those papers
-again with this build, because a record written against the older rules needs its selection checked,
-not its field names edited.
+and check that the site's records still validate under the new build. There is no record format to
+read and no backwards compatibility to keep: a record written against older rules is refused by its
+shape, which names what is wrong with it. Where the rules move, record those papers again, because
+what needs checking is the selection, not the field names.
 
 ## Rules that the code enforces
 
@@ -61,12 +59,6 @@ not its field names edited.
   `claims.json`.
 - The page mines a `reason` for the `R\d+` it names and turns each into a tag and a link, but only for the main results the record holds. A paper can print a token of that shape without meaning an id, such as a respondent or a round numbered R1, and there is no other way to write the sentence. A name the record does not hold is passed over, and `validate` warns so that a typo is still noticed.
 - `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
-- A record carries a top-level `format`, and `validate` refuses one written in a format this build
-  does not read. A record without the stamp is one written before the stamp existed, so it is read as
-  format 1 and refused with it. The stamp is not there for compatibility: it is what stops a record
-  written against older rules from passing every check and publishing a number that means something
-  else. Raise `FORMAT` only together with the field whose meaning changed, say what changed in
-  `_FORMAT_CHANGES`, and record the affected papers again rather than editing their records.
 - `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
   the name to write.
 - Ids (`R1`, `C3`, `E40`) are the anchors of the published pages. Do not renumber them when a record changes.
