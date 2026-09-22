@@ -4134,6 +4134,141 @@ class ACandidateIsShownAgainstTheResultItWeighs(unittest.TestCase):
                          f"{under['R2']!r}")
 
 
+class OnlyAnotherPdfBesideTheRecordIsAStray(unittest.TestCase):
+    """The advisory names a second PDF in the record's directory, because the page says every quote
+    was checked against the paper the record names. Which files count was held by nothing: joining
+    the two conditions with `or` instead of `and` made the advisory name every file in the directory
+    and the paper itself, and 147 of the 466 behaviour cases moved with the suite green."""
+
+    def advisories(self, files):
+        data = valid_claims()
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            for name in files:
+                (d / name).write_bytes(b"%PDF-1.4\n")
+            problems, parsed = cea_claims.validate(d)
+            self.assertEqual(problems, [])
+            said = [w for w in cea_claims.advisories(d, parsed) if "paper.pdf names" in w]
+        return said[0] if said else ""
+
+    def test_a_second_pdf_is_named(self):
+        said = self.advisories(["fixture.pdf", "another.pdf"])
+        self.assertIn("another.pdf", said, "the second paper has to be named")
+        self.assertIn("'fixture.pdf'", said, "and the one the record names, as what it names")
+
+    def test_the_paper_the_record_names_is_not_called_a_stray(self):
+        said = self.advisories(["fixture.pdf", "another.pdf"])
+        after = said.split("and", 1)[1] if "and" in said else said
+        self.assertNotIn("fixture.pdf", after,
+                         "the paper the record names must not be listed beside itself")
+
+    def test_a_file_that_is_not_a_pdf_is_not_a_stray(self):
+        self.assertEqual(self.advisories(["fixture.pdf", "notes.txt", "data.csv"]), "",
+                         "only another PDF is a stray")
+
+    def test_no_advisory_where_the_record_names_the_only_pdf(self):
+        self.assertEqual(self.advisories(["fixture.pdf"]), "")
+
+
+class ThePageAgreesWithItselfAboutHowManyThereAre(unittest.TestCase):
+    """Two counts on the page were held by nothing: the plural of the heading over the main results
+    no claim serves, and whether a result shows "also stated as" at all. Inverting either left a
+    page that reads wrongly, 40 and 94 of the 466 behaviour cases moved, and the suite stayed
+    green."""
+
+    def record(self, unserved):
+        data = valid_claims()
+        data["main_results"] = [
+            {"id": f"R{n}", "quote": f"Statement number {n} of the paper here.", "page": 1,
+             "section": "Abstract", "source": "abstract",
+             "note": "No claim serves this result: the paper gives no number for it."}
+            for n in range(1, unserved + 2)]
+        # the first result keeps its claims, the rest are unserved
+        for c in data["claims"]:
+            c["serves"] = ["R1"]
+        return data
+
+    def test_the_heading_counts_the_results_beneath_it(self):
+        for unserved, want in ((1, "Main result that no"), (2, "Main results that no")):
+            with self.subTest(unserved=unserved):
+                html = cea_page.build(self.record(unserved), Path("claims.json"),
+                                      Path("out.html"))
+                self.assertIn(want, html, f"{unserved} unserved result(s) needs {want!r}")
+                wrong = "Main results that no" if unserved == 1 else "Main result that no"
+                self.assertNotIn(wrong, html)
+
+    def test_a_result_stated_once_is_not_also_stated_as_nothing(self):
+        """A group of one has no other id to name, so the span must not appear empty."""
+        html = cea_page.build(valid_claims(), Path("claims.json"), Path("out.html"))
+        self.assertNotIn('class="node-also"', html,
+                         "a result stated in one place must not carry an 'also stated as' span")
+
+    def test_a_result_stated_twice_names_the_other_place(self):
+        data = valid_claims()
+        data["main_results"].append(
+            {"id": "R2", "quote": "Caching halves median build time.", "page": 4,
+             "section": "7 Conclusion", "source": "conclusion"})
+        for c in data["claims"]:
+            c["serves"] = ["R1", "R2"]
+        html = cea_page.build(data, Path("claims.json"), Path("out.html"))
+        m = re.search(r'class="node-also">also stated as ([^<]*)<', html)
+        self.assertIsNotNone(m, "a grouped result has to name where else it is stated")
+        self.assertTrue(m.group(1).strip(), "the span must not stand empty")
+
+
+class TheMutationHarnessPutsAMutantToEveryTestThatReachesIt(unittest.TestCase):
+    """Running all 625 tests for each mutant costs 18.8 seconds where the classes that can reach
+    cea_page cost 1.2. Selecting them is only safe if the selection is a superset of what can kill
+    a mutant: a class left out makes a mutant look like a survivor because the test holding it was
+    never run, which is the one error that matters here. Fifteen mutants were run both ways and
+    agreed on every verdict; these hold the shape of the selection so it cannot narrow."""
+
+    def setUp(self):
+        sys.path.insert(0, str(SCRIPTS))
+        import mutants
+        self.mutants = mutants
+        self.root = SCRIPTS.parent
+
+    def classes_mentioning(self, name):
+        import ast
+        source = (SCRIPTS / "tests" / "test_scripts.py").read_text(encoding="utf-8")
+        parsed = ast.parse(source)
+        return {f"test_scripts.{n.name}" for n in parsed.body if isinstance(n, ast.ClassDef)
+                and name in (ast.get_source_segment(source, n) or "")}
+
+    def test_every_module_reaches_some_test(self):
+        for module in self.mutants.MODULES:
+            with self.subTest(module=module):
+                got = self.mutants.tests_reaching(self.root, module)
+                self.assertGreater(len(got), 5, f"{module} is put to only {len(got)} class(es)")
+
+    def test_a_module_is_put_to_the_tests_of_everything_importing_it(self):
+        """cea_site builds pages with cea_page, so a cea_page mutant has to face cea_site's tests."""
+        page = set(self.mutants.tests_reaching(self.root, "cea_page.py"))
+        self.assertTrue(self.classes_mentioning("cea_page") <= page)
+        self.assertTrue(self.classes_mentioning("cea_site") <= page,
+                        "a cea_page mutant must be put to the tests that reach it through cea_site")
+        claims = set(self.mutants.tests_reaching(self.root, "cea_claims.py"))
+        self.assertTrue(page <= claims,
+                        "cea_page imports cea_claims, so claims faces at least what page does")
+
+    def test_the_selection_names_only_classes_that_exist(self):
+        every = self.classes_mentioning("")  # every class in the file
+        for module in self.mutants.MODULES:
+            for name in self.mutants.tests_reaching(self.root, module):
+                with self.subTest(module=module, name=name):
+                    self.assertIn(name, every, "the selection names a class that is not there")
+
+    def test_the_import_map_covers_every_module_it_mutates(self):
+        for module in self.mutants.MODULES:
+            with self.subTest(module=module):
+                self.assertIn(module, self.mutants.IMPORTED_BY,
+                              "a module with no entry falls back to every test, which is only slow, "
+                              "but the map should say so on purpose")
+
+
 class TheMutationHarnessRefusesAMeaninglessRun(unittest.TestCase):
     """It reported 152 of 153 mutants killed once, from a run where `check.sh` could not find a
     python new enough for its own version gate. The two tests that run the gate failed for every

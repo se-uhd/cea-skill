@@ -20,6 +20,7 @@ import argparse
 import ast
 import collections
 import json
+import os
 import random
 import re
 import shutil
@@ -99,8 +100,37 @@ def env() -> dict:
     return {"PATH": ":".join(path + ["/usr/bin", "/bin"]), "HOME": str(Path.home())}
 
 
-def run_suite(tree: Path) -> tuple[int, list[str]]:
-    done = subprocess.run([sys.executable, "-m", "unittest", "discover", "."],
+# Which module each of the others imports, so a mutant is put to every test that can reach it:
+# a change in cea_page shows up through cea_site, which builds pages with it.
+IMPORTED_BY = {"cea_claims.py": ("cea_claims", "cea_page", "cea_site"),
+               "cea_page.py": ("cea_page", "cea_site"),
+               "cea_site.py": ("cea_site",),
+               "pdf_text.py": ("pdf_text", "cea_claims", "cea_page", "cea_site")}
+
+
+def tests_reaching(tree: Path, module: str) -> list[str]:
+    """The test classes that can reach `module`, by it or by anything importing it.
+
+    Running the whole suite for every mutant costs 18.8 seconds where the classes that can reach
+    cea_page cost 1.2. The names are a superset of what can kill a mutant, never a subset, or a
+    mutant would be called a survivor because the test that holds it was not run.
+    """
+    source = (tree / "scripts" / "tests" / "test_scripts.py").read_text(encoding="utf-8")
+    parsed = ast.parse(source)
+    wanted = IMPORTED_BY.get(module, tuple(m[:-3] for m in MODULES))
+    out = []
+    for node in parsed.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        body = ast.get_source_segment(source, node) or ""
+        if any(name in body for name in wanted):
+            out.append(f"test_scripts.{node.name}")
+    return out
+
+
+def run_suite(tree: Path, only: list[str] | None = None) -> tuple[int, list[str]]:
+    args = ["-m", "unittest"] + (only if only else ["discover", "."])
+    done = subprocess.run([sys.executable, *args],
                           cwd=tree / "scripts" / "tests", capture_output=True, text=True,
                           env=env(), timeout=2400)
     failed = sorted({f"{c}.{t}" for t, c in
@@ -151,7 +181,8 @@ def main(argv=None) -> int:
                     help="a module to mutate; repeatable, default all but pdf_text.py")
     ap.add_argument("--sample", type=int, default=30, help="mutants per module")
     ap.add_argument("--seed", type=int, default=41)
-    ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--jobs", type=int, default=max(2, (os.cpu_count() or 4) * 3 // 4),
+                    help="default: three quarters of the cores")
     ap.add_argument("--out", help="write the result here as JSON")
     ap.add_argument("--triage", metavar="BASELINE",
                     help="for each survivor, how many behavior.py cases it moves, against this "
@@ -177,7 +208,10 @@ def main(argv=None) -> int:
     for m in chosen:
         pool = [(k, i) for k in ("cmp", "bool", "boolop") for i in range(sites(source[m], k))]
         jobs += [(m, k, i) for k, i in random.sample(pool, min(args.sample, len(pool)))]
-    print(f"CEA_MUTANTS: {len(jobs)} mutant(s)", flush=True)
+    reaching = {m: tests_reaching(frozen, m) for m in chosen}
+    for m in chosen:
+        print(f"CEA_MUTANTS: {m} is put to {len(reaching[m])} test class(es)", flush=True)
+    print(f"CEA_MUTANTS: {len(jobs)} mutant(s) on {args.jobs} worker(s)", flush=True)
 
     def one(job):
         m, kind, i = job
@@ -187,7 +221,7 @@ def main(argv=None) -> int:
             shutil.copytree(frozen, tree)
             (tree / "scripts" / m).write_text(mutated, encoding="utf-8")
             try:
-                _, killed = run_suite(tree)
+                _, killed = run_suite(tree, reaching[m])
             except subprocess.TimeoutExpired:
                 killed = ["<timeout>"]
         return {"module": m, "kind": kind, "n": i, "where": did, "killed": killed}
