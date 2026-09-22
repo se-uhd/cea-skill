@@ -1035,13 +1035,13 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                     problems.append(f"{label}.id: must be {prefix} and a number, as in {prefix}1; ids of "
                                     "main results start with B, claims with C, excluded claim candidates with R")
     result_ids = {e["id"] for _, e in lists["main_results"] if _nonempty(e.get("id"))}
-    broad_quotes = {_key(e["quote"]): e["id"] for _, e in lists["main_results"]
+    result_quotes = {_key(e["quote"]): e["id"] for _, e in lists["main_results"]
                     if _nonempty(e.get("quote")) and _nonempty(e.get("id"))}
     served: set[str] = set()
-    broad_pages: dict[str, list[str]] = {}
+    result_pages: dict[str, list[str]] = {}
     # A main result's quote with every page that its record covers, so that an excluded claim candidate
     # on one of those pages is caught even when the main result gives a page range.
-    broad_quoted: dict[str, set[int]] = {}
+    result_quoted: dict[str, set[int]] = {}
     excluded_quotes: dict[tuple[str, int], str] = {}
     splits: dict[str, list[tuple[str, dict]]] = {}
     # For each quote, the entries that use it: (kind, label, split_from), where kind is "results",
@@ -1076,9 +1076,9 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                 kind = "results" if key == "main_results" else "split" if split else key
                 uses.setdefault((_key(quote), str(e.get("page"))), []).append((kind, label, split))
                 if kind == "results":
-                    broad_pages.setdefault(_key(quote), []).append(label)
+                    result_pages.setdefault(_key(quote), []).append(label)
                     span = _page_span(e.get("page"), pages)
-                    broad_quoted.setdefault(_key(quote), set()).update(
+                    result_quoted.setdefault(_key(quote), set()).update(
                         range(span[0], span[1] + 1) if not isinstance(span, str) else [])
                 elif kind == "excluded" and not split:
                     excluded_quotes.setdefault((_key(quote), _first_page(e)), label)
@@ -1148,7 +1148,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                     else:
                         problems.append(f"{label}.serves: '{ref}' is not a main result id")
                 if quote and not split:
-                    same = broad_quotes.get(_key(quote))
+                    same = result_quotes.get(_key(quote))
                     if same and same not in listed:
                         problems.append(f"{label}.serves: the claim quotes the same sentence as {same}, "
                                         f"so it must serve {same}")
@@ -1202,11 +1202,11 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                                     "words of its own; remove them or set split_from")
 
     for (quote_key, page), label in excluded_quotes.items():
-        same = [b for b, e in broad_quoted.items() if b == quote_key and page in e]
+        same = [b for b, e in result_quoted.items() if b == quote_key and page in e]
         if same:
-            problems.append(f"{label}.quote: {broad_pages[quote_key][0]} quotes the same sentence on the "
+            problems.append(f"{label}.quote: {result_pages[quote_key][0]} quotes the same sentence on the "
                             "same page; a main result is not also an excluded claim candidate")
-    for labels in broad_pages.values():
+    for labels in result_pages.values():
         if len(labels) > 1:
             problems.append(f"{labels[1]}.quote: {labels[0]} already quotes the same sentence; one "
                             "sentence is one main result, even when it states several main results")
@@ -1229,7 +1229,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                             "result; add a note that says why")
 
     for split, members in splits.items():
-        quoted = broad_quotes.get(_key(_str(members[0][1].get("quote"))))
+        quoted = result_quotes.get(_key(_str(members[0][1].get("quote"))))
         serving = {ref for _, e in members
                    for ref in (e.get("serves") if isinstance(e.get("serves"), list) else [])
                    if isinstance(ref, str)}

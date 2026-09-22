@@ -115,12 +115,12 @@ def _affirms(clause: str) -> bool:
 # it leaves standing. The last is everything else, so its heading says only that, and does not
 # assert a ground: a candidate held open for the checker, or excluded for a reason the record
 # states in words rather than by id, falls here too, and the card beneath gives its own reason.
-REJ_GROUPS = [
+EXCLUDED_GROUPS = [
     ("repeat", "Repeats a recorded statement"),
     ("breakdown", "Breaks a main result into parts"),
     ("part", "Another part of a split sentence"),
     ("standing", "Leaves its main result standing"),
-    ("other", "Rejected on the ground its reason gives"),
+    ("other", "Excluded on the ground its reason gives"),
 ]
 
 
@@ -495,12 +495,12 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
         ticks.append((_first_page(c), "claim", c["id"], _flat(c["section"])))
 
     # the excluded claim candidates, folded
-    buckets: dict[str, list[dict]] = {k: [] for k, _ in REJ_GROUPS}
+    buckets: dict[str, list[dict]] = {k: [] for k, _ in EXCLUDED_GROUPS}
     for r in sorted(excluded, key=_first_page):
         buckets[kind_of(r, known)].append(r)
         ticks.append((_first_page(r), "candidate", r["id"], _flat(r["section"])))
     cand_html = []
-    for key, heading in REJ_GROUPS:
+    for key, heading in EXCLUDED_GROUPS:
         items = buckets[key]
         if not items:
             continue

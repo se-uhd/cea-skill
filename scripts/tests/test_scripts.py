@@ -3418,9 +3418,9 @@ class FrameworkMarkdown(unittest.TestCase):
 
     def test_two_headings_that_slug_the_same_get_different_anchors(self):
         import cea_site
-        html = cea_site.md_to_html("## Narrow claim\n\nOne.\n\n### Narrow Claim\n\nTwo.\n")
+        html = cea_site.md_to_html("## Link quality\n\nOne.\n\n### Link Quality\n\nTwo.\n")
         ids = re.findall(r'<h\d id="([^"]*)"', html)
-        self.assertEqual(ids, ["narrow-claim", "narrow-claim-2"])
+        self.assertEqual(ids, ["link-quality", "link-quality-2"])
 
     def test_a_heading_with_a_diacritic_keeps_a_readable_anchor(self):
         """Without folding, "Méthode" slugs to `m-thode`, and every accented heading is mangled."""
@@ -4218,6 +4218,55 @@ class EveryFlagTheDocsShowIsOneTheCommandTakes(unittest.TestCase):
         listed = set(re.findall(r"^  ([a-z][a-z-]+) ", cea_claims.__doc__, re.M))
         self.assertEqual(listed, set(self.COMMANDS),
                          "the docstring and this test disagree about the commands")
+
+
+class NoLabelTheOutputPrintsUsesARetiredWord(unittest.TestCase):
+    """Two retired words reached published output and the term check missed both, because it looks
+    for whole terms: claims.md printed "Excluded part" as "Rejected part", and every page tagged a
+    candidate "Rejected on the ground its reason gives". The second is on every page of the site.
+    What a reader sees is worth checking on its own."""
+
+    STEMS = ("reject", "broad", "narrow")
+
+    def labels(self):
+        """Every label the page and claims.md print, from the tables that hold them."""
+        out = dict(cea_page.EXCLUDED_GROUPS)
+        data = valid_claims()
+        data["excluded"] = [
+            {"id": "E1", "quote": SPLIT_QUOTE,
+             "states": "Across the 48 projects, the failure rate stayed at 3%.",
+             "page": 2, "section": "5 Results", "split_from": "S1",
+             "reason": "R1 would still stand: it states the build time."}]
+        rendered = cea_claims.render(data)
+        page = cea_page.build(data, Path("claims.json"), Path("out.html"))
+        for line in rendered.splitlines():
+            if line.startswith(("- ", "## ", "### ", "#### ")):
+                out[f"claims.md {line[:22]}"] = line
+        for m in re.finditer(r"<h2[^>]*>([^<@]{2,40})|class=\"taglabel\">([^<]{2,44})<", page):
+            text = m.group(1) or m.group(2)
+            out[f"page {text[:22]}"] = text
+        return out
+
+    def test_no_label_a_reader_sees_carries_a_retired_word(self):
+        found = self.labels()
+        self.assertGreater(len(found), 10, f"only {len(found)} label(s) were collected")
+        for where, text in found.items():
+            for stem in self.STEMS:
+                if stem in text.lower() and "narrower" not in text.lower():
+                    with self.subTest(where=where, stem=stem):
+                        self.fail(f"{where!r} prints {text!r}, which carries the retired {stem!r}")
+
+    def test_it_would_catch_the_two_that_got_through(self):
+        for text in ("Rejected part: the words (split from S1)",
+                     "Rejected on the ground its reason gives"):
+            with self.subTest(text=text[:26]):
+                self.assertTrue(any(s in text.lower() for s in self.STEMS))
+        for fine in ("Excluded part: the words (split from S1)",
+                     "Excluded on the ground its reason gives",
+                     "Leaves its main result standing"):
+            with self.subTest(text=fine[:26]):
+                self.assertFalse(any(s in fine.lower() for s in self.STEMS),
+                                 "a corrected label must not be flagged")
 
 
 class NoIdShapedTokenStandsWhereAnIdCannot(unittest.TestCase):
