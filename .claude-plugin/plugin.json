@@ -1,6 +1,6 @@
 {
   "name": "cea-skill",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Claim-Evidence Alignment (CEA) skills: extract a paper's narrow quantitative claims, the main results they serve, and the excluded claim candidates from its PDF, with every quote checked against the page text, then render the record as Markdown and as a page, and assemble the pages of several papers into a site.",
   "author": {
     "name": "se-uhd"
