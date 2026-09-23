@@ -552,15 +552,28 @@ def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, 
         caption = re.split(r"\s{3,}", text)[0]
         if text and _TABLE_CAPTION.match(text) and _centred_over(indent, len(caption), width,
                                                                 lines[i + 1:i + 9], c):
-            rows, end, j, cells = 0, i + 1, i + 1, set()
+            rows, end, j, cells = [], i + 1, i + 1, set()
+            gap = None  # where the latest run of blank lines inside the table began
             while j < len(lines):
                 line = lines[j]
+                if not line.strip():
+                    gap = j if gap is None or lines[j - 1].strip() else gap
+                elif _caption_in_a_column(line, c):
+                    # The columns have begun: a caption set inside one of them, whichever side of
+                    # its table it stands on. A paper that prints captions below its tables put
+                    # two tables side by side under a full-width one, and a column of prose beside
+                    # the second, and all of it was kept whole as rows of the table above, so the
+                    # rows of one table ran on inside the lines of the prose. The table ends at the
+                    # blank line before that column's content.
+                    if gap is not None:
+                        end = gap
+                    break
                 if line.strip():
                     right = re.search(r"\S", line[c:]) if len(line) > c else None
                     right_start = c + right.start() if right else None
                     if (_cell_gaps(line, c) >= 2 or _keeps_the_cells(line, c, cells)
                             or _spans_with_cells(line, c)):
-                        rows += 1
+                        rows.append(j)
                         cells.update(m.end() for m in _WIDE_GAP.finditer(line))
                     elif _blank_at(line, c) and not (
                             # A line inside the table that is not a row of its own: a category
@@ -576,12 +589,17 @@ def _full_width_tables(lines: list[str], c: int, width: int) -> list[tuple[int, 
                         break
                     end = j + 1
                 j += 1
-            if rows >= 3:
+            if sum(r < end for r in rows) >= 3:
                 spans.append((i, end))
                 i = end
                 continue
         i += 1
     return spans
+
+
+def _caption_in_a_column(line: str, c: int) -> bool:
+    """Whether `line` stays clear of the gutter at `c` and opens a caption in one of the columns."""
+    return _blank_at(line, c) and any(_CAPTION.match(part.strip()) for part in (line[:c], line[c:]))
 
 
 def _trim_edges(blank: list[bool], s: int, e: int, k: int = 3) -> tuple[int, int]:

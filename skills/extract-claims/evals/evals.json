@@ -74,7 +74,7 @@
     {
       "id": 4,
       "prompt": "I'd like to try CEA on the old MSR 2005 paper by Śliwerski, Zimmermann and Zeller, evals/papers/sliwerski-msr-2005.pdf. Which of its numbers are claims its findings depend on, and which did you leave out and why?",
-      "expected_output": "claims.json and claims.md for sliwerski-msr-2005, a five-page MSR paper. Main results are the abstract's patterns by size and by day of week and the conclusion's finding that in ECLIPSE fixes are three times as likely to induce a later change. Claims cover the size comparisons behind Tables 3 and 4, the Friday peak of P (bug) in both projects, and the ECLIPSE comparison of fixes with regular changes. The database and link counts are excluded claim candidates that describe the study, and the page-4 sentences whose lines the rows of Table 6 run into are quoted as the part that stands unbroken.",
+      "expected_output": "claims.json and claims.md for sliwerski-msr-2005, a five-page MSR paper. Main results are the abstract's patterns by size and by day of week and the conclusion's finding that in ECLIPSE fixes are three times as likely to induce a later change. Claims cover the size comparisons behind Tables 3 and 4, the Friday peak of P (bug) in both projects, and the ECLIPSE comparison of fixes with regular changes. The database and link counts are excluded claim candidates that describe the study.",
       "files": [
         "../../evals/papers/sliwerski-msr-2005.pdf"
       ],
@@ -92,7 +92,7 @@
         "The sentence saying that this comparison does not hold for MOZILLA is an excluded claim candidate, not a claim",
         "The database sizes (78,954 and 109,658 transactions, 278,010 and 392,972 revisions) and the link counts (25,317 and 53,574) are recorded as excluded claim candidates with reasons, not as claims",
         "Details are excluded claim candidates, not claims, including the day on which most fixes are made in each project and the day on which a fix is most likely to be undone",
-        "The page-4 size sentences, whose lines in the paper's text the rows of Table 6 run into, are quoted as the part of the sentence that stands unbroken, and their notes say that other text runs inside the sentence's line"
+        "The two page-4 size claims quote whole sentences: the one saying that fix-inducing transactions are roughly three times larger, and the one saying that Table 4 shows a similar trend for MOZILLA"
       ]
     }
   ]

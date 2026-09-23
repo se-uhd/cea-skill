@@ -19,3 +19,4 @@ FAIL if any of them does not.
 - The sentence saying that this comparison does not hold for MOZILLA is an excluded claim candidate, not a claim
 - The database sizes (78,954 and 109,658 transactions, 278,010 and 392,972 revisions) and the link counts (25,317 and 53,574) are recorded as excluded claim candidates with reasons, not as claims
 - Details are excluded claim candidates, not claims, including the day on which most fixes are made in each project and the day on which a fix is most likely to be undone
+- The two page-4 size claims quote whole sentences: the one saying that fix-inducing transactions are roughly three times larger, and the one saying that Table 4 shows a similar trend for MOZILLA

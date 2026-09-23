@@ -58,7 +58,7 @@
    "sha256": "2791a4e849825f16e977ddf98a9ad3f87c990d02f2b3986fe1d3e54487df49b4"
   },
   "sliwerski-msr-2005": {
-   "chars": 28154,
+   "chars": 27370,
    "pages": 5,
    "per_page": {
     "1": {
@@ -77,8 +77,8 @@
      "words": 1055
     },
     "4": {
-     "lines": 80,
-     "sha256": "2d9f630e9f9751a7596e0892c07db962c1f410e01ecb390b294fab7ef9878e26",
+     "lines": 101,
+     "sha256": "8946a5f719602789767a34c940c3d077027e0a8f50fac143f4d998cc43faf0ee",
      "words": 818
     },
     "5": {
@@ -96,7 +96,7 @@
     "  a number in the text is looked up against this list; a caption missing from it did not survive the extraction, so nothing can be compared with it",
     "references: removed from page 5 to the end"
    ],
-   "sha256": "097cfc9a11ac197e3422a5f28ccc510f072ac1c12507c03b4a7a2ccb16187850"
+   "sha256": "b4579e0582f154fec0949018550dac370415e15f9921a2c437ae2b713ad631f0"
   },
   "tse26-ai-code-review": {
    "chars": 93932,

@@ -1462,6 +1462,37 @@ class FullWidthContent(unittest.TestCase):
             self.assertIn(line.strip(), whole,
                           "a centred full-width line was cut at the gutter")
 
+    def test_a_table_beside_prose_does_not_run_into_its_lines(self):
+        """ACM prints a caption below its table. A full-width table's caption was read as the head
+        of a table that went on below it, so the two tables set side by side under it, and the prose
+        beside the second, were all kept whole as its rows. Each line of that prose then carried a
+        row of the other column's table, and no quote of those sentences could be made. A caption
+        set inside one column, such as "Table 3:" at the left margin, says the columns have begun.
+        The MSR 2005 paper in the test set prints this page."""
+        wide = [f"{'':>20}{'0':<14}{'1,287 (5%)':<18}{'2,057 (8%)':<20}{'1,439 (6%)':<16}"
+                f"{'2 (0%)':<16}5,055 (20%)"] * 4
+        caption = (f"{'':<12}Table 1: Distribution of links across different classes of "
+                   "confidence levels in ALPHA")
+        rows = [f"{'     fix       3.82±26.32          2.08± 7.42         2.73± 7.87':<81}"
+                "P (fix)         18.4 20.9 20.0 22.3 24.0 14.7"] * 3
+        column_caption = (f"{'Table 3: Average sizes of fix-inducing transactions for':<81}"
+                          "P (bug)         11.3 10.4 11.1 12.1 12.2 11.7")
+        prose = ["   Additionally, Table 3 shows that fix-inducing transactions are",
+                 "roughly three times larger than non fix-inducing transactions.",
+                 "Table 4 presents the same breakdown for BETA which shows"]
+        beside = ["P (bug | fix)       45.7 50.8 45.8 47.1 55.6",
+                  "P (bug | ¬fix)      34.1 38.3 36.7 35.5 37.3",
+                  "Table 6: Distribution of fixes across days"]
+        body = [f"{'prose of the left column that runs on along the page here':<81}"
+                "prose of the right column that runs along the page too"] * 24
+        lines = (wide + ["", caption, "", ""] + rows + [column_caption]
+                 + [f"{p:<81}{r}" for p, r in zip(prose, beside)] + [""] + body)
+        out, regions, _ = pdf_text._layout(lines)
+        whole = [l.strip() for l in out]
+        self.assertTrue(regions, "the page was not read as two columns at all")
+        for line in prose + beside + [caption.strip()]:
+            self.assertIn(line.strip(), whole, "a line of one column ran into the other's")
+
     def test_a_centred_author_block_over_the_columns_is_not_cut(self):
         """The title block above reaches the guard for centred lines nowhere: it stands above the
         two columns, outside the region. An author block centred over the gutter inside the region,
