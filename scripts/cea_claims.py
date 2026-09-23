@@ -1531,9 +1531,15 @@ def _reads_like_prose(line: str) -> bool:
     # distinct licenses we found"), so the number alone does not settle it: a footnote's number is
     # followed by a capital or by the marker's own spacing, and running prose carries on in lower
     # case. Justified text can hold a wide gap between words, so only a run of gaps reads as cells.
-    return (len(line.split()) >= 4 and not _CAPTION_START.match(line)
+    # A row of numbers set with single spaces has one gap, after its label, and more numbers than
+    # words, which a sentence never has: "P (fix)   18.4 20.9 20.0 22.3" is a row of a table.
+    tokens = line.split()
+    numbers = sum(bool(re.fullmatch(r"[(]?[-+]?\d[\d.,:%±/-]*[)]?[.,;]?", t)) for t in tokens)
+    words = sum(len(re.findall(r"[^\W\d_]", t)) >= 2 for t in tokens)
+    return (len(tokens) >= 4 and not _CAPTION_START.match(line)
             and not _FIGURE_LABEL.match(line)
             and len(re.findall(r"\S\s{3,}\S", line)) < 2
+            and numbers <= words
             and "http" not in line and not line.startswith("[references removed"))
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # A reason that gives a verdict instead of a ground: a word for how much the statement matters,

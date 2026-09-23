@@ -4242,6 +4242,19 @@ class WhatALineHasToLookLikeToCountAsProse(unittest.TestCase):
             "anc95/ChatGPT-CodeReview    2,831    2,384    84.21%"),
             "a run of wide gaps reads as cells, not as a sentence")
 
+    def test_a_row_of_numbers_set_with_single_spaces_is_not_prose(self):
+        """One gap, after the label, so the run-of-gaps test let it through, and a `[...]` over a
+        column of such rows was refused as a weld. Page 4 of the MSR 2005 paper sets them so."""
+        for line in ("P (fix)         18.4 20.9 20.0 22.3 24.0 14.7 16.9 20.8",
+                     "P (bug | ¬fix)      34.1 38.3 36.7 35.5 37.3 50.6 33.9 38.1"):
+            with self.subTest(line=line):
+                self.assertFalse(cea_claims._reads_like_prose(line))
+        # a sentence that gives many numbers still has more words than numbers
+        self.assertTrue(cea_claims._reads_like_prose(
+            "optimization and maintenance tasks accounted for 34 and 26 instances"))
+        self.assertTrue(cea_claims._reads_like_prose(
+            "and 109,658 transactions for MOZILLA. They account for 278,010 and 392,972"))
+
     def test_a_line_with_a_link_is_not_prose(self):
         self.assertFalse(cea_claims._reads_like_prose(
             "see http://example.org/the-replication-package for the data"))
