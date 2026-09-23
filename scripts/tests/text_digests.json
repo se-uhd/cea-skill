@@ -57,6 +57,47 @@
    ],
    "sha256": "2791a4e849825f16e977ddf98a9ad3f87c990d02f2b3986fe1d3e54487df49b4"
   },
+  "sliwerski-msr-2005": {
+   "chars": 28154,
+   "pages": 5,
+   "per_page": {
+    "1": {
+     "lines": 122,
+     "sha256": "083fadfb56dc0fea1f822a4b56d37c2ba53cb2eac18ed91ab2d097da1f256be8",
+     "words": 833
+    },
+    "2": {
+     "lines": 140,
+     "sha256": "b80ae6ffc3373b1a33d3874b8a7a45f08093ffaa2bf23645314d95795b765536",
+     "words": 955
+    },
+    "3": {
+     "lines": 134,
+     "sha256": "a41aa483f9aeaf52c559d835d681e5b54cbd3d6631dbe2787dd683bc8a0c5429",
+     "words": 1055
+    },
+    "4": {
+     "lines": 80,
+     "sha256": "2d9f630e9f9751a7596e0892c07db962c1f410e01ecb390b294fab7ef9878e26",
+     "words": 818
+    },
+    "5": {
+     "lines": 74,
+     "sha256": "807b929f7960297f9887250854c590249a8edcbe0f07f11a70962933d409ac7c",
+     "words": 521
+    }
+   },
+   "said": [
+    "CEA_EXTRACTED: <out>/sliwerski-msr-2005/text.txt",
+    "paper_id: sliwerski-msr-2005",
+    "pdf: sliwerski-msr-2005.pdf, copied here; write that name as paper.pdf",
+    "pages: 5, 5 of them with two-column text put in reading order",
+    "tables and figures: Fig. 1 p2, Fig. 2 p3, Fig. 3 p3, Table 1 p4, Table 2 p4, Table 3 p4, Table 4 p4, Table 5 p4, Table 6 p4",
+    "  a number in the text is looked up against this list; a caption missing from it did not survive the extraction, so nothing can be compared with it",
+    "references: removed from page 5 to the end"
+   ],
+   "sha256": "097cfc9a11ac197e3422a5f28ccc510f072ac1c12507c03b4a7a2ccb16187850"
+  },
   "tse26-ai-code-review": {
    "chars": 93932,
    "pages": 17,

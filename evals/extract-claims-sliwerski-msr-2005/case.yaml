@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: extract-claims-sliwerski-msr-2005
+tags: [cea, extract-claims]
+context:
+  scaffold_script: fixture.sh

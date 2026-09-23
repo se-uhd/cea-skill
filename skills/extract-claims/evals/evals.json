@@ -70,6 +70,30 @@
         "The thematic clusters (Review Friction, Quality Degradation, Forces and Consequences) are not recorded as a claim or a main result, and the abstract sentence that names them appears only as a excluded claim candidate whose reason is that its numbers describe the study",
         "A excluded claim candidate quotes the paper's own sentence declining to quantify prevalence, with a reason naming it as the ground on which the statements giving a frequency only in words were left out"
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "I'd like to try CEA on the old MSR 2005 paper by Śliwerski, Zimmermann and Zeller, evals/papers/sliwerski-msr-2005.pdf. Which of its numbers are claims its findings depend on, and which did you leave out and why?",
+      "expected_output": "claims.json and claims.md for sliwerski-msr-2005, a five-page MSR paper. Main results are the abstract's patterns by size and by day of week and the conclusion's finding that in ECLIPSE fixes are three times as likely to induce a later change. Claims cover the size comparisons behind Tables 3 and 4, the Friday peak of P (bug) in both projects, and the ECLIPSE comparison of fixes with regular changes. The database and link counts are excluded claim candidates that describe the study, and the page-4 sentences whose lines the rows of Table 6 run into are quoted as the part that stands unbroken.",
+      "files": [
+        "../../evals/papers/sliwerski-msr-2005.pdf"
+      ],
+      "expectations": [
+        "claims.json exists and cea_claims.py validate prints CEA_VALID",
+        "Every recorded quote is found on its stated page of the paper's text",
+        "Every selected claim has a selection reason that names a main result or key contribution and says how it would fail if the claim were false",
+        "At least one excluded claim candidate is recorded, and every excluded claim candidate is a quoted statement with a page and a reason",
+        "No number that only describes the study, such as a sample size, corpus size, codebook size, or agreement score, is recorded as a claim",
+        "No note judges whether a claim is supported; notes state facts that can be confirmed in the paper",
+        "Main results state the pattern by the day of week that fix-inducing changes were applied, the pattern by their size, and that in ECLIPSE fixes are three times as likely to induce a later change as ordinary enhancements",
+        "Claims serve the size result for both projects: the ECLIPSE comparison of Table 3, that fix-inducing transactions are roughly three times larger, and the MOZILLA comparison of Table 4",
+        "Claims serve the day-of-week result for both projects: that the likelihood P (bug) that a change induces a fix is highest on Friday in ECLIPSE (Table 5) and in MOZILLA (Table 6)",
+        "A claim gives the ECLIPSE comparison of P (bug | fix) with P (bug | ¬fix), almost three times higher for fixes, and serves the main result that fixes are three times as likely to induce a later change",
+        "The sentence saying that this comparison does not hold for MOZILLA is an excluded claim candidate, not a claim",
+        "The database sizes (78,954 and 109,658 transactions, 278,010 and 392,972 revisions) and the link counts (25,317 and 53,574) are recorded as excluded claim candidates with reasons, not as claims",
+        "Details are excluded claim candidates, not claims, including the day on which most fixes are made in each project and the day on which a fix is most likely to be undone",
+        "The page-4 size sentences, whose lines in the paper's text the rows of Table 6 run into, are quoted as the part of the sentence that stands unbroken, and their notes say that other text runs inside the sentence's line"
+      ]
     }
   ]
 }
