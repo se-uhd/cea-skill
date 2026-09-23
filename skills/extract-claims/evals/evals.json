@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "We're doing a claim-evidence alignment pass on our TSE paper about self-admitted GenAI usage in GitHub projects (evals/papers/tse26-genai-usage.pdf). Pull out the narrow quantitative claims and the abstract and contribution statements they back up, so the team can check them against the replication package later.",
+      "prompt": "We're doing a claim-evidence alignment pass on our TSE paper about self-admitted GenAI usage in GitHub projects (evals/papers/tse26-genai-usage.pdf). Pull out the quantitative claims and the abstract and contribution statements they back up, so the team can check them against the replication package later.",
       "expected_output": "claims.json and claims.md for tse26-genai-usage. Main results come from the boxed answers, the abstract, the contribution list and the conclusion. Claims cover the quantitative RQ1-RQ3 results, including the regression discontinuity results on code churn, and separate claims serve the two churn results that the RQ3 summary box states. Qualitative codes are not recorded as claims, and every quote is found on its page.",
       "files": [
         "../../evals/papers/tse26-genai-usage.pdf"

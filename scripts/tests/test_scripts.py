@@ -4933,8 +4933,10 @@ class NoCommittedFileUsesARetiredTerm(unittest.TestCase):
     the scripts was not enough, so this reads everything a commit carries."""
 
     # Built from fragments, so this file does not match its own search.
-    RETIRED = ("broad" + " statement", "narrow" + " claim", "rejected" + " candidate",
-               "broad" + "_statements")
+    # "narrow quantitative" as well: the phrase put a word between the two, and the old
+    # adjective stood in the plugin's own description until an audit read it.
+    RETIRED = ("broad" + " statement", "narrow" + " claim", "narrow" + " quantitative",
+               "rejected" + " candidate", "broad" + "_statements")
     # Nothing is exempt. The one file that was, cea_claims.py, is so because its format-change
     # note had to name the old terms, and there is no record format any more.
     ALLOWED = ()
@@ -8407,8 +8409,8 @@ class SiteGate(unittest.TestCase):
             fw = Path(tmp) / "framework.md"
             # Headings that used to collide: one with the wrapper's name, two that differ only
             # in case, and two with nothing to make a slug out of.
-            fw.write_text("# Framework\n\nWhat the terms mean.\n\n## Narrow claim\n\nOne.\n\n"
-                          "### Narrow Claim\n\nTwo.\n\n## !!!\n\nThree.\n\n## ???\n\nFour.\n",
+            fw.write_text("# Framework\n\nWhat the terms mean.\n\n## Quantitative claim\n\nOne.\n\n"
+                          "### Quantitative Claim\n\nTwo.\n\n## !!!\n\nThree.\n\n## ???\n\nFour.\n",
                           encoding="utf-8")
             site = Path(tmp) / "_site"
             with contextlib.redirect_stdout(io.StringIO()):
@@ -8429,8 +8431,8 @@ class SiteGate(unittest.TestCase):
         link in the published page that scrolls nowhere.
         """
         import cea_site
-        doc = ("# Framework\n\nSee [claims](#narrow-claim) and [results](#main-result).\n\n"
-               "## Narrow claim\n\nOne.\n\n## Main result\n\nTwo.\n")
+        doc = ("# Framework\n\nSee [claims](#quantitative-claim) and [results](#main-result).\n\n"
+               "## Quantitative claim\n\nOne.\n\n## Main result\n\nTwo.\n")
         html = cea_site.md_to_html(doc)
         ids = set(re.findall(r'<h\d id="([^"]*)"', html))
         targets = set(re.findall(r'href="#([^"]*)"', html))

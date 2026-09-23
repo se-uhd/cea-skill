@@ -1,6 +1,6 @@
 # cea-skill
 
-Claude Code skills for Claim-Evidence Alignment (CEA). CEA reconstructs the chain from a paper's narrow quantitative claims to the evidence in the paper and its research artifact, and compares what each claim asserts with what the chain shows. Claude Code drafts each step, and a person checks it.
+Claude Code skills for Claim-Evidence Alignment (CEA). CEA reconstructs the chain from a paper's quantitative claims to the evidence in the paper and its research artifact, and compares what each claim asserts with what the chain shows. Claude Code drafts each step, and a person checks it.
 
 | Skill | What it does |
 |---|---|

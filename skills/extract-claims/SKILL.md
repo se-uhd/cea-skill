@@ -1,7 +1,7 @@
 ---
 name: extract-claims
 description: >-
-  Extract a research paper's claims from its PDF for Claim-Evidence Alignment (CEA): the narrow
+  Extract a research paper's claims from its PDF for Claim-Evidence Alignment (CEA): the
   quantitative claims, the main results from the abstract, contributions, research-question
   answers, and conclusion they serve, and the excluded claim candidates, each with its exact wording,
   page, and reason. A claim is one a main result would fail without: the numbers a paper's
@@ -17,7 +17,7 @@ compatibility: Requires Python 3.10 or newer (standard library only) and pdftote
 
 # Extract claims from a paper PDF
 
-This skill drafts the claim selection step of Claim-Evidence Alignment (CEA) for one paper. For each narrow quantitative claim, CEA reconstructs the chain from the claim to its evidence, and a person, the checker, reviews each step that an agent drafts. This first step records which claims the paper makes, where it makes them, and why each claim was selected. Later steps start from this record. A claim missing here is never checked, and a wrong quote makes every later step work from the wrong passage.
+This skill drafts the claim selection step of Claim-Evidence Alignment (CEA) for one paper. For each quantitative claim, CEA reconstructs the chain from the claim to its evidence, and a person, the checker, reviews each step that an agent drafts. This first step records which claims the paper makes, where it makes them, and why each claim was selected. Later steps start from this record. A claim missing here is never checked, and a wrong quote makes every later step work from the wrong passage.
 
 The checker must be able to verify the record. Each statement is quoted exactly with its page, and each selection and rejection has a reason that the checker can accept or overturn. A script, the validator, confirms that each quote is on its page. A candidate is a statement that could be a claim; one that is not selected is an excluded claim candidate where a checker could expect it to be a claim. A main result quotes the sentence that states it: the finding the paper puts forward as what the study shows, or the tool, model, or framework the paper presents as a contribution and evaluates.
 

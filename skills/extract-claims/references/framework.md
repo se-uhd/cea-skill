@@ -8,7 +8,7 @@ This document is the whole framework. Section 1 gives the rules for selecting cl
 
 ## Scope
 
-CEA covers narrow quantitative empirical claims, as defined in Section 1. Its sources are the published paper and the published research artifact, and claim selection reads only the paper.  An agent drafts the selection of claims, each chain, and each alignment assessment, and a person, the checker, reviews them.
+CEA covers quantitative empirical claims, as defined in Section 1. Its sources are the published paper and the published research artifact, and claim selection reads only the paper.  An agent drafts the selection of claims, each chain, and each alignment assessment, and a person, the checker, reviews them.
 
 The checker can recount a count that comes from qualitative coding in the coded data, and the coding procedure belongs to that count's chain. Where every finding the paper puts forward is qualitative, no main result depends on such a count, so it is an excluded claim candidate whose reason says that, where no other ground fits. For a statement without a number, Section 1's rules for frequency words decide.
 
@@ -322,7 +322,7 @@ verdict is what changes, not the selection.
 
 ## 8. Foundations
 
-CEA combines established ideas, and its individual concepts are not new. Its proposed contribution is a procedure for reconstructing the chain behind a narrow quantitative claim from a finished paper and artifact, and for judging whether that chain supports the claim. A study still has to show that the procedure is useful, for example by testing whether independent checkers agree on claim selection, link qualities, and verdicts. Micropublications and SEE describe arguments without evaluating them [1, 2]. CEA adds records of gaps and a verdict for each claim.
+CEA combines established ideas, and its individual concepts are not new. Its proposed contribution is a procedure for reconstructing the chain behind a quantitative claim from a finished paper and artifact, and for judging whether that chain supports the claim. A study still has to show that the procedure is useful, for example by testing whether independent checkers agree on claim selection, link qualities, and verdicts. Micropublications and SEE describe arguments without evaluating them [1, 2]. CEA adds records of gaps and a verdict for each claim.
 
 | Work | Contribution | Use or extension in CEA |
 |---|---|---|
