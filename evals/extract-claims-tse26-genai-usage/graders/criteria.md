@@ -11,7 +11,7 @@ FAIL if any of them does not.
 - Every selected claim has a selection reason that names a main result or key contribution and says how it would fail if the claim were false
 - At least one excluded claim candidate is recorded, and every excluded claim candidate is a quoted statement with a page and a reason
 - No number that only describes the study, such as a sample size, corpus size, codebook size, or agreement score, is recorded as a claim
-- No purely qualitative finding or summary is recorded as a claim, a main result, or a excluded claim candidate, except a summary sentence in which the numbers describe the study, a statement whose basis the paper leaves unclear, which is a excluded claim candidate with a note
+- No purely qualitative finding or summary is recorded as a claim, a main result, or an excluded claim candidate, except a summary sentence in which the numbers describe the study, a statement whose basis the paper leaves unclear, which is an excluded claim candidate with a note
 - No note judges whether a claim is supported; notes state facts that can be confirmed in the paper
 - The dataset size of 1,292 GenAI mentions and the inter-rater agreement scores are recorded as excluded claim candidates with reasons
 - Main results state that code churn does not generally increase after GenAI adoption and that effects are stronger for generation tasks

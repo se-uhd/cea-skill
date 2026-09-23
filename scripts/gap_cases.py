@@ -13,7 +13,7 @@ stands for -- and recombined so that the answer is known by construction rather 
   a sentence, a block, then the paper's own prose -> a weld, and the same for prose alone
   anything with a section heading in the gap      -> a weld, since no sentence crosses one
 
-`scripts/tests/test_scripts.py` runs this over a fixed seed and holds the two error rates to what
+`scripts/tests/test_scripts.py` runs this over eight fixed seeds and holds the two error rates to what
 they were measured at. Run it directly to sweep more seeds:
 
     python3 scripts/gap_cases.py <seed> <rounds>

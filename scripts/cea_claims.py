@@ -38,15 +38,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
 PAGE_MARKER = re.compile(r"^=== page (\d{1,6}) ===$")
-# The first line `extract` writes, naming the PDF this text came out of and the digest of
-# its bytes. Without it nothing tied text.txt to a paper: a record could keep one paper's
-# text, name another paper's title and PDF, and publish a page whose every quote came from
-# a document the footer told the reader to check against.
 # The framework this plugin builds records against, and the definitions page the site
 # publishes. One document, so the rules and the terms the pages show cannot drift apart.
 FRAMEWORK = Path(__file__).resolve().parent.parent / "skills" / "extract-claims" \
     / "references" / "framework.md"
 
+# The first line `extract` writes, naming the PDF this text came out of and the digest of
+# its bytes. Without it nothing tied text.txt to a paper: a record could keep one paper's
+# text, name another paper's title and PDF, and publish a page whose every quote came from
+# a document the footer told the reader to check against.
 SOURCE_MARKER = re.compile(r"^=== paper (.+) sha256:([0-9a-f]{64}) ===$")
 # The files the site writes into a paper's directory, and claims.html, which render writes beside
 # a record. A paper.pdf named after one of them would be copied over it. Compared case-folded,
@@ -215,7 +215,6 @@ def _inside_a_label(text: str, i: int) -> bool:
     run = text[start + 1:i]
     return ")" not in run and "]" not in run and bool(
         re.match(r"[A-Za-z]{1,2}\d", run))
-# Stands for whitespace between two digits, so that "12 34" does not match "1234".
 # Stands where whitespace separated two word characters, so a boundary in text.txt is a boundary
 # in the quote. Not a character either can contain.
 _WORD_BREAK = "‖"
@@ -838,8 +837,8 @@ def _check_quote(problems: list[str], label: str, entry: dict, span: tuple[int, 
     quote = entry["quote"]
     lo, hi = span
     if quote_on(quote, _page_text(pages, span)):
-        # Refused, not merely questioned. A warning does not stop `render` or `site`, which do not
-        # print advisories at all, so a quote welded across a section boundary reached the page.
+        # Refused, not merely questioned. `render` and `site` print advisories but stop for none,
+        # so a quote welded across a section boundary reached the page.
         crossed = _skipped_heading(quote, _page_text(pages, span))
         if crossed:
             problems.append(f"{label}.quote: the [...] skips the heading \"{crossed[:60]}\", so "
@@ -847,9 +846,8 @@ def _check_quote(problems: list[str], label: str, entry: dict, span: tuple[int, 
                             "paper; use [...] only where a figure, table, footnote, or page break "
                             "interrupts one sentence")
         else:
-            # Refused rather than questioned, for the same reason: `render` and `site` print no
-            # advisories and stop for none, so a quote welding two sentences together reached the
-            # page with nothing said.
+            # Refused rather than questioned, for the same reason: `render` and `site` stop for no
+            # advisory, so a quote welding two sentences together reached the page.
             if _joins_two_rows(quote, _page_text(pages, span)):
                 problems.append(f"{label}.quote: starts in one row of a table and ends in "
                                 "another, so it is not one sentence of the paper; a [...] stands "
@@ -932,8 +930,6 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
     problems: list[str] = []
     if not pages:
         problems.append("text.txt holds no '=== page N ===' line; run extract again")
-    # `extract` writes each page once. A file that opens one twice has been edited, and a quote
-    # could then run straight from one part of it into the other as though the page read that way.
     # text.txt says which PDF it came out of. A record that keeps one paper's text while naming
     # another paper's file publishes a page whose every quote comes from a document its own
     # footer tells the reader to check against. Records written before the header carry none, and
@@ -951,6 +947,8 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
             if hashlib.sha256(beside.read_bytes()).hexdigest() != came_from[1]:
                 problems.append(f"{came_from[0]} beside the record is not the file text.txt was "
                                 "extracted from; run extract again so the text and the paper agree")
+    # `extract` writes each page once. A file that opens one twice has been edited, and a quote
+    # could then run straight from one part of it into the other as though the page read that way.
     for n in repeated_pages(text_path):
         problems.append(f"text.txt opens page {n} more than once; extract writes each page once, "
                         "so run extract again rather than editing text.txt")
@@ -974,8 +972,6 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
         for f in ("id", "title", "pdf"):
             if f in paper and not _nonempty(paper[f]):
                 problems.append(f"paper.{f}: must be a non-empty string")
-        # site writes the paper's page in a directory named by this id, so it has to be one
-        # plain path segment. extract folds a PDF's file name to the same rule.
         given = str(paper.get("pdf", ""))
         # A name, not a path. `extract` copies the PDF into the record and prints the bare name to
         # write here. A path was accepted as long as it was relative and held no `..`, and
@@ -985,8 +981,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                             "`extract` copies the PDF into the record and prints the name to "
                             "write, because the site publishes that file beside the page")
         elif given and (Path(given).is_absolute() or ".." in Path(given).parts):
-            problems.append("paper.pdf: must be a relative path without '..', because the site "
-                            "copies the file it names into the published pages")
+            problems.append("paper.pdf: must be the file's name, and '..' names a directory")
         if any(ord(c) < 32 for c in given):
             problems.append("paper.pdf: must not hold a control character")
         for f in ("id", "title", "pdf"):
@@ -1015,6 +1010,8 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
         if Path(given).name.casefold() in PUBLISHED_NAMES:
             problems.append("paper.pdf: must not be named after a file the site publishes, "
                             "because the copy would overwrite it")
+        # site writes the paper's page in a directory named by this id, so it has to be one
+        # plain path segment. extract folds a PDF's file name to the same rule.
         # The id names a directory, and a name the filesystem refuses fails inside `site`'s
         # staging copy, where the remedy it prints is to run validate, which is what passed it.
         if _nonempty(paper.get("id")) and len(paper["id"]) > 200:
@@ -1060,7 +1057,7 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
                 prefix = {"main_results": "R", "claims": "C", "excluded": "E"}[key]
                 if not re.fullmatch(rf"{prefix}\d{{1,6}}", e["id"]):
                     problems.append(f"{label}.id: must be {prefix} and a number, as in {prefix}1; ids of "
-                                    "main results start with B, claims with C, excluded claim candidates with R")
+                                    "main results start with R, claims with C, excluded claim candidates with E")
     result_ids = {e["id"] for _, e in lists["main_results"] if _nonempty(e.get("id"))}
     result_quotes = {_key(e["quote"]): e["id"] for _, e in lists["main_results"]
                     if _nonempty(e.get("quote")) and _nonempty(e.get("id"))}
@@ -1323,8 +1320,12 @@ _CAPTION_START = re.compile(r"^(?:Fig\.|Figure|FIGURE|Table|TABLE|Listing|Algori
 # Five: the longest caption or footnote in these papers runs to seven lines, and a sweep over
 # the real material puts the first cap with no legitimate gap refused at five.
 _CAPTION_LINES = 5
+# pdftotext sets a footnote's number apart from its text, or glues the number to the first word,
+# as in "1We use the term". The glued form was lost when this check moved into validate, and a
+# quote skipping such a footnote was refused as a weld. Glued, only before a capital that opens a
+# word, so that "3D" or "2FA" at the start of a line of prose is not taken for a footnote.
 _FOOTNOTE_LINE = re.compile(
-    r"^\d{1,2}\s+(?=[A-Z]|https?://|(?:[\w-]+\.)+[a-z]{2,}(?:[/\s]|$))")
+    r"^\d{1,2}(?:\s+(?=[A-Z]|https?://|(?:[\w-]+\.)+[a-z]{2,}(?:[/\s]|$))|(?=[A-Z][a-z]))")
 _HEADING = re.compile(r"^(?:[IVXLC]+(?:-[A-Z])?\.|\d+(?:\.\d+)*\.|\d+(?:\.\d+)+|[A-Z]\.)"
                       r"\s+[A-Z][\w &,:'\u2019-]*$")
 # A heading names a thing. These words mean the line is a sentence about something, which is
@@ -1540,8 +1541,8 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # decides: "Key numbers here come from cited work" names a ground, "A key number of the paper" names
 # none. The grounds are those the reference lists, so the words that name them are few.
 _A_GROUND = re.compile(
-    r"\b(?:describ\w+|repeat\w+|cited|agreement|corpus|codebook|sample\s+size|no\s+results\s+"
-    r"statement|states?\s+the\s+main\s+result|out\s+of\s+scope|comes?\s+from|came\s+from"
+    r"\b(?:describ\w+|repeat\w+|cited|agreement|corpus|codebook|sample\s+size"
+    r"|states?\s+the\s+main\s+result|out\s+of\s+scope|comes?\s+from|came\s+from"
     # the shape the reference asks a standing reason to take, which read as a verdict without it
     r"|(?:would|does|still)\s+(?:\w+\s+){0,3}?stands?|breaks?\s+\w+\s+down|part\s+of\s+a\s+split)\b",
     re.I)
@@ -1557,26 +1558,24 @@ _EMPTY_REASON = re.compile(
     r"|^\W*(?:it\s+)?(?:does\s+not\s+qualify|fails\s+the\s+test|nothing\s+rests\s+on\s+it"
     r"|judged\s+not\s+to\s+be\s+one|excluded\s+from\s+the\s+set|see\s+the\s+note)\b", re.I)
 _NO_MAIN_RESULT = re.compile(r"\bno main result\b", re.I)
-# A note saying the table prints the parts of the sentence's value rather than the value itself.
-# A reason saying the sentence repeats a number without restating the result behind it. The
-# advisory above offers this as a way to settle the question, so it has to be read.
+# A reason saying the sentence repeats a number without restating the result behind it. An
+# advisory offers this as a way to settle the question, so it has to be read.
 _ONLY_THE_NUMBER = re.compile(r"repeats?\s+(?:only\s+)?the\s+number|only\s+the\s+number"
                               r"|states?\s+no\s+(?:main\s+)?result|not\s+the\s+main\s+result", re.I)
-# A note that says its values are the parts of the number the sentence gives. Only then is the sum
-# of those values something to check. "No total" alone is not such a note: a table that prints no
-# total for the quantity the sentence gives is a table whose rows do not add up to it, which is
-# what the note is there to say.
-# A note that names the number its values are the parts of: "the parts of the sentence's 1,203",
-# "the parts of its number, 48". Only then is there a total to check the rows against.
-# How many words a selection_reason needs before it can be saying how a result would fail.
 # A note saying its rows do not make up the whole: they are some of them, or shares of another
 # number. Then the sum is not meant to match and there is nothing to warn about.
 _SAYS_SOME_ARE_MISSING = re.compile(
     r"\b(?:only\s+(?:some|part|the\s+parts?)|some\s+of\s+(?:them|these|the)|not\s+all"
     r"|do(?:es)?\s+not\s+add|shares?\s+of)\b", re.I)
+# How many words a selection_reason needs before it can be saying how a result would fail.
 _A_REASON = 5
+# A note that names the number its values are the parts of: "the parts of the sentence's 1,203",
+# "the parts of its number, 48". Only then is the sum of its values something to check. "No
+# total" alone is not such a note: a table that prints no total for the quantity the sentence
+# gives is a table whose rows do not add up to it, which is what the note is there to say. The
+# digits of an entry id or a split id are not a total.
 _PARTS_OF = re.compile(r"parts? of (?:the |its )?(?:sentence's )?(?:value |number )?"
-                       r"[^\d\n]{0,20}?(?<![BCRS])(\d[\d,]*(?:\.\d+)?)", re.I)
+                       r"[^\d\n]{0,20}?(?<![RCES])(\d[\d,]*(?:\.\d+)?)", re.I)
 # A section heading that names the paper's answer to a research question.
 _BOXED_SECTION = re.compile(r"(?:summary|answer)\s*(?:to|for)?\s*rq", re.I)
 # The order the reference gives for the sentence that states a main result. Where the paper states
@@ -1825,8 +1824,8 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
         for i, e in enumerate(data[key]):
             for f in ("reason", "selection_reason"):
                 for ref in sorted(set(RESULT_REF.findall(_str(e.get(f)))) - results):
-                    out.append(f"{_label(key, i, e)}.{f}: names '{ref}', which is not a main-result "
-                               "statement in this record. The page passes over it. Correct it "
+                    out.append(f"{_label(key, i, e)}.{f}: names '{ref}', which is not a main result "
+                               "in this record. The page passes over it. Correct it "
                                "if it was meant as an id.")
     for key in ("main_results", "claims", "excluded"):
         for i, e in enumerate(data[key]):
@@ -1907,7 +1906,7 @@ def advisories(paper_dir: Path, data: dict) -> list[str]:
                        "than state one of its own; it keeps its record where its sentence reports "
                        "something no other main result mentions, and where its only addition is "
                        "a subgroup, an exception, an example, or a subset, record it as an excluded "
-                       f"candidate with breaks_down naming {widest}")
+                       f"claim candidate with breaks_down naming {widest}")
     # The record has to say which main results the paper has, and say each one once, or a reader
     # cannot tell one result stated four ways from four results.
     for group in _one_result(data):

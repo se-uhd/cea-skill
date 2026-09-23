@@ -9,7 +9,9 @@ accordion cards for the records.
 It reuses the ordering of `cea_claims.render`, so the page and the Markdown cannot disagree about
 which claims stand under which main result.
 
-`cea_claims.py render` calls `build`. This module holds the page template and nothing else.
+`cea_claims.py render` and `cea_site.copy_paper` call `build`. This module holds the page
+template and what the page reads out of a reason, such as whether the main result it names still
+stands.
 """
 from __future__ import annotations
 
@@ -48,7 +50,7 @@ _ASKS = re.compile(r"\b(?:whether|unclear|uncertain|depends|debatable|arguable)\
 _ONLY_IF = re.compile(r"\bstands?\s+only\b", re.I)
 _STANDS = re.compile(r"\b(?:would|does|still)\b([^.]{0,40}?)\bstands?\b", re.I)
 # "without" is not one of these: "R1 still stands without this sentence" is the affirmative case,
-# and it is how the reference's own template reads.
+# as is the reference's own template, "R2 would still stand, because ...".
 # "nothing" is its own word: `\bno\b` does not reach inside it, so "Nothing in R1 would still
 # stand" read as the affirmative and the page said the result stands.
 _NOT = re.compile(r"\b(?:not|never|no|none|nothing|neither|nor|cannot|hardly|barely|n't)\b",
@@ -577,8 +579,8 @@ def build(data: dict, source: Path, out: Path, index_href: str | None = None,
 
     # the overview
     places = _stated_in(data) if results else 0
-    # "main results", not "main results": several statements can state one result, which the
-    # map merges into one row, and one statement can state two. claims.md has always said this.
+    # A count of entries, not of distinct results: several statements can state one result, which
+    # the map merges into one row, and one statement can state two. claims.md counts the same way.
     stats = [(len(results), "main results"), (len(claims), "claims"),
              (len(excluded), "excluded claim candidates"), (places, "sentences the record marks as stating the main results")]
     stat_html = "".join(f'<div class="stat-card"><div class="stat-value">{v}</div>'
@@ -881,9 +883,9 @@ TEMPLATE = r"""<!DOCTYPE html>
         <h3>By section of the paper</h3>
         <p class="panel-desc">One row per section heading, in page order. Each mark is one main result, claim, or excluded claim candidate recorded in that section. Click a mark to open its card.</p>
         <div class="legend in-panel">
-          <span class="legend-item"><i class="legend-dot result"></i>main result (B)</span>
+          <span class="legend-item"><i class="legend-dot result"></i>main result (R)</span>
           <span class="legend-item"><i class="legend-dot claim"></i>claim (C)</span>
-          <span class="legend-item"><i class="legend-dot candidate"></i>excluded claim candidate (R)</span>
+          <span class="legend-item"><i class="legend-dot candidate"></i>excluded claim candidate (E)</span>
         </div>
         <div class="strip">@@STRIP@@</div>
       </div>

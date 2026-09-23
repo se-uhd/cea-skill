@@ -88,7 +88,7 @@ are what the schema cannot say.
 - `split_from`: `null` unless the claim is one part of a split statement.
 - `duplicate_of` (excluded claim candidates only): a list of the ids of the claims, excluded claim candidates, or main results that the statement repeats. A sentence that repeats a main result names that main result, so that the record shows how many places the paper states it.
 - `breaks_down` (excluded claim candidates only): a list of the ids of the main results whose result the statement divides into parts. A breakdown is not a place where the paper states the result, so it is kept apart from `duplicate_of`, which counts the places.
-- `states` on an excluded claim candidate: only for a rejected part of a split statement, together with `split_from`.
+- `states` on an excluded claim candidate: only for an excluded part of a split statement, together with `split_from`.
 - `states` on a main result (optional): the clause that the statement is recorded for, where its sentence also repeats another main result. Where one sentence states two main results it is one entry all the same, and the `note` names both, because a second statement on the same sentence is refused. Its words come from the quote, and the `note` names the statement that holds the rest.
 - `note` (optional, on any entry): only facts that the checker can confirm in the paper, each with its location. A note can say:
   - that the extraction garbled characters in the quote

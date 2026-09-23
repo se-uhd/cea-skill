@@ -71,7 +71,6 @@ def variants(data):
     yield "as recorded", data
     edits = [
         ("title dropped", lambda d: d["paper"].update(title="A Title The Paper Does Not Print")),
-        ("format dropped", lambda d: d.pop("format", None)),
         ("pdf renamed", lambda d: d["paper"].update(pdf="somewhere-else.pdf")),
     ]
     for name, edit in edits:

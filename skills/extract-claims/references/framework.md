@@ -66,7 +66,7 @@ A checker reviews the selection itself, not only its outcome, so the record hold
 
 | Entry | Id | What it holds |
 |---|---|---|
-| **Main result** | `E1`, `E2`, ... | One of the paper's main results, quoted from the sentence that states it, with every other place the paper states it again. |
+| **Main result** | `R1`, `R2`, ... | One of the paper's main results, quoted from the sentence that states it, with every other place the paper states it again. |
 | **Claim** | `C1`, `C2`, ... | One claim, quoted with its location, the main results it serves, and how each of them would fail if the claim were false. |
 | **Excluded claim candidate** | `E1`, `E2`, ... | One statement that a checker could expect to be a claim and that was not selected, with the ground that excludes it. |
 

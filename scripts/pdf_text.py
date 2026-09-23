@@ -15,9 +15,10 @@ bibliography. This module reads it to find claims, which changes the following:
 Pipeline:
   1. `pdftotext -layout`, split into pages on form feeds.
   2. Blank running headers, footers, and bare page numbers at the top and bottom of each page.
-  3. Cut each page into two-column regions and full-width blocks, and read each region's left
+  3. Blank LaTeX `lineno` line numbers, at either margin or glued to the end of a line, before the
+     columns are split, while they still stand in a column of their own.
+  4. Cut each page into two-column regions and full-width blocks, and read each region's left
      column before its right. A page too short for this is cut at the gutter of the other pages.
-  4. Blank LaTeX `lineno` line numbers, at either margin or glued to the end of a line.
   5. Remove the references section.
 """
 

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Every check that guards this plugin, in one command. CI runs it, and so should a release tag.
+# Every check that guards this plugin, run once in one environment. `gates.sh` runs it in the two
+# environments that differ, and that is what CI and a release run.
 #
 #     sh scripts/check.sh
 #

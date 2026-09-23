@@ -678,7 +678,20 @@ class UncoveredGuards(unittest.TestCase):
                 self.assertIn("paper.title", "\n".join(messages))
 
     def test_a_site_with_no_index_page_is_not_reported_as_published(self):
-        """The post-condition had no test, so removing it left the suite green."""
+        """The post-condition after the copy: a build whose index never reached the site is not
+        a published site. It had no test that reached it, so removing it left the suite green."""
+        import cea_site
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = self.record(tmp)
+            site = Path(tmp) / "_site"
+            with mock.patch.object(cea_site, "write_index", lambda *a, **k: None), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                written, messages = cea_site.build_site([rec], site)
+            self.assertEqual(written, 0, "a site with no index was reported as published")
+            self.assertIn("was not written as a file", "\n".join(messages))
+
+    def test_an_index_standing_as_a_link_is_not_published_through(self):
+        """A symbolic link where the index goes would take the index wherever it points."""
         import cea_site
         with tempfile.TemporaryDirectory() as tmp:
             rec = self.record(tmp)
@@ -923,10 +936,14 @@ class ASumIsCheckedAgainstTheNumberTheNoteNames(unittest.TestCase):
             "no total: Whole methods 7 and One block 5."))
 
     def test_an_entry_id_is_not_read_as_a_total(self):
-        """"part of R12" captured 12, and four committed notes are written that way."""
-        self.assertNotIn("add up to", self.check(
-            "The remaining part of R12 is recorded separately. Table 4 prints 9 and 8 for the "
-            "two groups."))
+        """"part of R12" captured 12, and four committed notes are written that way. The guard
+        named the id letters of the record before its rename, so an excluded candidate's id was
+        still read as a total."""
+        for letter in sorted(set(cea_claims._ID_PREFIX.values()) | {"S"}):
+            with self.subTest(letter=letter):
+                self.assertNotIn("add up to", self.check(
+                    f"The remaining part of {letter}12 is recorded separately. Table 4 prints 9 "
+                    "and 8 for the two groups."))
 
     def test_one_quantity_with_a_wrong_sum_is_still_questioned(self):
         self.assertIn("add up to 1103", self.check(
@@ -1445,15 +1462,39 @@ class FullWidthContent(unittest.TestCase):
             self.assertIn(line.strip(), whole,
                           "a centred full-width line was cut at the gutter")
 
+    def test_a_centred_author_block_over_the_columns_is_not_cut(self):
+        """The title block above reaches the guard for centred lines nowhere: it stands above the
+        two columns, outside the region. An author block centred over the gutter inside the region,
+        with the gutter the other pages give, is what the guard is for, and IEEE Software prints
+        one on its first page."""
+        def centred(text, width=137):
+            return " " * ((width - len(text)) // 2) + text
+        authors = [centred("Firstname Lastname*, Other Author**, Third Person***"),
+                   centred("* Some University, Country"), "",
+                   centred("first.last@example-university.de"),
+                   centred("** Another University, Country"), "",
+                   centred("other.author@example.edu.au"),
+                   centred("*** Third University, Country"), "",
+                   centred("third@example.edu.au")]
+        title = [f"{'':<20}An Endless Title Of A Paper About Things:",
+                 f"{'':<18}How Someone Discusses A Burden Of Work",
+                 f"{'':<19}In A Field Of Software Engineering"]
+        body = [f"{'Left column prose that runs along the page and on and on':<69}"
+                "right column prose that runs along the page as well here"] * 40
+        out, regions, _ = pdf_text._layout(["", "", ""] + title + authors + [""] * 4 + body, 69)
+        self.assertTrue(regions, "the page was not read as two columns at all")
+        whole = [l.strip() for l in out]
+        for line in authors:
+            if line.strip():
+                self.assertIn(line.strip(), whole, "a centred author line was cut at the gutter")
+
     def test_two_columns_of_body_text_are_still_split(self):
         """The guards must not stop the page being read in reading order."""
         out, regions, _ = pdf_text._layout(self.page([]))
         self.assertEqual(regions, 1)
         text = "\n".join(out)
         self.assertIn("Left column text that runs on and on here", text)
-        self.assertLess(text.index("Right column text here"),
-                        len(text), "the right column was dropped")
-        self.assertGreater(text.count("Right column text here"), 0)
+        self.assertIn("Right column text here", text, "the right column was dropped")
 
 
 class GapWarnings(unittest.TestCase):
@@ -1516,7 +1557,6 @@ class GapWarnings(unittest.TestCase):
         for caption in ("TABLE V", "TABLE XVI", "Fig. 3", "Figure 12", "Algorithm 2"):
             with self.subTest(caption=caption):
                 self.assertIsNone(self.crossed(caption))
-                self.assertNotIn("skips the heading", self.warnings(caption))
 
     def test_the_paper_s_own_words_are_not_headings(self):
         for line in ("GPT", "LLM", "YES", "AI AI AI AI", "RQ1 RQ2 RQ3 RQ4"):
@@ -1951,7 +1991,7 @@ class Validate(unittest.TestCase):
 
     def refusals(self, data, text=TEXT):
         """What `validate` refuses. A `[...]` over the paper's own prose is a problem now, not a
-        warning, because render and site print no warnings and stop for none."""
+        warning, because render and site stop for no warning."""
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "text.txt").write_text(text, encoding="utf-8")
@@ -2498,7 +2538,8 @@ class Validate(unittest.TestCase):
         data["claims"] = []
         data["excluded"] = [{"id": "E1", "quote": "The failure rate increased for 12 of the 48 [...] projects that used remote caching.",
                              "page": 2, "section": "5 Results", "reason": "No main result depends on it."}]
-        self.assertEqual([w for w in self.warnings(data, text).splitlines() if "skips" in w], [])
+        # refusals, not warnings: the gap check refuses, and no warning ever says "skips"
+        self.assertEqual([w for w in self.refusals(data, text).splitlines() if "skips" in w], [])
 
     def test_gap_that_skips_five_lines_of_prose_is_flagged(self):
         body = "\n".join(f"line {i} of running prose that the quote leaves out of its middle" for i in range(5))
@@ -2537,7 +2578,8 @@ class Validate(unittest.TestCase):
         data["claims"] = []
         data["excluded"] = [{"id": "E1", "quote": "The failure rate stayed at 3% across [...] the 48 projects.",
                              "page": 2, "section": "5 Results", "reason": "No main result depends on it."}]
-        self.assertEqual([w for w in self.warnings(data, text).splitlines() if "skips" in w], [])
+        # refusals, not warnings: the gap check refuses, and no warning ever says "skips"
+        self.assertEqual([w for w in self.refusals(data, text).splitlines() if "skips" in w], [])
 
     def test_page_that_text_does_not_have(self):
         text = "=== page 1 ===\nCaching halves median build time.\n=== page 5 ===\nEnd of the paper.\n"
@@ -3329,9 +3371,15 @@ class WhatThePageAsserts(unittest.TestCase):
         """The counter and the heading over the same cards used to disagree, one saying "broad
         statements" and the other "Main Results". They are one name now, and the count is of
         entries: a sentence that states two of the paper's findings is one entry all the same."""
+        data = valid_claims()
         html = self.page()
-        self.assertIn('stat-label">main results', html)
         self.assertIn("<h2>Main Results", html)
+        counts = dict((label, int(value)) for value, label in re.findall(
+            r'stat-value">(\d+)</div><div class="stat-label">([^<]+)<', html))
+        self.assertEqual({k: counts.get(k) for k in ("main results", "claims",
+                                                      "excluded claim candidates")},
+                         {"main results": len(data["main_results"]), "claims": len(data["claims"]),
+                          "excluded claim candidates": len(data["excluded"])})
 
     def test_the_footer_names_the_skill_that_built_the_page(self):
         data = valid_claims()
@@ -3409,8 +3457,10 @@ class NestedLists(unittest.TestCase):
         html = cea_site.md_to_html("1. M1 nothing reconstructed\n   - a note\n   - another\n"
                                    "2. M2 the interpretation is drawn\n")
         outer = re.findall(r"<ol>(.*)</ol>", html, re.S)[0]
-        items = re.findall(r"<li>(?:(?!<li>).)*?(M\d)", outer)
-        self.assertEqual(items, ["M1", "M2"], "the sub-items were counted as items of the list")
+        # the list's own items, once the list nested inside one of them is taken out
+        own = re.sub(r"<ul>.*?</ul>", "", outer, flags=re.S)
+        self.assertEqual(re.findall(r"<li>\s*(M\d)", own), ["M1", "M2"])
+        self.assertEqual(own.count("<li>"), 2, "the sub-items were counted as items of the list")
 
 
 class FrameworkMarkdown(unittest.TestCase):
@@ -4324,11 +4374,15 @@ class TheSiteRefusesAnIdThatNamesNothingInTheRecord(unittest.TestCase):
         written, said = self.build(
             lambda d: d["excluded"][0].update(duplicate_of=["R1", "E7"]))
         self.assertEqual(written, 0)
-        self.assertIn("'E7'", said)
+        # the site's own wording: validate names 'E7' too, and would carry this alone
+        self.assertIn("'E7', which is not in this record", said)
 
     def test_serves_and_breaks_down_are_held_to_the_main_results(self):
         written, said = self.build(lambda d: d["claims"][0].update(serves=["R9"]))
         self.assertEqual(written, 0, "a claim served a result the record does not hold")
+        self.assertIn("'R9'", said)
+        written, said = self.build(lambda d: d["excluded"][0].update(breaks_down=["R9"]))
+        self.assertEqual(written, 0, "a candidate broke down a result the record does not hold")
         self.assertIn("'R9'", said)
 
 
@@ -4342,7 +4396,8 @@ class ClaimsMdSaysWhichClaimsServeAResult(unittest.TestCase):
         data = valid_claims()
         data["main_results"] = [
             {"id": "R1", "quote": "Caching halves median build time.", "page": 1,
-             "section": "Abstract", "source": "abstract"},
+             "section": "Abstract", "source": "abstract",
+             "states": "Caching halves median build time."},
             {"id": "R2", "quote": "Failures did not increase with caching.", "page": 1,
              "section": "Abstract", "source": "abstract",
              "states": "Failures did not increase.",
@@ -4959,6 +5014,16 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
                 self.assertIn(term, rows, "the Glossary does not define it")
                 self.assertGreater(len(rows[term].split()), 4, f"{term} has no real definition")
 
+    def test_the_selection_record_table_gives_the_ids_the_record_uses(self):
+        """It gave main results `E1`, `E2`, the letter of the excluded candidates, and the
+        glossary test beside this one did not read that table."""
+        block = self.text.split("### The selection record", 1)[1].split("\n### ", 1)[0]
+        rows = {m.group(1): m.group(2) for m in
+                re.finditer(r"^\| \*\*([^*]+)\*\* \| `([A-Z])1`", block, re.M)}
+        kinds = {"Main result": "main_results", "Claim": "claims",
+                 "Excluded claim candidate": "excluded"}
+        self.assertEqual(rows, {term: cea_claims._ID_PREFIX[key] for term, key in kinds.items()})
+
     def test_the_glossary_carries_the_id_letter_of_every_entry_kind(self):
         rows = {t: m for t, m in self.glossary().items()}
         block = self.text.split("## Glossary", 1)[1].split("\n## ", 1)[0]
@@ -4980,11 +5045,20 @@ class TheFrameworkDefinesTheTermsThePagesUse(unittest.TestCase):
                                      f"{term} is defined again outside the Glossary")
 
     def test_it_defines_every_term_the_pages_use(self):
-        for term in ("main result", "main result", "claim", "excluded claim candidate",
-                     "checker", "mapping level"):
+        """Each word a page shows, and the Glossary row that defines it. Finding the word anywhere
+        in the document proved nothing: "claim" is in its title."""
+        import cea_page
+        page = cea_page.build(valid_claims(), Path("claims.json"), Path("out.html"),
+                              framework_href="../../framework/")
+        shown = " ".join(unescape(re.sub(r"(?s)<script.*?</script>|<style.*?</style>|<[^>]+>", " ",
+                                         page)).lower().split())
+        rows = self.glossary()
+        for word, term in (("main result", "Main result"), ("claim", "Claim"),
+                           ("excluded claim candidate", "Excluded claim candidate"),
+                           ("checker", "Checker"), ("l1", "Mapping level")):
             with self.subTest(term=term):
-                self.assertIn(term, self.folded,
-                              f"the pages use {term!r} and the framework does not define it")
+                self.assertIn(word, shown, f"the page no longer shows {word!r}")
+                self.assertIn(term, rows, f"the page shows {word!r} and the Glossary has no {term}")
 
     def test_it_names_every_link_the_claim_card_shows(self):
         """The badge shows six dots, one per link, and the tooltip names them from LINKS."""
@@ -5122,7 +5196,9 @@ class ExtractNamesEachFigureOnce(unittest.TestCase):
         listed = [l for l in done.stdout.splitlines() if l.startswith("tables and figures:")]
         self.assertEqual(len(listed), 1)
         names = [n.rsplit(" p", 1)[0] for n in listed[0].split(": ", 1)[1].split(", ")]
-        self.assertEqual(sorted(names), sorted(set(names)), f"listed twice: {names}")
+        # "Figure 2" and "Fig. 2" are one figure, so they are compared as one
+        folded = [re.sub(r"^(?:figure|fig\.)\s*", "fig ", n.lower()) for n in names]
+        self.assertEqual(len(folded), len(set(folded)), f"listed twice: {names}")
 
 
 class ANoteHedgesOnlyTheQuantityItHedges(unittest.TestCase):
@@ -5616,8 +5692,7 @@ class TheReferenceExampleIsARecordThatValidates(unittest.TestCase):
                         for n in range(1, example["paper"]["pages"] + 1)), encoding="utf-8")
             (d / "claims.json").write_text(json.dumps(example), encoding="utf-8")
             problems = cea_claims.validate(d)[0]
-        shape = [p for p in problems if "missing" in p or "unknown" in p or "format" in p]
-        self.assertEqual(shape, [], "the example is refused for its shape")
+        self.assertEqual(problems, [], "the reference's own example is refused")
 
 
 class APaperIdNamesADirectory(unittest.TestCase):
@@ -5911,6 +5986,9 @@ class TheGeneratedCasesDoNotUseTheRulesTheyTest(unittest.TestCase):
         except ImportError as e:  # pragma: no cover
             raise unittest.SkipTest(f"gap_cases is not importable: {e}")
         blocks, _pairs = gap_cases.material()
+        if not any(blocks.values()):
+            # a fresh clone has no records to harvest, and an empty harvest asserts nothing
+            self.skipTest("no blocks harvested; the records are not in this tree")
         for kind, drawn in blocks.items():
             for block in drawn:
                 held = [l for l in block if gap_cases.reads_as_the_paper(l)]
@@ -6108,7 +6186,7 @@ class EveryLabelInAListKeepsItsDigits(unittest.TestCase):
             "result pages (H01, H02).\n")
 
     def test_a_later_label_may_not_drop_its_number(self):
-        for bad in ("13 Reddit threads (E01, R, R)", "three Hacker News result pages (H01, H)"):
+        for bad in ("13 Reddit threads (E01, E, E)", "three Hacker News result pages (H01, H)"):
             with self.subTest(quote=bad):
                 self.assertIsNone(cea_claims.find_quote(bad, self.PAGE))
 
@@ -6229,7 +6307,7 @@ class AVersionDigitSurvivesALineBreak(unittest.TestCase):
         """A quotation's attribution could be stripped and still certified."""
         page = "One team reported receiving 30 PRs per day across 6 reviewers [E07].\n"
         self.assertIsNone(cea_claims.find_quote(
-            "One team reported receiving 30 PRs per day across 6 reviewers [R].", page))
+            "One team reported receiving 30 PRs per day across 6 reviewers [E].", page))
         self.assertIsNotNone(cea_claims.find_quote(
             "One team reported receiving 30 PRs per day across 6 reviewers [E07].", page))
 
@@ -6354,7 +6432,7 @@ class EveryCommandSaysWhatItFound(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = cea_claims.main(["render", str(d)])
             self.assertEqual(code, 0, out.getvalue())
-            self.assertNotIn("warning: paper.title", out.getvalue())
+            self.assertNotIn("paper.title", out.getvalue())
 
 
 class NoFieldMaySayOneThingAndShowAnother(unittest.TestCase):
@@ -6668,7 +6746,7 @@ class TheSectionIsWhereTheQuoteStands(unittest.TestCase):
                           if ".section: the quote stands under" in w])
         if not records:
             self.skipTest("no valid records to measure")
-        self.assertLessEqual(fired, 2, f"{fired} section warnings across {records} records")
+        self.assertLessEqual(fired, 1, f"{fired} section warnings across {records} records")
 
 
 class APartStatesItsOwnPartInTheQuotesOrder(unittest.TestCase):
@@ -6886,12 +6964,25 @@ class WhatTheValidatorChecksOnAStatement(unittest.TestCase):
         swapped = ("Hunk-level review actions (0.9%-4.2%) show a higher addressing rate than "
                    "file-level actions (6.5%-19.2%).")
         self.assertTrue(cea_claims._out_of_quote_order(swapped, self.QUOTE))
+        # and validate refuses the main result that carries it, which is what the page prints
+        data = valid_claims()
+        data["paper"]["pages"] = 1
+        data["main_results"] = [{"id": "R1", "quote": self.QUOTE, "states": swapped, "page": 1,
+                                 "section": "Abstract", "source": "abstract",
+                                 "note": "No claim serves this statement."}]
+        data["claims"], data["excluded"] = [], []
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(f"=== page 1 ===\n{self.QUOTE}\n", encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            problems = cea_claims.validate(d)[0]
+        self.assertTrue(any("in an order the" in p for p in problems), problems)
 
     def test_a_faithful_statement_is_not_questioned(self):
         """It differs from the quote by dropping a clause, and keeps its numbers in order."""
-        self.assertEqual([w for w in self.warnings(
-            "Hunk-level review actions (6.5%-19.2%) show a higher addressing rate.")
-            if "order" in w], [])
+        # the helper asserts that validate refuses nothing: the order rule is a refusal, and no
+        # warning speaks of order any more
+        self.warnings("Hunk-level review actions (6.5%-19.2%) show a higher addressing rate.")
 
 
 class AQuoteThatIsARowOfATable(unittest.TestCase):
@@ -7170,8 +7261,9 @@ class AReaderWithoutScripting(unittest.TestCase):
         self.assertIn(".filter-bar, .reveal { display: none; }", self.HIDES.search(html).group(1))
 
     def test_every_reason_and_every_candidate_is_reachable_with_scripting_off(self):
-        """Measured on the page itself: each string the record holds has to survive removing the
-        scripts and the subtrees that stay closed."""
+        """Each string the record holds stands in the page's static markup, not only in what its
+        script writes. That the closed bodies open without scripting is
+        test_the_page_opens_every_body_when_scripting_is_off."""
         data = valid_claims()
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
         wanted = [c[k] for c in data["claims"] for k in ("selection_reason", "note") if c.get(k)]
@@ -7182,6 +7274,18 @@ class AReaderWithoutScripting(unittest.TestCase):
         text = re.sub(r"\s+", " ", unescape(re.sub(r"(?s)<[^>]+>", " ", body)))
         missing = [w for w in wanted if re.sub(r"\s+", " ", unescape(w))[:70] not in text]
         self.assertEqual(missing, [], f"{len(missing)} of {len(wanted)} strings are unreachable")
+
+
+class ThePageLegendUsesTheIdLetters(unittest.TestCase):
+    """The legend said "main result (B)" and "excluded claim candidate (R)", the letters of the
+    record before its entries were renamed, beside cards whose ids read R1 and E3."""
+
+    def test_each_legend_entry_names_the_letter_its_ids_carry(self):
+        import cea_page
+        page = cea_page.build(valid_claims(), Path("claims.json"), Path("out.html"))
+        found = dict(re.findall(r'<i class="legend-dot (\w+)"></i>[^<(]*\(([A-Z])\)', page))
+        kinds = {"result": "main_results", "claim": "claims", "candidate": "excluded"}
+        self.assertEqual(found, {dot: cea_claims._ID_PREFIX[key] for dot, key in kinds.items()})
 
 
 class APaperThatMayNotBeRepublished(unittest.TestCase):
@@ -7255,6 +7359,27 @@ class APaperThatMayNotBeRepublished(unittest.TestCase):
         site, page, said = self.build()
         self.assertIn("no PDF found", said)
         self.assertNotIn('href="text.txt"', page)
+
+    def test_without_its_pdf_the_text_is_not_published_either(self):
+        site, page, said = self.build(doi=self.DOI)
+        self.assertFalse((site / "papers" / "fixture" / "text.txt").exists(),
+                         "the paper's whole text was published where its PDF is left out")
+        site, page, said = self.build(doi=self.DOI, pdf=True)
+        self.assertTrue((site / "papers" / "fixture" / "text.txt").is_file())
+
+    def test_a_rebuild_without_the_pdf_takes_down_what_an_earlier_build_published(self):
+        import cea_site
+        site, page, said = self.build(doi=self.DOI, pdf=True)
+        rec = site.parent / "rec"
+        (rec / "fixture.pdf").unlink()
+        with contextlib.redirect_stdout(io.StringIO()):
+            written, messages = cea_site.build_site([rec], site)
+        self.assertEqual(written, 1, messages)
+        dest = site / "papers" / "fixture"
+        self.assertEqual(sorted(p.name for p in dest.iterdir()),
+                         ["claims.json", "claims.md", "index.html"])
+        page = (dest / "index.html").read_text(encoding="utf-8")
+        self.assertNotRegex(page, r'href="[^"]*\.(?:pdf|txt)"')
 
     def test_the_doi_reaches_the_page_and_claims_md_escaped(self):
         site, page, said = self.build(doi=self.OLD_STYLE)
@@ -7392,9 +7517,10 @@ class PublishedFiles(unittest.TestCase):
             lambda d: d["paper"].update(url="javascript:fetch('https://evil.example/')"))
         self.assertEqual(written, 0, "a record with an unknown paper field was published")
         self.assertIn("unknown field", messages)
-        # and the page itself refuses the scheme, whatever reaches it
+        # and the page itself makes no link a browser would run of the one address it builds,
+        # the DOI's, whatever reaches it
         data = valid_claims()
-        data["paper"]["url"] = "javascript:alert(1)"
+        data["paper"]["doi"] = "javascript:alert(1)"
         data["paper"]["pdf"] = "nowhere.pdf"
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
         self.assertEqual([h for h in re.findall(r'href="([^"]*)"', html)
@@ -7408,13 +7534,14 @@ class PublishedFiles(unittest.TestCase):
         self.assertIn("excluded[0].reason", messages)
 
     def test_a_name_the_record_does_not_hold_is_not_turned_into_a_link(self):
-        """The page mined every `B\\d+` out of a reason and made each one a tag and a link.
+        """The page mined every `R\\d+` out of a reason and made each one a tag and a link.
 
         A reason is prose. A paper numbering a respondent R12 says so in one, and the page asserted a main
         result "R12" behind a link that landed nowhere. Refusing the record instead is no good
         either: there is no other way to write that sentence.
         """
-        for reason, label in (("Reports what respondent R12 said, not a result here.", "real prose"),
+        for reason, label in (("Respondent R12 still stands by that view, which is not a "
+                               "result of this study.", "real prose"),
                               ("Data only. R7 would still stand.", "a typo")):
             with self.subTest(reason=label):
                 tmp, site, written, messages = self.build(
@@ -7928,7 +8055,8 @@ class Page(unittest.TestCase):
                 here = root / "site" / "papers" / paper_id
                 self.assertTrue((here / "index.html").is_file())
                 self.assertTrue((here / "claims.json").is_file())
-                self.assertTrue((here / "text.txt").is_file())
+                # no PDF in these records, so the paper's text is not published either
+                self.assertFalse((here / "text.txt").exists())
 
     def test_only_a_page_inside_a_site_links_back_to_the_index(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -8309,6 +8437,12 @@ class SiteGate(unittest.TestCase):
         self.assertTrue(targets, "the fixture has no links")
         self.assertEqual(sorted(targets - ids), [],
                          "the framework page links to headings it does not have")
+        # and the framework the site publishes, whose links are the ones a reader follows
+        html = cea_site.md_to_html(cea_claims.FRAMEWORK.read_text(encoding="utf-8"))
+        ids = set(re.findall(r'<h\d id="([^"]*)"', html))
+        targets = set(re.findall(r'href="#([^"]*)"', html))
+        self.assertEqual(sorted(targets - ids), [],
+                         "the published framework links to headings it does not have")
 
     def test_a_record_missing_a_field_the_pages_need_is_refused(self):
         """It used to raise KeyError after earlier papers were already written."""
@@ -8447,24 +8581,21 @@ class SiteGate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rec = self.record(tmp)
             site = Path(tmp) / "_site"
-            order, real_tree, real_file = [], shutil.copytree, shutil.copy2
+            order, real = [], cea_site._publish
 
-            def note(fn, seen):
-                def wrapper(src, dst, *args, **kwargs):
-                    if Path(src).parent.name.startswith(".cea-staging-"):
-                        seen.append(Path(src).name)
-                    return fn(src, dst, *args, **kwargs)
-                return wrapper
+            def spy(item, target):
+                # every path `_publish` writes, the files inside a paper's directory included:
+                # it recurses through the module's own name, so the spy sees each step
+                order.append(target.relative_to(site).as_posix())
+                return real(item, target)
 
-            shutil.copytree = note(real_tree, order)
-            shutil.copy2 = note(real_file, order)
-            try:
-                with contextlib.redirect_stdout(io.StringIO()):
-                    cea_site.build_site([rec], site)
-            finally:
-                shutil.copytree, shutil.copy2 = real_tree, real_file
-            self.assertIn("index.html", order)
-            self.assertEqual(order[-1], "index.html", f"the index must be copied last, got {order}")
+            with mock.patch.object(cea_site, "_publish", spy), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                cea_site.build_site([rec], site)
+            pages = [n for n, p in enumerate(order) if p.startswith("papers/") and p.endswith(".html")]
+            self.assertTrue(pages, f"no page was published: {order}")
+            self.assertGreater(order.index("index.html"), max(pages),
+                               f"the index must be copied after every page, got {order}")
 
     def test_an_interrupt_while_publishing_is_reported_and_reraised(self):
         import cea_site
@@ -8596,7 +8727,7 @@ class SiteGate(unittest.TestCase):
                     with contextlib.redirect_stdout(io.StringIO()):
                         written, messages = cea_site.build_site([rec], Path(tmp) / "_site")
                     self.assertEqual(written, 0)
-                    self.assertIn("relative path", "\n".join(messages))
+                    self.assertIn("must be the file's name, not a path", "\n".join(messages))
                     problems, _ = cea_claims.validate(rec)
                     self.assertTrue(any("paper.pdf" in p for p in problems), problems)
 
@@ -8766,9 +8897,11 @@ class SiteGate(unittest.TestCase):
         # every record field the tooltip shows must be wrapped, not just the ones listed above
         body = script[script.index("function showTip("):]
         body = body[:body.index("tooltip.style")]
-        for reference in re.findall(r"\be\.\w+", body):
-            self.assertRegex(body, rf"esc\(\s*(?:\[\]\.concat\(|String\()?{re.escape(reference)}",
-                             f"{reference} must be escaped in the tooltip")
+        # every occurrence: a field shown twice is escaped twice, and one escaped use of a
+        # name does not cover the other
+        for found in re.finditer(r"\be\.\w+", body):
+            self.assertRegex(body[:found.start()], r"esc\(\s*(?:\[\]\.concat\(|String\()?$",
+                             f"{found.group(0)} at {found.start()} must be escaped in the tooltip")
 
     def test_every_record_field_is_escaped_on_the_page(self):
         """Only the title was pinned. Eleven other escapes could be deleted unnoticed."""
@@ -9070,7 +9203,7 @@ class SiteGate(unittest.TestCase):
             printed = out.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("CEA_SITE", printed)
-        self.assertIn("CEA_WARNING", printed, "a paper with no PDF must say so")
+        self.assertIn("no PDF found", printed, "a paper with no PDF must say so")
 
     def test_every_recorded_id_is_an_anchor_on_the_page_exactly_once(self):
         """CLAUDE.md: ids are the anchors of the published pages."""
@@ -9088,14 +9221,20 @@ class SiteGate(unittest.TestCase):
         """CLAUDE.md: the page and claims.md cannot disagree about which claims serve which result."""
         import cea_page
         data = valid_claims()
+        data["main_results"].append({"id": "R2", "quote": "Failures did not increase.",
+                                     "page": 1, "section": "Abstract", "source": "abstract"})
+        data["claims"][1]["serves"] = ["R2"]
         html = cea_page.build(data, Path("claims.json"), Path("out.html"))
         markdown = cea_claims.render(data)
-        for statement in cea_claims._by_weight(data):
-            served = [c["id"] for c in data["claims"] if statement["id"] in c["serves"]]
-            with self.subTest(result=statement["id"]):
-                for claim in served:
-                    self.assertIn(claim, markdown)
-                    self.assertRegex(html, rf'\sid="{claim}"')
+        on_page = {}
+        for row in html.split('<div class="map-row">')[1:]:
+            lead = re.search(r'class="node result[^"]*" data-id="(R\d+)"', row).group(1)
+            on_page[lead] = re.findall(r'class="node claim" data-id="(C\d+)"', row)
+        section = markdown.split("\n## Claims\n", 1)[1].split("### Every claim", 1)[0]
+        in_markdown = {m.group(1): re.findall(r"^- (C\d+),", m.group(2), re.M) for m in
+                       re.finditer(r"^### (R\d+)[^\n]*\n\n((?:- [^\n]*\n)+)", section, re.M)}
+        self.assertEqual(on_page, {"R1": ["C1"], "R2": ["C2"]})
+        self.assertEqual(in_markdown, on_page)
 
     def test_the_page_links_the_files_it_was_built_from(self):
         """`near`/`source_links` had no behavioral test: the reader's way back to the record."""
@@ -9138,7 +9277,9 @@ class SiteGate(unittest.TestCase):
         self.assertIn(f'p. {claim["page"]}', body, "the card must state the claim's page")
         self.assertIn(cea_claims._flat(claim["section"]), body)
         for served in claim["serves"]:
-            self.assertIn(served, body, "the card must name the result it serves")
+            # the link to the result, since the selection reason names R1 in the same card
+            self.assertIn(f'href="#{served}" data-jump="{served}"', body,
+                          "the card must link the result it serves")
         self.assertIn(cea_claims._flat(claim["selection_reason"])[:40], body)
         excluded = data["excluded"][0]
         rcard = re.search(rf'<article[^>]*\sid="{excluded["id"]}".*?</article>', html, re.S)
@@ -9238,8 +9379,9 @@ class SiteGate(unittest.TestCase):
         import cea_site
         for label, mutate in (
                 ("page", lambda d: d["claims"][0].__setitem__("page", "9" * 4400 + "-" + "9" * 4400)),
-                ("results id", lambda d: d["main_results"][0].__setitem__("id", "B" + "9" * 4400)),
-                ("excluded id", lambda d: d["excluded"][0].__setitem__("id", "R" + "9" * 4400))):
+                # nothing names E1 or C2, so the bound on the digits is all that can refuse them
+                ("claim id", lambda d: d["claims"][1].__setitem__("id", "C" + "9" * 4400)),
+                ("excluded id", lambda d: d["excluded"][0].__setitem__("id", "E" + "9" * 4400))):
             with self.subTest(case=label):
                 data = valid_claims()
                 mutate(data)

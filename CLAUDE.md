@@ -12,7 +12,7 @@ plugin. Two skills share one set of scripts:
 
 `skills/extract-claims/references/framework.md` is the framework itself and the source of truth
 for every term the skills and the published pages use. Section 1 holds the claim-selection rules
-that `extract-claims` applies, and Sections 2 to 8 the later steps, so that the rules and the
+that `extract-claims` applies, Sections 2 to 7 the later steps, and Section 8 its foundations, so that the rules and the
 framework they serve cannot drift apart. It sits in that skill's `references/` because the Agent
 Skills spec has a skill name its files by a relative path one level down, and that is the skill
 that reads it; `site` resolves it through `FRAMEWORK` in `cea_claims.py` and always publishes it as
@@ -63,7 +63,7 @@ checking is the selection, not the field names.
 - `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
   the name to write.
 - A paper that may not be republished goes up without its PDF and with a `paper.doi`, which the page
-  links. The page links `text.txt` only beside the PDF, because it is the paper's whole text.
+  links. `site` publishes `text.txt` only beside the PDF, because it is the paper's whole text.
 - Ids (`R1`, `C3`, `E40`) are the anchors of the published pages. Do not renumber them when a record changes.
 
 ## Tests

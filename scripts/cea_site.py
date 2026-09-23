@@ -2,8 +2,8 @@
 """Assemble a site from a set of claim records, one directory per paper.
 
 `cea_claims.py site` calls `build_site`. Each paper gets `<out>/papers/<paper_id>/` holding the
-record, both renderings and the PDF, so the page's relative links work the same locally, on a web
-server, and inside a zip of that one folder.
+record and both renderings, and the PDF and `text.txt` where the record holds the PDF, so the
+page's relative links work the same locally, on a web server, and inside a zip of that one folder.
 """
 from __future__ import annotations
 
@@ -246,8 +246,8 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
     # A checker may point their editor at the schema. That path is theirs, not the reader's, so
     # it is dropped rather than published in the record and inside every page.
     data.pop("$schema", None)
-    # The recorded path is the checker's. The reader wants the copy published beside the page.
-    # Keep the path as recorded for the search below, and publish only its last segment.
+    # validate has refused a path here, so this is the file's name. Only its last segment is
+    # published all the same, and the search below keeps the value as recorded.
     given = str(data["paper"]["pdf"])
     pdf_name = Path(given).name
     data["paper"]["pdf"] = pdf_name
@@ -257,7 +257,7 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
     (dest / "claims.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                                       encoding="utf-8")
     # claims.md prints paper.pdf in its header, so it is re-rendered from the sanitised record
-    # rather than copied. Otherwise the path the other two renderings drop reaches the site here.
+    # rather than copied, and says what the other two renderings say.
     (dest / "claims.md").write_text(cea_claims.render(data), encoding="utf-8")
     # validate has already refused a record without it, so it is here. Resolved and checked all
     # the same: a link where text.txt should be publishes whatever it points at, and the page says
@@ -267,10 +267,9 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
     if not said.is_relative_to(home):
         raise IsADirectoryError(f"{record / 'text.txt'} leads outside {record}; move the paper's "
                                 "text into the record rather than linking to it")
-    shutil.copy2(said, dest / "text.txt")
     candidates = [record / pdf_name, record / f'{data["paper"]["id"]}.pdf']
-    # Only a relative path is followed: an absolute one would publish a file from anywhere on the
-    # machine, and the reader needs the copy beside the page in any case.
+    # Never an absolute path or one through '..', which validate refuses before this runs: either
+    # would publish a file from anywhere on the machine.
     if not Path(given).is_absolute() and ".." not in Path(given).parts:
         candidates.append(record / given)
     for candidate in candidates:
@@ -293,6 +292,9 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
                 print(f"CEA_WARNING: {record}: no {pdf_name} here, so {candidate.name} is "
                       f"published under that name; rename it or correct paper.pdf")
             shutil.copy2(target, dest / pdf_name)
+            # The text only beside the paper. It is the paper's whole text, so publishing it where
+            # the PDF is left out would publish the paper the record was kept from publishing.
+            shutil.copy2(said, dest / "text.txt")
             break
     else:
         # A record with a DOI is how a paper that may not be republished goes up: the page links
@@ -555,8 +557,8 @@ def build_site(records: list[Path], site: Path, framework: Path | None = None) -
             continue
         given = str(paper.get("pdf", ""))
         if Path(given).is_absolute() or ".." in Path(given).parts:
-            messages.append(f"CEA_INVALID: {record}: paper.pdf {given!r} must be a relative path "
-                            "without '..'; run validate")
+            messages.append(f"CEA_INVALID: {record}: paper.pdf {given!r} must be the file's "
+                            "name, not a path; run validate")
             blocked = True
             still_published.append(named)
             continue
@@ -659,6 +661,20 @@ def build_site(records: list[Path], site: Path, framework: Path | None = None) -
         # rather than a new index pointing at pages that are not there yet.
         for item in sorted(staging.iterdir(), key=lambda p: p.name == "index.html"):
             _publish(item, site / item.name)
+        # The copy merges, so a paper whose PDF this build left out would keep the PDF and the
+        # text an earlier build published, still at their addresses though the page no longer
+        # links them. They go, and only they: what the build withheld, not what it never knew.
+        for d in built:
+            paper_id, pdf_name = d["paper"]["id"], d["paper"]["pdf"]
+            for name in (pdf_name, "text.txt"):
+                stale = site / "papers" / paper_id / name
+                try:
+                    if (staging / "papers" / paper_id / name).exists():
+                        continue
+                    if stale.is_symlink() or stale.is_file():
+                        stale.unlink()
+                except (OSError, ValueError):  # an over-long name was never written
+                    pass
         index = site / "index.html"
         if index.is_symlink() or not index.is_file():
             raise FileNotFoundError(f"{index} was not written as a file of the site")
