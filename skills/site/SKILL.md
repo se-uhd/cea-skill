@@ -49,14 +49,20 @@ only the first three problems per paper, while `validate` prints them all with t
 |---|---|
 | `<site>/index.html` | every paper, with its counts and a link to its page |
 | `<site>/papers/<paper_id>/index.html` | the paper's page |
-| `<site>/papers/<paper_id>/claims.json`, `claims.md`, `text.txt`, the PDF | the record the page was built from, beside it |
+| `<site>/papers/<paper_id>/claims.json`, `claims.md`, `text.txt`, the PDF where the record holds one | the record the page was built from, beside it |
 | `<site>/framework/index.html` | the framework text, always |
 
 The record sits beside its page so that the page's links to it work wherever the folder is served,
 and so that a zip of one paper's folder is complete on its own.
 
+A paper whose publisher keeps the right to redistribute it, as a copyright notice on its first page
+usually says, goes up without its PDF: leave the file out of the record's directory, and out of the
+repository that holds the records, and give the record a `paper.doi`. The page then links the DOI.
+It links `text.txt` only where it links the PDF, because the text is the whole paper. The file is
+still copied beside the page, where the page does not point to it.
+
 A successful build prints `CEA_SITE`, preceded by a `CEA_WARNING` line for each paper whose PDF is
-missing, for each main result that no claim serves, and for each paper directory left in the
+missing and whose record gives no DOI, for each main result that no claim serves, and for each paper directory left in the
 output by an earlier build that this one no longer lists. A record that fails the checks prints `CEA_INVALID` or `CEA_UNRESOLVED`, then `CEA_FAILED`.
 Nothing is written unless every record holds the fields the pages need, passes `validate`, and
 leaves no decision open. The build runs `validate` itself, so a record whose quote is not on its

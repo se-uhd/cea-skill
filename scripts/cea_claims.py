@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import sys
 import unicodedata
+import urllib.parse
 from functools import lru_cache
 from pathlib import Path
 
@@ -60,10 +61,21 @@ RESULT_REF = re.compile(r"\bR\d+\b")
 # gap must also start and end at a line break (see `find_quote`).
 MAX_GAP = 4000
 
+# A paper's DOI, as written after https://doi.org/. The characters are Crossref's for modern DOIs
+# plus the brackets and `#` that older ones carry. Nothing that ends a Markdown code span or an
+# HTML attribute, and no space, so the page and claims.md can print it as it stands.
+DOI = re.compile(r"10\.\d{4,9}/[-._;()/:<>#\[\]+A-Za-z0-9]+")
+
+
+def doi_url(doi: str) -> str:
+    """The address that resolves `doi`, with the characters a URL gives a meaning to escaped."""
+    return "https://doi.org/" + urllib.parse.quote(doi, safe="/:;._-")
+
+
 # Required and optional fields per entry type.
 
 FIELDS = {
-    "paper": ({"id", "title", "pdf", "pages"}, set()),
+    "paper": ({"id", "title", "pdf", "pages"}, {"doi"}),
     "main_results": ({"id", "quote", "page", "section", "source"}, {"note", "states"}),
     "claims": ({"id", "quote", "states", "page", "section", "serves", "split_from",
                 "selection_reason"}, {"note"}),
@@ -85,6 +97,7 @@ PROPERTIES = {
     # paper.id names a directory in the site. Every entry id is overridden in entry() below.
     "id": {"type": "string", "pattern": r"^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 200},
     "title": _TEXT, "pdf": _TEXT,
+    "doi": {"type": "string", "pattern": rf"^{DOI.pattern}$"},
     "pages": {"type": "integer", "minimum": 1},
     "quote": _TEXT, "states": _TEXT, "section": _TEXT,
     "reason": _TEXT, "selection_reason": _TEXT, "note": _TEXT,
@@ -983,6 +996,20 @@ def validate(paper_dir: Path) -> tuple[list[str], dict | None]:
             if found:
                 problems.append(f"paper.{f}: holds {found}, which makes the page show something "
                                 "other than what the record says")
+        # How a reader reaches a paper whose PDF may not be published beside its page, so a
+        # value that resolves nowhere leaves that page with no way to the paper at all.
+        if "doi" in paper:
+            doi = paper["doi"]
+            if not isinstance(doi, str) or not DOI.fullmatch(doi):
+                shown = _printable(str(doi))[:80]
+                bare = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", str(doi), flags=re.I)
+                if bare != str(doi) and DOI.fullmatch(bare):
+                    problems.append(f"paper.doi: write {bare!r}, the DOI itself, not {shown!r}; "
+                                    "the page makes the link")
+                else:
+                    problems.append(f"paper.doi: {shown!r} is not a DOI, which starts with '10.' "
+                                    "and a prefix of four to nine digits, such as "
+                                    "10.1145/1083142.1083147")
         if given and not Path(given).name.strip():
             problems.append("paper.pdf: must name a file, not a directory")
         if Path(given).name.casefold() in PUBLISHED_NAMES:
@@ -2205,7 +2232,9 @@ def render(data: dict) -> str:
     out = [
         f"# Claims: {_flat(paper['title'])}",
         "",
-        f"Paper `{paper['id']}` ({paper['pages']} pages, `{paper['pdf']}`): "
+        f"Paper `{paper['id']}` ({paper['pages']} pages, `{paper['pdf']}`"
+        + (f", DOI [`{paper['doi']}`]({doi_url(paper['doi'])})" if paper.get("doi") else "")
+        + "): "
         f"{len(results)} main results, {len(claims)} claims, "
         f"{len(excluded)} excluded claim candidates.",
         "",

@@ -295,7 +295,12 @@ def copy_paper(record: Path, site: Path, framework_href: str = "") -> dict:
             shutil.copy2(target, dest / pdf_name)
             break
     else:
-        print(f"CEA_WARNING: {record}: no PDF found for {pdf_name}, the page will name it without a link")
+        # A record with a DOI is how a paper that may not be republished goes up: the page links
+        # the DOI, so the missing file is the choice, and a warning on every build would say
+        # nothing but train the reader to pass over the rest.
+        if not data["paper"].get("doi"):
+            print(f"CEA_WARNING: {record}: no PDF found for {pdf_name}, the page will name it "
+                  "without a link")
     # A main result that no claim serves is the finding a reader should not have to search
     # for, and the site skill says to report it. Nothing printed it: the record is valid, the page
     # carries the heading, and the fact stood only inside the generated files.

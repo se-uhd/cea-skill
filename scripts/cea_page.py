@@ -25,7 +25,7 @@ from pathlib import Path
 # claims.md cannot disagree about which claims stand under which main result.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cea_claims import (_by_weight, _first_page, _flat, _id_order, _key,  # noqa: E402
-                        _one_result, _shared_with_other_results, _stated_in)
+                        _one_result, _shared_with_other_results, _stated_in, doi_url)
 
 E = html.escape
 RID = re.compile(r"\bR\d+\b")
@@ -278,11 +278,17 @@ def near(name: str, source: Path, out: Path) -> str:
 
 
 def source_links(paper: dict, source: Path, out: Path) -> str:
-    """The files this page was built from, linked where they sit beside it."""
+    """The files this page was built from, linked where they sit beside it.
+
+    `text.txt` only where the page also links the PDF. It is the paper's whole text, and a paper
+    that may not be republished goes up without its PDF: linking the text would publish it anyway.
+    """
+    files = [(source.name, "what this page is built from"),
+             ("claims.md", "the same content as Markdown")]
+    if published_pdf(paper, source, out):
+        files.append(("text.txt", "the page text that every quote was checked against"))
     items = []
-    for name, label in ((source.name, "what this page is built from"),
-                        ("claims.md", "the same content as Markdown"),
-                        ("text.txt", "the page text that every quote was checked against")):
+    for name, label in files:
         rel = near(name, source, out)
         if rel:
             items.append(f'<a href="{E(rel)}">{E(name)}</a> <span class="dim">{E(label)}</span>')
@@ -290,11 +296,23 @@ def source_links(paper: dict, source: Path, out: Path) -> str:
 
 
 def pdf_link(paper: dict, source: Path, out: Path) -> str:
-    """The header link to the paper.
+    """The header links to the paper: its PDF where one is published, and its DOI where the record
+    gives one. With neither, the recorded file name stands as text."""
+    name = Path(str(paper["pdf"])).name
+    links = []
+    if rel := published_pdf(paper, source, out):
+        links.append(f'<a class="nav-ext" href="{E(rel)}">{E(name)}</a>')
+    if doi := paper.get("doi"):
+        links.append(f'<a class="nav-ext" href="{E(doi_url(doi))}">DOI {E(doi)}</a>')
+    return ("\n    ".join(links)
+            or f'<span class="nav-ext plain" title="{E(str(paper["pdf"]))}">{E(name)}</span>')
+
+
+def published_pdf(paper: dict, source: Path, out: Path) -> str:
+    """The path from the page to the paper's PDF, or "" where there is none to link.
 
     The PDF published beside the page comes first, because that is the copy a reader of the page can
-    open. Then the copy in the record's own directory, which is where `extract` puts one. With no
-    file to link, the recorded path stands as text.
+    open. Then the copy in the record's own directory, which is where `extract` puts one.
     """
     name = Path(str(paper["pdf"])).name
     # Beside the page, or in the record. Not the directory the command happened to run in: a file
@@ -315,11 +333,8 @@ def pdf_link(paper: dict, source: Path, out: Path) -> str:
         rel = os.path.relpath(candidate, out.resolve().parent)
         if rel.count("..") > 2:  # a path that climbs that far will not survive being moved
             continue
-        return f'<a class="nav-ext" href="{E(rel)}">{E(name)}</a>'
-    # No web address here. `paper` holds id, title, pdf and pages and nothing else, so a doi or a
-    # url field cannot reach a record that validate accepts, and a branch for one would be a
-    # defence against nothing that a reader would take for a live one.
-    return f'<span class="nav-ext plain" title="{E(str(paper["pdf"]))}">{E(name)}</span>'
+        return rel
+    return ""
 
 
 _MARKER = re.compile(r"@@([A-Z_]+)@@")
@@ -664,6 +679,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     nav .nav-ext:hover { color: #1e40af; }
     nav .nav-ext.plain { color: #a8a29e; font-size: 0.8rem; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
     nav .nav-ext { overflow-wrap: anywhere; max-width: 100%; }
+    nav .nav-ext + .nav-ext { margin-left: 0; }
 
     header { text-align: left; padding: 2.5rem 2rem 1.5rem; max-width: 1260px; margin: 0 auto; }
     header h1 { font-family: 'Source Serif 4', Georgia, serif; font-size: 2.0rem; color: #1c1917; margin-bottom: 0.25rem; line-height: 1.25; }

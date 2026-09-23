@@ -62,6 +62,8 @@ checking is the selection, not the field names.
 - `site` publishes the paper file only from inside the record's own directory, and resolves it first, so a symlink cannot publish what it points at.
 - `paper.pdf` is the file's name, not a path. `extract` copies the PDF into the record and prints
   the name to write.
+- A paper that may not be republished goes up without its PDF and with a `paper.doi`, which the page
+  links. The page links `text.txt` only beside the PDF, because it is the paper's whole text.
 - Ids (`R1`, `C3`, `E40`) are the anchors of the published pages. Do not renumber them when a record changes.
 
 ## Tests

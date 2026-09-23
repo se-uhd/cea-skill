@@ -7184,6 +7184,87 @@ class AReaderWithoutScripting(unittest.TestCase):
         self.assertEqual(missing, [], f"{len(missing)} of {len(wanted)} strings are unreachable")
 
 
+class APaperThatMayNotBeRepublished(unittest.TestCase):
+    """A paper whose publisher keeps the right to redistribute it goes up without its PDF, and
+    `paper.doi` is then how a reader reaches it. `text.txt` is the paper's whole text, so the page
+    links it only where it links the PDF."""
+
+    DOI = "10.1145/1083142.1083147"
+    OLD_STYLE = "10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-0"
+
+    def problems(self, doi):
+        data = valid_claims()
+        data["paper"]["doi"] = doi
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "text.txt").write_text(TEXT, encoding="utf-8")
+            (d / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+            return [p for p in cea_claims.validate(d)[0] if p.startswith("paper.doi")]
+
+    def build(self, doi=None, pdf=False):
+        import cea_site
+        data = valid_claims()
+        if doi:
+            data["paper"]["doi"] = doi
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        rec = tmp / "rec"
+        rec.mkdir()
+        (rec / "text.txt").write_text(TEXT, encoding="utf-8")
+        (rec / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+        if pdf:
+            (rec / "fixture.pdf").write_bytes(b"%PDF-1.4\n")
+        site = tmp / "_site"
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            written, messages = cea_site.build_site([rec], site)
+        self.assertEqual(written, 1, messages)
+        page = (site / "papers" / "fixture" / "index.html").read_text(encoding="utf-8")
+        return site, page, "\n".join(messages) + said.getvalue()
+
+    def test_a_doi_is_accepted_in_either_style(self):
+        self.assertEqual(self.problems(self.DOI), [])
+        self.assertEqual(self.problems(self.OLD_STYLE), [])
+
+    def test_a_doi_written_as_its_address_is_refused_with_the_doi_to_write(self):
+        for given in (f"https://doi.org/{self.DOI}", f"doi:{self.DOI}"):
+            with self.subTest(given=given):
+                said = "\n".join(self.problems(given))
+                self.assertIn(repr(self.DOI), said, "the message does not say what to write")
+
+    def test_what_is_not_a_doi_is_refused(self):
+        for given in ("1083142.1083147", "10.1145/1083142 1083147", "10.1145/`x`", 1083142, ""):
+            with self.subTest(given=given):
+                self.assertTrue(self.problems(given), f"{given!r} was accepted as a DOI")
+
+    def test_without_its_pdf_the_page_links_the_doi_and_not_the_text(self):
+        site, page, said = self.build(doi=self.DOI)
+        self.assertIn(f'href="https://doi.org/{self.DOI}"', page)
+        self.assertNotIn('href="text.txt"', page, "the paper's text is offered without the paper")
+        self.assertNotRegex(page, r'href="[^"]*\.pdf"', "a PDF that is not there was linked")
+        # the DOI takes the reader to the paper, so a missing PDF is the choice, not a fault
+        self.assertNotIn("no PDF found", said)
+
+    def test_beside_its_pdf_the_page_links_both_and_the_text(self):
+        site, page, said = self.build(doi=self.DOI, pdf=True)
+        self.assertIn('href="fixture.pdf"', page)
+        self.assertIn(f'href="https://doi.org/{self.DOI}"', page)
+        self.assertIn('href="text.txt"', page)
+
+    def test_without_a_doi_a_missing_pdf_is_still_reported(self):
+        site, page, said = self.build()
+        self.assertIn("no PDF found", said)
+        self.assertNotIn('href="text.txt"', page)
+
+    def test_the_doi_reaches_the_page_and_claims_md_escaped(self):
+        site, page, said = self.build(doi=self.OLD_STYLE)
+        self.assertNotIn("<693", page.split('id="cea-data"')[0], "a DOI's '<' reached the HTML raw")
+        address = cea_claims.doi_url(self.OLD_STYLE)
+        self.assertNotRegex(address[len("https://doi.org/"):], r"[<>#()]")
+        markdown = (site / "papers" / "fixture" / "claims.md").read_text(encoding="utf-8")
+        self.assertIn(f"DOI [`{self.OLD_STYLE}`]({address})", markdown)
+
+
 class PublishedFiles(unittest.TestCase):
     """What `site` copies beside a page, and what it must refuse to copy."""
 
@@ -9022,13 +9103,19 @@ class SiteGate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "rec"
             record.mkdir()
-            for name in ("claims.json", "claims.md", "text.txt"):
+            for name in ("claims.json", "claims.md", "text.txt", "fixture.pdf"):
                 (record / name).write_text("x", encoding="utf-8")
             out = record / "claims.html"
             links = cea_page.source_links(valid_claims()["paper"], record / "claims.json", out)
             for name in ("claims.json", "claims.md", "text.txt"):
                 self.assertIn(f'href="{name}"', links, f"{name} sits beside the page")
+            # the paper's text only beside the paper: without the PDF it would publish the paper
+            (record / "fixture.pdf").unlink()
+            links = cea_page.source_links(valid_claims()["paper"], record / "claims.json", out)
+            self.assertNotIn("text.txt", links, "the text was offered where the paper is not")
+            self.assertIn('href="claims.json"', links)
             # a file that is not there is not linked
+            (record / "fixture.pdf").write_text("x", encoding="utf-8")
             (record / "text.txt").unlink()
             self.assertNotIn("text.txt", cea_page.source_links(
                 valid_claims()["paper"], record / "claims.json", out))
